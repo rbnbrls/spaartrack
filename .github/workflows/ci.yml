@@ -1,0 +1,117 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: spaartrack
+          POSTGRES_USER: spaartrack
+          POSTGRES_PASSWORD: ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U spaartrack -d spaartrack"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://spaartrack:ci-password@localhost:5432/spaartrack
+      API_URL: http://localhost:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.5
+      - run: pnpm install --frozen-lockfile=true
+      - name: Validate database schema
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Build API
+        run: pnpm --filter @spaartrack/api build
+      - name: Start API bootstrap
+        run: |
+          node apps/api/dist/index.js > /tmp/spaartrack-api.log 2>&1 &
+          echo $! > /tmp/spaartrack-api.pid
+          for attempt in $(seq 1 20); do curl --fail --silent http://localhost:8080/health/ready && break; sleep 1; done
+          curl --fail --silent http://localhost:8080/health/ready >/dev/null
+      - name: Tests
+        run: pnpm test
+      - name: Upload CI evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-evidence-${{ github.run_id }}
+          path: |
+            /tmp/spaartrack-api.log
+            /tmp/spaartrack-api.pid
+          if-no-files-found: warn
+
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.5
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+      - name: Dependency audit
+        run: pnpm audit --audit-level high
+
+  image:
+    needs: [verify, security]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        service: [web, api, worker]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build immutable ${{ matrix.service }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.service }}/Dockerfile
+          tags: spaartrack/${{ matrix.service }}:${{ github.sha }}
+          build-args: |
+            VCS_REF=${{ github.sha }}
+            APP_VERSION=${{ github.ref_name }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+          outputs: type=oci,dest=/tmp/spaartrack-${{ matrix.service }}.tar
+          metadata-file: /tmp/spaartrack-${{ matrix.service }}.metadata.json
+          sbom: true
+          provenance: mode=max
+      - name: Upload image evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-evidence-${{ github.run_id }}-${{ matrix.service }}
+          path: |
+            /tmp/spaartrack-${{ matrix.service }}.tar
+            /tmp/spaartrack-${{ matrix.service }}.metadata.json
+          if-no-files-found: error

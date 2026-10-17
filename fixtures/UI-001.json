@@ -1,0 +1,9 @@
+{
+  "fixture_id": "UI-001",
+  "version": "1.0.0",
+  "description": "Synthetic local onboarding journey for the first portfolio release.",
+  "steps": ["empty", "portfolio", "account", "currency", "first_action"],
+  "reporting_currency_code": "EUR",
+  "account_type": "BROKERAGE",
+  "first_action_type": "DEPOSIT"
+}

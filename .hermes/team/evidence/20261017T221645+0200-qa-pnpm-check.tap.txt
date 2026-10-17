@@ -1,0 +1,1042 @@
+
+> spaartrack@ check /workspace
+> pnpm lint && pnpm typecheck && pnpm test
+
+
+> spaartrack@ lint /workspace
+> tsc --noEmit
+
+
+> spaartrack@ typecheck /workspace
+> tsc --noEmit
+
+
+> spaartrack@ test /workspace
+> node --test tests/smoke/*.test.mjs
+
+TAP version 13
+# Subtest: TC-US-0302: financial account types, tracking modes and statuses are contractual
+ok 1 - TC-US-0302: financial account types, tracking modes and statuses are contractual
+  ---
+  duration_ms: 7.515417
+  type: 'test'
+  ...
+# Subtest: TC-US-0302-runtime: owner registers all local account types with tracking/status and outsider is denied
+ok 2 - TC-US-0302-runtime: owner registers all local account types with tracking/status and outsider is denied
+  ---
+  duration_ms: 242.585875
+  type: 'test'
+  ...
+# Subtest: TC-US-0708: alert rules expose conditions, channels, pause, test and delivery history
+ok 3 - TC-US-0708: alert rules expose conditions, channels, pause, test and delivery history
+  ---
+  duration_ms: 5.294125
+  type: 'test'
+  ...
+# Subtest: TC-US-0708-runtime: synthetic alert can be created, paused, tested and listed with delivery history
+ok 4 - TC-US-0708-runtime: synthetic alert can be created, paused, tested and listed with delivery history
+  ---
+  duration_ms: 196.590417
+  type: 'test'
+  ...
+# Subtest: TC-US-0205: security actions have an auditable application boundary
+ok 5 - TC-US-0205: security actions have an auditable application boundary
+  ---
+  duration_ms: 1.068958
+  type: 'test'
+  ...
+# Subtest: TC-US-0205-runtime: login, permission change, secret access, share, export and revoke are recorded
+ok 6 - TC-US-0205-runtime: login, permission change, secret access, share, export and revoke are recorded
+  ---
+  duration_ms: 205.612875
+  type: 'test'
+  ...
+# Subtest: B-004 refinement covers all remaining parent stories and executable traceability
+ok 7 - B-004 refinement covers all remaining parent stories and executable traceability
+  ---
+  duration_ms: 12.341416
+  type: 'test'
+  ...
+# Subtest: TC-US-0107-A: backup creates encrypted artifacts with integrity and retention metadata
+ok 8 - TC-US-0107-A: backup creates encrypted artifacts with integrity and retention metadata
+  ---
+  duration_ms: 0.762083
+  type: 'test'
+  ...
+# Subtest: TC-US-0107-B: restore verifies checksum and uses a temporary PostgreSQL database
+ok 9 - TC-US-0107-B: restore verifies checksum and uses a temporary PostgreSQL database
+  ---
+  duration_ms: 0.151958
+  type: 'test'
+  ...
+# Subtest: TC-US-0107-C: restore extracts object-storage raw payloads and reports
+ok 10 - TC-US-0107-C: restore extracts object-storage raw payloads and reports
+  ---
+  duration_ms: 0.186625
+  type: 'test'
+  ...
+# Subtest: TC-US-1003: authorized bank account selection exposes only selected accounts with type and currency
+ok 11 - TC-US-1003: authorized bank account selection exposes only selected accounts with type and currency
+  ---
+  duration_ms: 3.500833
+  type: 'test'
+  ...
+# Subtest: TC-US-1003-runtime: selection persists only chosen synthetic accounts and rejects unknown IDs
+ok 12 - TC-US-1003-runtime: selection persists only chosen synthetic accounts and rejects unknown IDs
+  ---
+  duration_ms: 183.274042
+  type: 'test'
+  ...
+# Subtest: TC-US-1002: requisition consent contract covers state, PKCE, CSRF, callback and failure paths
+ok 13 - TC-US-1002: requisition consent contract covers state, PKCE, CSRF, callback and failure paths
+  ---
+  duration_ms: 8.188708
+  type: 'test'
+  ...
+# Subtest: TC-US-1002-runtime: valid synthetic requisition authorizes once and rejects invalid/replayed callback
+ok 14 - TC-US-1002-runtime: valid synthetic requisition authorizes once and rejects invalid/replayed callback
+  ---
+  duration_ms: 124.98
+  type: 'test'
+  ...
+# Subtest: TC-US-1001: GoCardless institution selection exposes region, capabilities and availability
+ok 15 - TC-US-1001: GoCardless institution selection exposes region, capabilities and availability
+  ---
+  duration_ms: 3.956917
+  type: 'test'
+  ...
+# Subtest: TC-US-1001-runtime: synthetic BANK-001 catalog filters GoCardless institutions without provider credentials
+ok 16 - TC-US-1001-runtime: synthetic BANK-001 catalog filters GoCardless institutions without provider credentials
+  ---
+  duration_ms: 137.896959
+  type: 'test'
+  ...
+# Subtest: TC-US-1007: expired bank consent preserves history and requires reconnect
+ok 17 - TC-US-1007: expired bank consent preserves history and requires reconnect
+  ---
+  duration_ms: 3.629875
+  type: 'test'
+  ...
+# Subtest: TC-US-1007-runtime: expiry keeps historical sync and reconnect dedupes previous provider transaction
+ok 18 - TC-US-1007-runtime: expiry keeps historical sync and reconnect dedupes previous provider transaction
+  ---
+  duration_ms: 284.674375
+  type: 'test'
+  ...
+# Subtest: TC-US-1005: bank requisition revoke cleans local references and disconnects without ledger writes
+ok 19 - TC-US-1005: bank requisition revoke cleans local references and disconnects without ledger writes
+  ---
+  duration_ms: 6.836042
+  type: 'test'
+  ...
+# Subtest: TC-US-1005-runtime: authorized BANK-001 consent can be revoked once and rejects replay
+ok 20 - TC-US-1005-runtime: authorized BANK-001 consent can be revoked once and rejects replay
+  ---
+  duration_ms: 192.877667
+  type: 'test'
+  ...
+# Subtest: TC-US-1004: bank sync exposes incremental window, balances, dedupe, freshness and provider errors
+ok 21 - TC-US-1004: bank sync exposes incremental window, balances, dedupe, freshness and provider errors
+  ---
+  duration_ms: 15.453
+  type: 'test'
+  ...
+# Subtest: TC-US-1004-runtime: bank sync persists snapshots, dedupes cursor replay and reports provider failure
+ok 22 - TC-US-1004-runtime: bank sync persists snapshots, dedupes cursor replay and reports provider failure
+  ---
+  duration_ms: 253.078334
+  type: 'test'
+  ...
+# Subtest: TC-US-0707: benchmark comparison keeps observation and cashflow-matched variants distinct
+ok 23 - TC-US-0707: benchmark comparison keeps observation and cashflow-matched variants distinct
+  ---
+  duration_ms: 6.65275
+  type: 'test'
+  ...
+# Subtest: TC-US-0707-runtime: synthetic benchmark returns expose both variants
+ok 24 - TC-US-0707-runtime: synthetic benchmark returns expose both variants
+  ---
+  duration_ms: 251.962625
+  type: 'test'
+  ...
+# Subtest: TC-US-1006: direct bunq OAuth stays behind compliance deployment gate
+ok 25 - TC-US-1006: direct bunq OAuth stays behind compliance deployment gate
+  ---
+  duration_ms: 7.079125
+  type: 'test'
+  ...
+# Subtest: TC-US-1006-runtime: gate allows only approved read-only localhost bunq configuration
+ok 26 - TC-US-1006-runtime: gate allows only approved read-only localhost bunq configuration
+  ---
+  duration_ms: 178.687125
+  type: 'test'
+  ...
+# Subtest: TC-US-0103: pull request CI runs blocking checks and uploads evidence
+ok 27 - TC-US-0103: pull request CI runs blocking checks and uploads evidence
+  ---
+  duration_ms: 2.135
+  type: 'test'
+  ...
+# Subtest: TC-US-0103: CI artifact retains diagnostics even after a failed check
+ok 28 - TC-US-0103: CI artifact retains diagnostics even after a failed check
+  ---
+  duration_ms: 0.328291
+  type: 'test'
+  ...
+# Subtest: TC-US-0102-A: Coolify development destination is versioned
+ok 29 - TC-US-0102-A: Coolify development destination is versioned
+  ---
+  duration_ms: 1.192041
+  type: 'test'
+  ...
+# Subtest: TC-US-0102-B/C: release page exposes deploy and migration identity
+ok 30 - TC-US-0102-B/C: release page exposes deploy and migration identity
+  ---
+  duration_ms: 85.616417
+  type: 'test'
+  ...
+# Subtest: TC-US-0406: corporate-action and split contract are explicit
+ok 31 - TC-US-0406: corporate-action and split contract are explicit
+  ---
+  duration_ms: 9.114333
+  type: 'test'
+  ...
+# Subtest: TC-US-0406-runtime: split changes quantity and unit cost without cashflow and is idempotent
+ok 32 - TC-US-0406-runtime: split changes quantity and unit cost without cashflow and is idempotent
+  ---
+  duration_ms: 239.111166
+  type: 'test'
+  ...
+# Subtest: TC-US-0404: cost basis contract exposes FIFO/WAC, fees, taxes and partial sells
+ok 33 - TC-US-0404: cost basis contract exposes FIFO/WAC, fees, taxes and partial sells
+  ---
+  duration_ms: 5.476834
+  type: 'test'
+  ...
+# Subtest: TC-US-0404-runtime: FIFO and WAC golden cases include fees/taxes and partial sell allocation
+ok 34 - TC-US-0404-runtime: FIFO and WAC golden cases include fees/taxes and partial sell allocation
+  ---
+  duration_ms: 261.359167
+  type: 'test'
+  ...
+# Subtest: TC-US-0401: currency registry and FX-rate contract are explicit
+ok 35 - TC-US-0401: currency registry and FX-rate contract are explicit
+  ---
+  duration_ms: 20.814875
+  type: 'test'
+  ...
+# Subtest: TC-US-0401-runtime: EUR/USD/GBP/CHF registry and versioned rates support duplicate and missing-rate handling
+ok 36 - TC-US-0401-runtime: EUR/USD/GBP/CHF registry and versioned rates support duplicate and missing-rate handling
+  ---
+  duration_ms: 152.856584
+  type: 'test'
+  ...
+# Subtest: TC-US-0804: DEGIRO CSV contract exposes versioned layout, canonical candidates and reconciliation
+ok 37 - TC-US-0804: DEGIRO CSV contract exposes versioned layout, canonical candidates and reconciliation
+  ---
+  duration_ms: 8.612958
+  type: 'test'
+  ...
+# Subtest: TC-US-0804-runtime: synthetic DEGIRO preview normalizes rows and reports reconciliation
+ok 38 - TC-US-0804-runtime: synthetic DEGIRO preview normalizes rows and reports reconciliation
+  ---
+  duration_ms: 224.250333
+  type: 'test'
+  ...
+# Subtest: TC-US-0704: dividend growth exposes configurable annual buckets, YoY and CAGR
+ok 39 - TC-US-0704: dividend growth exposes configurable annual buckets, YoY and CAGR
+  ---
+  duration_ms: 1.622417
+  type: 'test'
+  ...
+# Subtest: TC-US-0704-runtime: paid income yields reproducible YoY and CAGR
+ok 40 - TC-US-0704-runtime: paid income yields reproducible YoY and CAGR
+  ---
+  duration_ms: 260.018917
+  type: 'test'
+  ...
+# Subtest: TC-US-0703: TTM uses paid income and PADI uses explicit forecasts
+ok 41 - TC-US-0703: TTM uses paid income and PADI uses explicit forecasts
+  ---
+  duration_ms: 12.628
+  type: 'test'
+  ...
+# Subtest: TC-US-0703-runtime: TTM excludes old/projected events and PADI sums explicit forecast rules
+ok 42 - TC-US-0703-runtime: TTM excludes old/projected events and PADI sums explicit forecast rules
+  ---
+  duration_ms: 228.75325
+  type: 'test'
+  ...
+# Subtest: TC-US-0408: CALC-001 golden fixture covers the financial kernel contract
+ok 43 - TC-US-0408: CALC-001 golden fixture covers the financial kernel contract
+  ---
+  duration_ms: 30.361416
+  type: 'test'
+  ...
+# Subtest: TC-US-0408-runtime: CALC-001 is deterministic across FX, dividend tax, fees, transfer, split and replay
+ok 44 - TC-US-0408-runtime: CALC-001 is deterministic across FX, dividend tax, fees, transfer, split and replay
+  ---
+  duration_ms: 298.426459
+  type: 'test'
+  ...
+# Subtest: TC-US-1104: net-worth goal contract is scoped, configurable and versioned
+ok 45 - TC-US-1104: net-worth goal contract is scoped, configurable and versioned
+  ---
+  duration_ms: 14.978292
+  type: 'test'
+  ...
+# Subtest: TC-US-1104-UI: goal controls and evidence are present
+ok 46 - TC-US-1104-UI: goal controls and evidence are present
+  ---
+  duration_ms: 3.691542
+  type: 'test'
+  ...
+# Subtest: TC-US-1104-runtime: owner can create and read a synthetic net-worth goal
+ok 47 - TC-US-1104-runtime: owner can create and read a synthetic net-worth goal
+  ---
+  duration_ms: 162.718334
+  type: 'test'
+  ...
+# Subtest: TC-US-0105-A: API liveness is process-only
+ok 48 - TC-US-0105-A: API liveness is process-only
+  ---
+  duration_ms: 81.726375
+  type: 'test'
+  ...
+# Subtest: TC-US-0105-B: API readiness reports each dependency with a reason
+ok 49 - TC-US-0105-B: API readiness reports each dependency with a reason
+  ---
+  duration_ms: 20.259416
+  type: 'test'
+  ...
+# Subtest: TC-US-0105: web and worker have separate readiness checks
+ok 50 - TC-US-0105: web and worker have separate readiness checks
+  ---
+  duration_ms: 5.87475
+  type: 'test'
+  ...
+# Subtest: API liveness endpoint reports healthy
+ok 51 - API liveness endpoint reports healthy
+  ---
+  duration_ms: 94.969834
+  type: 'test'
+  ...
+# Subtest: API readiness endpoint reports dependency contract
+ok 52 - API readiness endpoint reports dependency contract
+  ---
+  duration_ms: 18.098917
+  type: 'test'
+  ...
+# Subtest: TC-US-0507: historical timetravel uses an as-of snapshot and preserves read-model boundaries
+ok 53 - TC-US-0507: historical timetravel uses an as-of snapshot and preserves read-model boundaries
+  ---
+  duration_ms: 11.367375
+  type: 'test'
+  ...
+# Subtest: TC-US-0507-runtime: historical snapshot access is authenticated
+ok 54 - TC-US-0507-runtime: historical snapshot access is authenticated
+  ---
+  duration_ms: 80.555667
+  type: 'test'
+  ...
+# Subtest: TC-US-0201: identity API owns the local account lifecycle contract
+ok 55 - TC-US-0201: identity API owns the local account lifecycle contract
+  ---
+  duration_ms: 5.552
+  type: 'test'
+  ...
+# Subtest: TC-US-0201-A: local user can be created and transitioned through lifecycle
+ok 56 - TC-US-0201-A: local user can be created and transitioned through lifecycle
+  ---
+  duration_ms: 97.231501
+  type: 'test'
+  ...
+# Subtest: TC-US-0104-A: application images expose commit and version metadata
+ok 57 - TC-US-0104-A: application images expose commit and version metadata
+  ---
+  duration_ms: 7.288834
+  type: 'test'
+  ...
+# Subtest: TC-US-0104-B: CI produces SBOM and digest evidence as artifacts
+ok 58 - TC-US-0104-B: CI produces SBOM and digest evidence as artifacts
+  ---
+  duration_ms: 0.221666
+  type: 'test'
+  ...
+# Subtest: TC-US-0104-C: promotion refuses different development and production digests
+ok 59 - TC-US-0104-C: promotion refuses different development and production digests
+  ---
+  duration_ms: 0.107166
+  type: 'test'
+  ...
+# Subtest: TC-US-0606: import commit is atomic and returns counts
+ok 60 - TC-US-0606: import commit is atomic and returns counts
+  ---
+  duration_ms: 11.909083
+  type: 'test'
+  ...
+# Subtest: TC-US-0606-runtime: blocking row prevents partial ledger commit, valid batch commits with counts
+ok 61 - TC-US-0606-runtime: blocking row prevents partial ledger commit, valid batch commits with counts
+  ---
+  duration_ms: 181.086084
+  type: 'test'
+  ...
+# Subtest: TC-US-0605: duplicate detection exposes provider id/hash reasons without ledger writes
+ok 62 - TC-US-0605: duplicate detection exposes provider id/hash reasons without ledger writes
+  ---
+  duration_ms: 6.197084
+  type: 'test'
+  ...
+# Subtest: TC-US-0605-runtime: provider id/hash matches are previewed and do not double-book
+ok 63 - TC-US-0605-runtime: provider id/hash matches are previewed and do not double-book
+  ---
+  duration_ms: 163.539
+  type: 'test'
+  ...
+# Subtest: TC-US-0601: import upload validates metadata, checksum, storage and ownership boundaries
+ok 64 - TC-US-0601: import upload validates metadata, checksum, storage and ownership boundaries
+  ---
+  duration_ms: 9.167292
+  type: 'test'
+  ...
+# Subtest: TC-US-0601-runtime: synthetic CSV upload is idempotency-safe and rejects unsupported input
+ok 65 - TC-US-0601-runtime: synthetic CSV upload is idempotency-safe and rejects unsupported input
+  ---
+  duration_ms: 109.192875
+  type: 'test'
+  ...
+# Subtest: TC-US-0602: import mapping templates enforce canonical fields and versioning
+ok 66 - TC-US-0602: import mapping templates enforce canonical fields and versioning
+  ---
+  duration_ms: 20.837833
+  type: 'test'
+  ...
+# Subtest: TC-US-0602-runtime: template is saved, reused and versioned without ledger mutation
+ok 67 - TC-US-0602-runtime: template is saved, reused and versioned without ledger mutation
+  ---
+  duration_ms: 161.262958
+  type: 'test'
+  ...
+# Subtest: TC-US-0604: row review preserves raw and normalized values with correction actor and timestamp
+ok 68 - TC-US-0604: row review preserves raw and normalized values with correction actor and timestamp
+  ---
+  duration_ms: 19.565583
+  type: 'test'
+  ...
+# Subtest: TC-US-0604-runtime: actor corrects a reviewed row without mutating the ledger
+ok 69 - TC-US-0604-runtime: actor corrects a reviewed row without mutating the ledger
+  ---
+  duration_ms: 153.735458
+  type: 'test'
+  ...
+# Subtest: TC-US-0607: import undo voids batch activities and keeps audit evidence
+ok 70 - TC-US-0607: import undo voids batch activities and keeps audit evidence
+  ---
+  duration_ms: 4.774042
+  type: 'test'
+  ...
+# Subtest: TC-US-0607-runtime: committed import batch can be undone without physical delete
+ok 71 - TC-US-0607-runtime: committed import batch can be undone without physical delete
+  ---
+  duration_ms: 208.22125
+  type: 'test'
+  ...
+# Subtest: TC-US-0603: import validation keeps valid, warning, error and unsupported rows separate
+ok 72 - TC-US-0603: import validation keeps valid, warning, error and unsupported rows separate
+  ---
+  duration_ms: 22.0265
+  type: 'test'
+  ...
+# Subtest: TC-US-0603-runtime: validation persists row reviews without ledger mutation
+ok 73 - TC-US-0603-runtime: validation persists row reviews without ledger mutation
+  ---
+  duration_ms: 153.798667
+  type: 'test'
+  ...
+# Subtest: TC-US-0701: income events separate received dividends from expected dividends by status
+ok 74 - TC-US-0701: income events separate received dividends from expected dividends by status
+  ---
+  duration_ms: 6.886916
+  type: 'test'
+  ...
+# Subtest: TC-US-0701-fixture: PERF-001 covers the four dividend statuses
+ok 75 - TC-US-0701-fixture: PERF-001 covers the four dividend statuses
+  ---
+  duration_ms: 0.586166
+  type: 'test'
+  ...
+# Subtest: TC-US-0701-runtime: received and expected dividends stay separated across status transitions
+ok 76 - TC-US-0701-runtime: received and expected dividends stay separated across status transitions
+  ---
+  duration_ms: 209.197
+  type: 'test'
+  ...
+# Subtest: TC-US-0702: income metrics expose gross, tax, net, yield and yield-on-cost
+ok 77 - TC-US-0702: income metrics expose gross, tax, net, yield and yield-on-cost
+  ---
+  duration_ms: 21.586375
+  type: 'test'
+  ...
+# Subtest: TC-US-0702-runtime: dividend metrics are traceable to income events, price and position cost
+ok 78 - TC-US-0702-runtime: dividend metrics are traceable to income events, price and position cost
+  ---
+  duration_ms: 169.925292
+  type: 'test'
+  ...
+# Subtest: TC-US-0303: instrument contract supports identifiers, exchange, asset class, currency and custom assets
+ok 79 - TC-US-0303: instrument contract supports identifiers, exchange, asset class, currency and custom assets
+  ---
+  duration_ms: 5.302292
+  type: 'test'
+  ...
+# Subtest: TC-US-0303-runtime: authenticated user registers standard and custom instruments
+ok 80 - TC-US-0303-runtime: authenticated user registers standard and custom instruments
+  ---
+  duration_ms: 107.637542
+  type: 'test'
+  ...
+# Subtest: TC-US-0403: provider identity mapping and unresolved workflow are explicit
+ok 81 - TC-US-0403: provider identity mapping and unresolved workflow are explicit
+  ---
+  duration_ms: 10.394875
+  type: 'test'
+  ...
+# Subtest: TC-US-0403-runtime: provider symbol can be unresolved, resolved, and read back with ISIN/CUSIP
+ok 82 - TC-US-0403-runtime: provider symbol can be unresolved, resolved, and read back with ISIN/CUSIP
+  ---
+  duration_ms: 190.967417
+  type: 'test'
+  ...
+# Subtest: TC-US-0402: instrument price observation contract is explicit
+ok 83 - TC-US-0402: instrument price observation contract is explicit
+  ---
+  duration_ms: 7.400083
+  type: 'test'
+  ...
+# Subtest: TC-US-0402-runtime: current/history prices persist with captured-at and conflict-safe duplicates
+ok 84 - TC-US-0402-runtime: current/history prices persist with captured-at and conflict-safe duplicates
+  ---
+  duration_ms: 158.154208
+  type: 'test'
+  ...
+# Subtest: TC-US-0304: ledger action contract covers action types and required financial fields
+ok 85 - TC-US-0304: ledger action contract covers action types and required financial fields
+  ---
+  duration_ms: 10.586083
+  type: 'test'
+  ...
+# Subtest: TC-US-0304-runtime: owner books all local action types and outsider is denied
+ok 86 - TC-US-0304-runtime: owner books all local action types and outsider is denied
+  ---
+  duration_ms: 324.8945
+  type: 'test'
+  ...
+# Subtest: TC-US-0306: ledger duplicate actions use external identity or deterministic account-scoped hash
+ok 87 - TC-US-0306: ledger duplicate actions use external identity or deterministic account-scoped hash
+  ---
+  duration_ms: 9.071042
+  type: 'test'
+  ...
+# Subtest: TC-US-0306-runtime: duplicate external and fallback identities do not create a second ledger action
+ok 88 - TC-US-0306-runtime: duplicate external and fallback identities do not create a second ledger action
+  ---
+  duration_ms: 259.094583
+  type: 'test'
+  ...
+# Subtest: TC-US-0308: ledger replay is deterministic and uses the canonical source
+ok 89 - TC-US-0308: ledger replay is deterministic and uses the canonical source
+  ---
+  duration_ms: 7.167333
+  type: 'test'
+  ...
+# Subtest: TC-US-0308-runtime: replay returns stable balances/totals and enforces portfolio isolation
+ok 90 - TC-US-0308-runtime: replay returns stable balances/totals and enforces portfolio isolation
+  ---
+  duration_ms: 232.701917
+  type: 'test'
+  ...
+# Subtest: TC-US-0305: transaction state machine and VOID correction are contractual
+ok 91 - TC-US-0305: transaction state machine and VOID correction are contractual
+  ---
+  duration_ms: 5.8745
+  type: 'test'
+  ...
+# Subtest: TC-US-0305-runtime: draft/pending/post transitions and VOID preserve the original activity
+ok 92 - TC-US-0305-runtime: draft/pending/post transitions and VOID preserve the original activity
+  ---
+  duration_ms: 239.001292
+  type: 'test'
+  ...
+# Subtest: TC-US-0307: paired transfers are contractual and contribution-neutral
+ok 93 - TC-US-0307: paired transfers are contractual and contribution-neutral
+  ---
+  duration_ms: 4.828792
+  type: 'test'
+  ...
+# Subtest: TC-US-0307-runtime: transfer creates paired source/destination activities without external flow
+ok 94 - TC-US-0307-runtime: transfer creates paired source/destination activities without external flow
+  ---
+  duration_ms: 197.505042
+  type: 'test'
+  ...
+# Subtest: US-0101: default Compose stack contains the local MacBook services
+ok 95 - US-0101: default Compose stack contains the local MacBook services
+  ---
+  duration_ms: 3.097708
+  type: 'test'
+  ...
+# Subtest: US-0101: required local services declare health checks
+ok 96 - US-0101: required local services declare health checks
+  ---
+  duration_ms: 0.489709
+  type: 'test'
+  ...
+# Subtest: TC-US-0502: manual action form validates required fields before commit and supports editing
+ok 97 - TC-US-0502: manual action form validates required fields before commit and supports editing
+  ---
+  duration_ms: 1.979625
+  type: 'test'
+  ...
+# Subtest: TC-US-0705: market events are filterable by type and date range
+ok 98 - TC-US-0705: market events are filterable by type and date range
+  ---
+  duration_ms: 8.441083
+  type: 'test'
+  ...
+# Subtest: TC-US-0705-runtime: synthetic events can be listed by type and date range
+ok 99 - TC-US-0705-runtime: synthetic events can be listed by type and date range
+  ---
+  duration_ms: 284.816292
+  type: 'test'
+  ...
+# Subtest: TC-US-0901: Money Flow account scope is opt-in and portfolio/user scoped
+ok 100 - TC-US-0901: Money Flow account scope is opt-in and portfolio/user scoped
+  ---
+  duration_ms: 6.839209
+  type: 'test'
+  ...
+# Subtest: TC-US-0901-runtime: member opts in/out only eligible accounts and cannot cross portfolio/user scope
+ok 101 - TC-US-0901-runtime: member opts in/out only eligible accounts and cannot cross portfolio/user scope
+  ---
+  duration_ms: 316.504626
+  type: 'test'
+  ...
+# Subtest: TC-US-0901-UI: onboarding exposes opt-in Money Flow account scope
+ok 102 - TC-US-0901-UI: onboarding exposes opt-in Money Flow account scope
+  ---
+  duration_ms: 2.064375
+  type: 'test'
+  ...
+# Subtest: TC-US-0902: Money Flow activities expose category type and final amount from the canonical ledger
+ok 103 - TC-US-0902: Money Flow activities expose category type and final amount from the canonical ledger
+  ---
+  duration_ms: 7.02175
+  type: 'test'
+  ...
+# Subtest: TC-US-0902-runtime: scoped activities classify income/spending/saving/transfer and account for fees/taxes
+ok 104 - TC-US-0902-runtime: scoped activities classify income/spending/saving/transfer and account for fees/taxes
+  ---
+  duration_ms: 269.018084
+  type: 'test'
+  ...
+# Subtest: TC-US-0909: Money Flow analysis exposes flow totals, category drill-down and parent-child consistency
+ok 105 - TC-US-0909: Money Flow analysis exposes flow totals, category drill-down and parent-child consistency
+  ---
+  duration_ms: 1.245666
+  type: 'test'
+  ...
+# Subtest: TC-US-0909-runtime: flow totals and drill-down transactions remain consistent for parent-child categories
+ok 106 - TC-US-0909-runtime: flow totals and drill-down transactions remain consistent for parent-child categories
+  ---
+  duration_ms: 300.600042
+  type: 'test'
+  ...
+# Subtest: TC-US-0908: monthly budgets expose groups, rollovers and actual-versus-budget
+ok 107 - TC-US-0908: monthly budgets expose groups, rollovers and actual-versus-budget
+  ---
+  duration_ms: 5.6465
+  type: 'test'
+  ...
+# Subtest: TC-US-0908-runtime: budget actuals are category-scoped and rollover is retained
+ok 108 - TC-US-0908-runtime: budget actuals are category-scoped and rollover is retained
+  ---
+  duration_ms: 234.590084
+  type: 'test'
+  ...
+# Subtest: TC-US-0904: Money Flow categories expose hierarchy, inactive status and bulk reassignment
+ok 109 - TC-US-0904: Money Flow categories expose hierarchy, inactive status and bulk reassignment
+  ---
+  duration_ms: 10.55225
+  type: 'test'
+  ...
+# Subtest: TC-US-0904-runtime: parent-child categories can be deactivated and transactions bulk-reassigned
+ok 110 - TC-US-0904-runtime: parent-child categories can be deactivated and transactions bulk-reassigned
+  ---
+  duration_ms: 219.292625
+  type: 'test'
+  ...
+# Subtest: TC-US-0910: Money Flow currency report exposes native and base currency with period-end FX
+ok 111 - TC-US-0910: Money Flow currency report exposes native and base currency with period-end FX
+  ---
+  duration_ms: 1.366125
+  type: 'test'
+  ...
+# Subtest: TC-US-0910-runtime: native amount stays visible while period-end FX produces base amount
+ok 112 - TC-US-0910-runtime: native amount stays visible while period-end FX produces base amount
+  ---
+  duration_ms: 232.277833
+  type: 'test'
+  ...
+# Subtest: TC-US-0905: normalized payees, tags and bulk edit are exposed
+ok 113 - TC-US-0905: normalized payees, tags and bulk edit are exposed
+  ---
+  duration_ms: 8.613709
+  type: 'test'
+  ...
+# Subtest: TC-US-0905-runtime: payees and tags can be bulk-edited on scoped transactions
+ok 114 - TC-US-0905-runtime: payees and tags can be bulk-edited on scoped transactions
+  ---
+  duration_ms: 249.449125
+  type: 'test'
+  ...
+# Subtest: TC-US-0907: review queue exposes confidence, source, override and audit boundaries
+ok 115 - TC-US-0907: review queue exposes confidence, source, override and audit boundaries
+  ---
+  duration_ms: 9.986
+  type: 'test'
+  ...
+# Subtest: TC-US-0907-runtime: review-required rule enters queue and override closes it with audit evidence
+ok 116 - TC-US-0907-runtime: review-required rule enters queue and override closes it with audit evidence
+  ---
+  duration_ms: 223.442833
+  type: 'test'
+  ...
+# Subtest: TC-US-0906: categorisation rules expose match types, priority and account scope
+ok 117 - TC-US-0906: categorisation rules expose match types, priority and account scope
+  ---
+  duration_ms: 8.462416
+  type: 'test'
+  ...
+# Subtest: TC-US-0906-runtime: deterministic rule matching honors priority, matcher type and account scope
+ok 118 - TC-US-0906-runtime: deterministic rule matching honors priority, matcher type and account scope
+  ---
+  duration_ms: 302.214666
+  type: 'test'
+  ...
+# Subtest: TC-US-0903: paired transfers and credit-card payments expose neutral Money Flow semantics
+ok 119 - TC-US-0903: paired transfers and credit-card payments expose neutral Money Flow semantics
+  ---
+  duration_ms: 1.168916
+  type: 'test'
+  ...
+# Subtest: TC-US-0903-runtime: paired transfers and liability payments stay visible without changing contribution or spending totals
+ok 120 - TC-US-0903-runtime: paired transfers and liability payments stay visible without changing contribution or spending totals
+  ---
+  duration_ms: 241.200125
+  type: 'test'
+  ...
+# Subtest: US-0101-D: local object storage supports synthetic upload and download
+ok 121 - US-0101-D: local object storage supports synthetic upload and download
+  ---
+  duration_ms: 103.16225
+  type: 'test'
+  ...
+# Subtest: TC-US-0106-A: API request and response carry trace context
+ok 122 - TC-US-0106-A: API request and response carry trace context
+  ---
+  duration_ms: 57.4745
+  type: 'test'
+  ...
+# Subtest: TC-US-0106-B: worker job logs contain traceable job context
+ok 123 - TC-US-0106-B: worker job logs contain traceable job context
+  ---
+  duration_ms: 0.194
+  type: 'test'
+  ...
+# Subtest: TC-US-0106-C: observability redacts sensitive synthetic fields
+ok 124 - TC-US-0106-C: observability redacts sensitive synthetic fields
+  ---
+  duration_ms: 2.526833
+  type: 'test'
+  ...
+# Subtest: TC-US-0203-B: OIDC state is single-use and identity mapping is persisted
+ok 125 - TC-US-0203-B: OIDC state is single-use and identity mapping is persisted
+  ---
+  duration_ms: 0.897041
+  type: 'test'
+  ...
+# Subtest: TC-US-0203-B-runtime: callback maps identity, creates session, rejects replay and logout revokes it
+ok 126 - TC-US-0203-B-runtime: callback maps identity, creates session, rejects replay and logout revokes it
+  ---
+  duration_ms: 167.178959
+  type: 'test'
+  ...
+# Subtest: TC-US-0501: UI-001 onboarding contract leads from empty state to first action
+ok 127 - TC-US-0501: UI-001 onboarding contract leads from empty state to first action
+  ---
+  duration_ms: 8.912458
+  type: 'test'
+  ...
+# Subtest: TC-US-0706: performance comparison exposes TWR, MWRR/IRR and Modified Dietz contracts
+ok 128 - TC-US-0706: performance comparison exposes TWR, MWRR/IRR and Modified Dietz contracts
+  ---
+  duration_ms: 9.317292
+  type: 'test'
+  ...
+# Subtest: TC-US-0706-runtime: cashflow timing produces comparable performance methods
+ok 129 - TC-US-0706-runtime: cashflow timing produces comparable performance methods
+  ---
+  duration_ms: 189.811583
+  type: 'test'
+  ...
+# Subtest: TC-US-0405: P&L contract separates price, FX, fees and taxes
+ok 130 - TC-US-0405: P&L contract separates price, FX, fees and taxes
+  ---
+  duration_ms: 5.483208
+  type: 'test'
+  ...
+# Subtest: TC-US-0405-runtime: realized and unrealized P&L golden case explains price, FX, fees and taxes
+ok 131 - TC-US-0405-runtime: realized and unrealized P&L golden case explains price, FX, fees and taxes
+  ---
+  duration_ms: 163.075917
+  type: 'test'
+  ...
+# Subtest: TC-US-0505: allocation uses explicit largest-remainder rounding and totals 100 percent
+ok 132 - TC-US-0505: allocation uses explicit largest-remainder rounding and totals 100 percent
+  ---
+  duration_ms: 8.90475
+  type: 'test'
+  ...
+# Subtest: TC-US-0301: portfolio contract exposes owner, status, privacy scope and reporting currency
+ok 133 - TC-US-0301: portfolio contract exposes owner, status, privacy scope and reporting currency
+  ---
+  duration_ms: 6.565042
+  type: 'test'
+  ...
+# Subtest: TC-US-0301-runtime: authenticated owner creates and reads a configured portfolio
+ok 134 - TC-US-0301-runtime: authenticated owner creates and reads a configured portfolio
+  ---
+  duration_ms: 107.671208
+  type: 'test'
+  ...
+# Subtest: TC-US-0503: portfolio KPIs are rendered from the calculation read model
+ok 135 - TC-US-0503: portfolio KPIs are rendered from the calculation read model
+  ---
+  duration_ms: 1.804458
+  type: 'test'
+  ...
+# Subtest: TC-US-0504: positions table supports configurable columns, open/closed filter and cash position
+ok 136 - TC-US-0504: positions table supports configurable columns, open/closed filter and cash position
+  ---
+  duration_ms: 2.513209
+  type: 'test'
+  ...
+# Subtest: TC-US-0204: portfolio roles are explicit and enforced server-side
+ok 137 - TC-US-0204: portfolio roles are explicit and enforced server-side
+  ---
+  duration_ms: 3.780417
+  type: 'test'
+  ...
+# Subtest: TC-US-0204-runtime: owner, role reads/writes, member management and isolation
+ok 138 - TC-US-0204-runtime: owner, role reads/writes, member management and isolation
+  ---
+  duration_ms: 238.697542
+  type: 'test'
+  ...
+# Subtest: TC-US-0407: portfolio snapshot contract is explicit and rebuildable
+ok 139 - TC-US-0407: portfolio snapshot contract is explicit and rebuildable
+  ---
+  duration_ms: 9.705292
+  type: 'test'
+  ...
+# Subtest: TC-US-0407-runtime: snapshot contains value, cash, flows, P&L and as-of evidence
+ok 140 - TC-US-0407-runtime: snapshot contains value, cash, flows, P&L and as-of evidence
+  ---
+  duration_ms: 153.170875
+  type: 'test'
+  ...
+# Subtest: TC-US-0506: position detail contract exposes identity, performance, calendar and actions
+ok 141 - TC-US-0506: position detail contract exposes identity, performance, calendar and actions
+  ---
+  duration_ms: 19.621458
+  type: 'test'
+  ...
+# Subtest: TC-US-0506-runtime: detail endpoint keeps the portfolio access boundary
+ok 142 - TC-US-0506-runtime: detail endpoint keeps the portfolio access boundary
+  ---
+  duration_ms: 56.353125
+  type: 'test'
+  ...
+# Subtest: TC-US-0206: privacy export and deletion use soft-delete and revoke boundaries
+ok 143 - TC-US-0206: privacy export and deletion use soft-delete and revoke boundaries
+  ---
+  duration_ms: 1.064208
+  type: 'test'
+  ...
+# Subtest: TC-US-0206-runtime: export contains owned data/grants and deletion revokes access without physical delete
+ok 144 - TC-US-0206-runtime: export contains owned data/grants and deletion revokes access without physical delete
+  ---
+  duration_ms: 156.535709
+  type: 'test'
+  ...
+# Subtest: TC-US-0801: provider registry exposes capabilities, auth mode, API version and status
+ok 145 - TC-US-0801: provider registry exposes capabilities, auth mode, API version and status
+  ---
+  duration_ms: 8.253209
+  type: 'test'
+  ...
+# Subtest: TC-US-0801-runtime: synthetic provider can be configured and paused
+ok 146 - TC-US-0801-runtime: synthetic provider can be configured and paused
+  ---
+  duration_ms: 105.963625
+  type: 'test'
+  ...
+# Subtest: TC-US-0806: provider sync failures expose status, retry policy and incident evidence
+ok 147 - TC-US-0806: provider sync failures expose status, retry policy and incident evidence
+  ---
+  duration_ms: 4.88925
+  type: 'test'
+  ...
+# Subtest: TC-US-0806-runtime: synthetic 401/403/429/schema failures persist incidents and retry policy
+ok 148 - TC-US-0806-runtime: synthetic 401/403/429/schema failures persist incidents and retry policy
+  ---
+  duration_ms: 151.9505
+  type: 'test'
+  ...
+# Subtest: TC-US-0608: reconciliation issues have a portfolio-scoped review queue
+ok 149 - TC-US-0608: reconciliation issues have a portfolio-scoped review queue
+  ---
+  duration_ms: 7.010875
+  type: 'test'
+  ...
+# Subtest: TC-US-0608-runtime: unknown instrument, balance mismatch and ambiguous transfer can be reviewed and resolved
+ok 150 - TC-US-0608-runtime: unknown instrument, balance mismatch and ambiguous transfer can be reviewed and resolved
+  ---
+  duration_ms: 139.52875
+  type: 'test'
+  ...
+# Subtest: TC-US-1101-A: report run contract is queued, as-of and source-versioned
+ok 151 - TC-US-1101-A: report run contract is queued, as-of and source-versioned
+  ---
+  duration_ms: 6.874875
+  type: 'test'
+  ...
+# Subtest: TC-US-1101-A-runtime: owner can queue and read a synthetic portfolio report run
+ok 152 - TC-US-1101-A-runtime: owner can queue and read a synthetic portfolio report run
+  ---
+  duration_ms: 94.544542
+  type: 'test'
+  ...
+# Subtest: TC-US-1101-UI: report run controls and evidence are present
+ok 153 - TC-US-1101-UI: report run controls and evidence are present
+  ---
+  duration_ms: 0.340125
+  type: 'test'
+  ...
+# Subtest: TC-US-1101-B: completed report artifact contract is versioned and expiring
+ok 154 - TC-US-1101-B: completed report artifact contract is versioned and expiring
+  ---
+  duration_ms: 4.958666
+  type: 'test'
+  ...
+# Subtest: TC-US-1101-B-runtime: completed synthetic report exposes artifact key, format, status and expiry
+ok 155 - TC-US-1101-B-runtime: completed synthetic report exposes artifact key, format, status and expiry
+  ---
+  duration_ms: 42.9315
+  type: 'test'
+  ...
+# Subtest: TC-US-1102: export contract validates format, privacy scope and locale/currency
+ok 156 - TC-US-1102: export contract validates format, privacy scope and locale/currency
+  ---
+  duration_ms: 5.788292
+  type: 'test'
+  ...
+# Subtest: TC-US-1102-runtime: synthetic export respects filters, privacy scope and locale/currency formatting
+ok 157 - TC-US-1102-runtime: synthetic export respects filters, privacy scope and locale/currency formatting
+  ---
+  duration_ms: 35.932125
+  type: 'test'
+  ...
+# Subtest: TC-US-1103: taxable income and securities report contract exposes source and estimate boundaries
+ok 158 - TC-US-1103: taxable income and securities report contract exposes source and estimate boundaries
+  ---
+  duration_ms: 6.60625
+  type: 'test'
+  ...
+# Subtest: TC-US-1103-runtime: synthetic tax report traces income and trades and filters sold securities
+ok 159 - TC-US-1103-runtime: synthetic tax report traces income and trades and filters sold securities
+  ---
+  duration_ms: 41.26375
+  type: 'test'
+  ...
+# Subtest: TC-US-0202: sessions are opaque, hashed, expirable and revocable
+ok 160 - TC-US-0202: sessions are opaque, hashed, expirable and revocable
+  ---
+  duration_ms: 2.304666
+  type: 'test'
+  ...
+# Subtest: TC-US-0202-A: local session login, expiry and logout lifecycle
+ok 161 - TC-US-0202-A: local session login, expiry and logout lifecycle
+  ---
+  duration_ms: 1316.516751
+  type: 'test'
+  ...
+# Subtest: TC-US-0805: sync result review exposes before/after posting categories
+ok 162 - TC-US-0805: sync result review exposes before/after posting categories
+  ---
+  duration_ms: 7.712125
+  type: 'test'
+  ...
+# Subtest: TC-US-0805-runtime: synthetic sync results are reviewable and posting remains separate
+ok 163 - TC-US-0805-runtime: synthetic sync results are reviewable and posting remains separate
+  ---
+  duration_ms: 124.089375
+  type: 'test'
+  ...
+# Subtest: TC-US-0203-A: TOTP factor is encrypted, enrollable, verifiable and revocable
+ok 164 - TC-US-0203-A: TOTP factor is encrypted, enrollable, verifiable and revocable
+  ---
+  duration_ms: 1.046084
+  type: 'test'
+  ...
+# Subtest: TC-US-0203-A-runtime: enrolment, success, invalid code and revoke
+ok 165 - TC-US-0203-A-runtime: enrolment, success, invalid code and revoke
+  ---
+  duration_ms: 91.807208
+  type: 'test'
+  ...
+# Subtest: TC-US-0802: Trading 212 connection is read-only, vault-referenced and revocable
+ok 166 - TC-US-0802: Trading 212 connection is read-only, vault-referenced and revocable
+  ---
+  duration_ms: 8.009375
+  type: 'test'
+  ...
+# Subtest: TC-US-0802-runtime: synthetic Trading 212 Invest and Stocks ISA mapping can be revoked
+ok 167 - TC-US-0802-runtime: synthetic Trading 212 Invest and Stocks ISA mapping can be revoked
+  ---
+  duration_ms: 73.148125
+  type: 'test'
+  ...
+# Subtest: TC-US-0803: Trading 212 incremental sync exposes fixtures, retry and review-safe summary
+ok 168 - TC-US-0803: Trading 212 incremental sync exposes fixtures, retry and review-safe summary
+  ---
+  duration_ms: 6.054083
+  type: 'test'
+  ...
+# Subtest: TC-US-0803-runtime: success is idempotent, rate limits retry and schema drift stays attention-only
+ok 169 - TC-US-0803-runtime: success is idempotent, rate limits retry and schema drift stays attention-only
+  ---
+  duration_ms: 90.725834
+  type: 'test'
+  ...
+1..169
+# tests 169
+# suites 0
+# pass 169
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3626.558044
+
+exit_code=0

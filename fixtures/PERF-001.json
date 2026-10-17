@@ -1,0 +1,76 @@
+{
+  "fixture_id": "PERF-001",
+  "version": "1.0.0",
+  "description": "Synthetic income/dividend events for the local income-performance prefix (US-0701).",
+  "portfolio": {
+    "reporting_currency_code": "EUR"
+  },
+  "instrument": {
+    "name": "Synthetic dividend equity",
+    "instrument_type": "STOCK",
+    "asset_class": "EQUITY",
+    "currency_code": "EUR",
+    "ticker": "DIVSYNTH",
+    "valuation_source": "MANUAL",
+    "is_listed": false
+  },
+  "income_events": [
+    {
+      "status": "ANNOUNCED",
+      "event_type": "DIVIDEND",
+      "announced_on": "2026-09-01",
+      "ex_date": "2026-10-05",
+      "payment_date": "2026-10-20",
+      "gross_amount": "25.00",
+      "tax_amount": "3.75",
+      "net_amount": "21.25",
+      "currency_code": "EUR"
+    },
+    {
+      "status": "PROJECTED",
+      "event_type": "DIVIDEND",
+      "announced_on": null,
+      "ex_date": "2026-11-06",
+      "payment_date": "2026-11-20",
+      "gross_amount": "26.00",
+      "tax_amount": "3.90",
+      "net_amount": "22.10",
+      "currency_code": "EUR"
+    },
+    {
+      "status": "EX_DATE",
+      "event_type": "DIVIDEND",
+      "announced_on": "2026-09-15",
+      "ex_date": "2026-10-16",
+      "payment_date": "2026-10-30",
+      "gross_amount": "24.50",
+      "tax_amount": "3.68",
+      "net_amount": "20.82",
+      "currency_code": "EUR"
+    },
+    {
+      "status": "PAID",
+      "event_type": "DIVIDEND",
+      "announced_on": "2026-06-01",
+      "ex_date": "2026-07-01",
+      "payment_date": "2026-07-15",
+      "gross_amount": "22.00",
+      "tax_amount": "3.30",
+      "net_amount": "18.70",
+      "currency_code": "EUR"
+    }
+  ],
+  "expected": {
+    "received_statuses": ["PAID"],
+    "expected_statuses": ["ANNOUNCED", "PROJECTED", "EX_DATE"],
+    "counts": {
+      "total": 4,
+      "received": 1,
+      "expected": 3,
+      "announced": 1,
+      "projected": 1,
+      "ex_date": 1,
+      "paid": 1
+    }
+  }
+}

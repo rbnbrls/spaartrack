@@ -1,0 +1,1529 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Spaartrack — lokale onboarding</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: #0b1018; color: #e8eef8; }
+      header { border-bottom: 1px solid #202b3b; background: #101722; }
+      header .shell, main { width: min(1040px, calc(100% - 2rem)); margin: 0 auto; }
+      header .shell { display: flex; align-items: center; justify-content: space-between; min-height: 72px; }
+      .brand { font-weight: 800; letter-spacing: .02em; font-size: 1.15rem; }
+      .badge { color: #9fe3b1; border: 1px solid #2e6545; border-radius: 999px; padding: .35rem .65rem; font-size: .78rem; }
+      main { padding: 3rem 0 5rem; }
+      .hero { max-width: 720px; margin-bottom: 2rem; }
+      h1 { margin: 0 0 .8rem; font-size: clamp(2rem, 6vw, 3.6rem); line-height: 1.05; }
+      h2 { margin-top: 0; }
+      p { color: #a9b6c8; line-height: 1.6; }
+      .card { border: 1px solid #26354a; border-radius: 18px; background: #121b28; padding: clamp(1.25rem, 4vw, 2rem); box-shadow: 0 16px 50px #0003; }
+      .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: .55rem; margin: 0 0 1.5rem; padding: 0; list-style: none; }
+      .steps li { color: #718198; border-bottom: 2px solid #26354a; padding: .5rem 0; font-size: .82rem; }
+      .steps li.active { color: #e8eef8; border-color: #7cc9f7; }
+      label { display: grid; gap: .4rem; color: #cbd6e5; font-weight: 650; margin: 1rem 0; }
+      input, select { width: 100%; border: 1px solid #33455e; border-radius: 10px; padding: .75rem .8rem; background: #0c141f; color: #f4f7fb; font: inherit; }
+      input:focus, select:focus { outline: 2px solid #7cc9f7; outline-offset: 2px; }
+      button { border: 0; border-radius: 10px; padding: .78rem 1rem; background: #7cc9f7; color: #07111d; font: inherit; font-weight: 800; cursor: pointer; }
+      button:hover { background: #a3ddff; }
+      .actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.3rem; }
+      .notice { border-left: 3px solid #7cc9f7; background: #172537; padding: .8rem 1rem; color: #c7d8e9; }
+      .success { border-color: #54c987; background: #13291f; }
+      .error { border-color: #e58b8b; background: #311b20; color: #ffd4d4; }
+      .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-top: 1.25rem; }
+      .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-top: 1.25rem; }
+      .position-controls { display: flex; gap: 1rem; flex-wrap: wrap; align-items: end; margin-top: 1.5rem; }
+      .position-controls label { margin: 0; min-width: 180px; }
+      .position-columns { display: flex; gap: .75rem; flex-wrap: wrap; color: #a9b6c8; font-size: .9rem; }
+      .position-columns label { display: inline-flex; margin: 0; gap: .35rem; align-items: center; font-weight: 500; }
+      .position-columns input { width: auto; }
+      .positions-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+      .positions-table th, .positions-table td { border-bottom: 1px solid #26354a; padding: .75rem .5rem; text-align: left; }
+      .positions-table th { color: #a9b6c8; font-size: .8rem; text-transform: uppercase; }
+      .positions-empty { color: #a9b6c8; }
+      .position-detail { margin-top: 1.5rem; border-top: 1px solid #26354a; padding-top: 1.25rem; }
+      .detail-tabs { display: flex; gap: .5rem; flex-wrap: wrap; margin: .75rem 0 1rem; }
+      .detail-tabs button { background: #26354a; color: #e8eef8; }
+      .detail-tabs button[aria-selected="true"] { background: #7cc9f7; color: #07111d; }
+      .detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+      .detail-table { width: 100%; border-collapse: collapse; }
+      .detail-table th, .detail-table td { border-bottom: 1px solid #26354a; padding: .6rem .4rem; text-align: left; }
+      .detail-table th { color: #a9b6c8; font-size: .8rem; }
+      .timetravel { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid #26354a; }
+      .timetravel-controls { display: flex; gap: .75rem; flex-wrap: wrap; align-items: end; }
+      .timetravel-controls label { min-width: 190px; margin: 0; }
+      .timetravel-evidence { color: #a9b6c8; }
+      .allocation-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+      .allocation-table th, .allocation-table td { border-bottom: 1px solid #26354a; padding: .65rem .5rem; text-align: left; }
+      .validation { margin: 1rem 0; padding: .8rem 1rem .8rem 2rem; border-left: 3px solid #e58b8b; background: #311b20; color: #ffd4d4; }
+      .metric { padding: 1rem; background: #0c141f; border-radius: 12px; border: 1px solid #26354a; }
+      .metric small { display: block; color: #8292a8; margin-bottom: .35rem; }
+      .metric strong { font-size: 1.05rem; }
+      [hidden] { display: none !important; }
+      @media (max-width: 640px) { main { padding-top: 2rem; } .steps { grid-template-columns: repeat(2, 1fr); } .summary { grid-template-columns: 1fr; } header .shell { min-height: 62px; } }
+    </style>
+  </head>
+  <body>
+    <header><div class="shell"><div class="brand">Spaartrack</div><div class="badge">Lokale MacBook release</div></div></header>
+    <main>
+      <section class="hero">
+        <h1>Bouw je eerste portfolio op.</h1>
+        <p>Een rustige, stap-voor-stap start voor je private portfolio. Deze lokale release gebruikt uitsluitend synthetische demo-data.</p>
+      </section>
+      <section id="onboarding" class="card" aria-labelledby="onboarding-title">
+        <h2 id="onboarding-title">Synthetische lokale demo</h2>
+        <ol class="steps" aria-label="Onboarding stappen">
+          <li id="step-empty" class="active">1. Start</li><li id="step-portfolio">2. Portfolio</li><li id="step-account">3. Account</li><li id="step-action">4. Eerste actie</li>
+        </ol>
+        <div id="status" class="notice" role="status">Maak een lokaal synthetisch profiel aan om te beginnen.</div>
+
+        <div id="empty-state" data-testid="empty-state">
+          <p>Je hebt nog geen portfolio. We maken een synthetische lokale gebruiker aan en leiden je door currency, portfolio, account en je eerste storting.</p>
+          <div class="actions"><button id="start-onboarding" data-testid="start-onboarding" type="button">Start onboarding</button></div>
+        </div>
+
+        <form id="portfolio-form" data-testid="portfolio-form" hidden>
+          <h3>1. Portfolio instellen</h3>
+          <p>Kies een naam en de reporting currency voor je read models.</p>
+          <label for="portfolio-name">Portfolio naam<input id="portfolio-name" name="name" required value="Mijn synthetisch portfolio"></label>
+          <label for="reporting-currency">Reporting currency<select id="reporting-currency" name="reporting_currency_code" required></select></label>
+          <div class="actions"><button type="submit">Portfolio opslaan</button></div>
+        </form>
+
+        <form id="account-form" data-testid="account-form" hidden>
+          <h3>2. Account toevoegen</h3>
+          <p>Een account is de financiële container voor je eerste ledger-actie.</p>
+          <label for="account-name">Account naam<input id="account-name" name="name" required value="Lokale brokerage"></label>
+          <label for="account-type">Account type<select id="account-type" name="account_type" required><option value="BANK">Bank</option><option value="CASH">Cash</option><option value="CREDIT_CARD">Creditcard</option><option value="BROKERAGE">Brokerage</option></select></label>
+          <label for="base-currency">Base currency<select id="base-currency" name="base_currency_code" required></select></label>
+          <div class="actions"><button type="submit">Account opslaan</button></div>
+        </form>
+
+        <form id="action-form" data-testid="action-form" hidden>
+          <h3>3. Eerste actie boeken</h3>
+          <p>Deze synthetische deposit wordt via de canonical ledger geboekt.</p>
+          <label for="deposit-amount">Bedrag<input id="deposit-amount" name="amount" inputmode="decimal" required value="100"></label>
+          <label for="deposit-date">Datum<input id="deposit-date" name="effective_date" type="date" required value="2026-10-17"></label>
+          <div class="actions"><button type="submit">Eerste actie boeken</button></div>
+        </form>
+
+        <div id="complete-state" hidden>
+          <h3>Onboarding voltooid</h3>
+          <div class="notice success">Je eerste portfolio is opgebouwd. De gegevens zijn via de API en canonical ledger opgeslagen.</div>
+          <div id="portfolio-kpis" class="kpis" aria-label="Portfolio KPI's">
+            <div class="metric"><small>Portfolio value</small><strong id="portfolio-value">—</strong></div>
+            <div class="metric"><small>Invested capital</small><strong id="invested-capital">—</strong></div>
+            <div class="metric"><small>Free cash</small><strong id="free-cash">—</strong></div>
+          </div>
+          <p id="snapshot-evidence">KPI’s geladen uit de calculation read model snapshot.</p>
+          <section id="money-flow-scope-panel" class="timetravel" data-testid="money-flow-scope-panel" aria-labelledby="money-flow-scope-title">
+            <h3 id="money-flow-scope-title">Money Flow accounts</h3>
+            <p>Selecteer opt-in welke bank-, cash- en creditcardaccounts in Money Flow worden meegenomen. Deze keuze is persoonlijk en portfolio-scoped.</p>
+            <div id="money-flow-scope-list" aria-live="polite">Accounts worden geladen.</div>
+            <p id="money-flow-scope-status" class="notice" role="status">Nog geen Money Flow-scope geladen.</p>
+          </section>
+          <section id="money-flow-activities" class="timetravel" data-testid="money-flow-activities" aria-labelledby="money-flow-activities-title">
+            <h3 id="money-flow-activities-title">Money Flow activities</h3>
+            <p>POSTED ledgeractiviteiten worden read-only geclassificeerd als income, spending, saving of transfer. Paired transfers en Creditcard payment activiteiten zijn zichtbaar maar contribution/spending-neutral. Final amount verwerkt fees en tax.</p>
+            <p id="money-flow-activities-status" class="notice" role="status">Activities worden geladen.</p>
+            <div id="money-flow-activity-totals" class="kpis" aria-label="Money Flow totals"></div>
+            <table id="money-flow-activity-table" class="detail-table"><thead><tr><th>Select</th><th>Datum</th><th>Activity</th><th>Category</th><th>Neutral</th><th>Final amount</th><th>Currency</th></tr></thead><tbody></tbody></table>
+          </section>
+          <section id="money-flow-categories" class="timetravel" data-testid="money-flow-categories" aria-labelledby="money-flow-categories-title">
+            <h3 id="money-flow-categories-title">Money Flow categories</h3>
+            <p>Beheer parent categories en subcategories. Een Subcategory hoort bij één parent category. Deactiveer een category zonder historische transaction assignments te verwijderen en reassign geselecteerde activities in bulk.</p>
+            <form id="category-form">
+              <label for="category-name">Category name<input id="category-name" required value="Synthetic groceries"></label>
+              <label for="category-type">Category type<select id="category-type"><option value="SPENDING">Spending</option><option value="INCOME">Income</option><option value="SAVING">Saving</option><option value="TRANSFER">Transfer</option></select></label>
+              <label for="category-parent">Parent category<select id="category-parent"><option value="">Geen parent (top-level)</option></select></label>
+              <div class="actions"><button type="submit">Category opslaan</button></div>
+            </form>
+            <p id="category-status" class="notice" role="status">Categories worden geladen.</p>
+            <table id="category-table" class="detail-table"><thead><tr><th>Name</th><th>Type</th><th>Parent</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table>
+            <div class="actions" data-endpoint="/api/v1/money-flow/categories/bulk-reassign"><label for="category-reassign-target">Bulk reassign target<select id="category-reassign-target"><option value="">Kies active category</option></select></label><button id="category-reassign" type="button">Bulk reassign geselecteerde activities</button></div>
+          </section>
+          <section id="money-flow-payees-tags" class="timetravel" data-testid="money-flow-payees-tags" aria-labelledby="money-flow-payees-tags-title">
+            <h3 id="money-flow-payees-tags-title">Money Flow payees</h3>
+            <p>Beheer normalized payees en tags. Bulk edit past een payee en de volledige tagset toe op geselecteerde activities zonder de canonical ledger te wijzigen.</p>
+            <div class="grid-2">
+              <form id="payee-form">
+                <label for="payee-name">Normalized payee<input id="payee-name" required value="Synthetic Coffee Shop"></label>
+                <div class="actions"><button type="submit">Payee opslaan</button></div>
+              </form>
+              <form id="tag-form">
+                <label for="tag-name">Tag<input id="tag-name" required value="Needs review"></label>
+                <label for="tag-color">Tag color<input id="tag-color" value="#f59e0b" pattern="#[0-9a-fA-F]{6}"></label>
+                <div class="actions"><button type="submit">Tag opslaan</button></div>
+              </form>
+            </div>
+            <p id="payees-tags-status" class="notice" role="status">Payees en tags worden geladen.</p>
+            <div class="grid-2">
+              <div><strong>Payees</strong><ul id="payee-list"></ul></div>
+              <div><strong>Tags</strong><ul id="tag-list"></ul></div>
+            </div>
+            <div class="actions" data-endpoint="/api/v1/money-flow/transactions/bulk-edit">
+              <label for="bulk-payee">Bulk edit payee<select id="bulk-payee"><option value="">Geen payee</option></select></label>
+              <label for="bulk-tags">Bulk edit tags<select id="bulk-tags" multiple size="3"><option value="">Geen tags</option></select></label>
+              <button id="bulk-payee-tags" type="button">Bulk edit geselecteerde activities</button>
+            </div>
+          </section>
+          <section id="money-flow-rules" class="timetravel" data-testid="money-flow-rules" aria-labelledby="money-flow-rules-title">
+            <h3 id="money-flow-rules-title">Money Flow rules</h3>
+            <p>Automatiseer categorisation met contains, starts-with, exact of regex. Priority wordt eerst toegepast; daarna volgt vaste matcher-volgorde en account scope.</p>
+            <form id="rule-form">
+              <label for="rule-name">Rule name<input id="rule-name" required value="Synthetic coffee rule"></label>
+              <label for="rule-match-type">Match type<select id="rule-match-type"><option value="CONTAINS">Contains</option><option value="STARTS_WITH">Starts-with</option><option value="EXACT">Exact</option><option value="REGEX">Regex</option></select></label>
+              <label for="rule-value">Match value<input id="rule-value" required value="Synthetic"></label>
+              <label for="rule-priority">Priority<input id="rule-priority" type="number" min="0" value="100"></label>
+              <label for="rule-account">Account scope<select id="rule-account"><option value="">Alle eligible accounts</option></select></label>
+              <label for="rule-payee">Action payee<select id="rule-payee"><option value="">Geen payee</option></select></label>
+              <label for="rule-category">Action category<select id="rule-category"><option value="">Geen category</option></select></label>
+              <label><input id="rule-review-required" type="checkbox"> Review required</label>
+              <div class="actions"><button type="submit">Rule opslaan</button></div>
+            </form>
+            <p id="rules-status" class="notice" role="status">Rules worden geladen.</p>
+            <table id="rules-table" class="detail-table"><thead><tr><th>Name</th><th>Match</th><th>Priority</th><th>Account scope</th><th>Status</th></tr></thead><tbody></tbody></table>
+            <div class="actions" data-endpoint="/api/v1/money-flow/rules/apply"><button id="rules-apply" type="button">Apply categorisation rules</button></div>
+          </section>
+          <section id="money-flow-review" class="timetravel" data-testid="money-flow-review" aria-labelledby="money-flow-review-title">
+            <h3 id="money-flow-review-title">Money Flow review queue</h3>
+            <p>Review rule/import/AI confidence voordat een assignment definitief wordt. Accept, Override en Review audit blijven zichtbaar.</p>
+            <div class="grid-2">
+              <label for="review-payee">Override payee<select id="review-payee"><option value="">Geen payee</option></select></label>
+              <label for="review-category">Override category<select id="review-category"><option value="">Geen category</option></select></label>
+            </div>
+            <p id="money-flow-review-status" class="notice" role="status">Review queue wordt geladen.</p>
+            <table id="review-table" class="detail-table"><thead><tr><th>Date</th><th>Description</th><th>Source</th><th>Confidence</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table>
+          </section>
+          <section id="money-flow-budgets" class="timetravel" data-testid="money-flow-budgets" aria-labelledby="money-flow-budgets-title">
+            <h3 id="money-flow-budgets-title">Money Flow budgets</h3>
+            <p>Maandelijkse budgetten met groepen, rollover en Actual versus budget uit gecategoriseerde POSTED ledgeractiviteiten.</p>
+            <form id="budget-form"><div class="grid-2">
+              <label for="budget-start">Monthly budget start<input id="budget-start" type="date" value="2026-10-01" required></label>
+              <label for="budget-end">Monthly budget end<input id="budget-end" type="date" value="2026-10-31" required></label>
+              <label for="budget-group">Budget group<input id="budget-group" value="Synthetic essentials" required></label>
+              <label for="budget-category">Category<select id="budget-category" required><option value="">Kies category</option></select></label>
+              <label for="budget-planned">Planned amount<input id="budget-planned" value="300.00" required></label>
+              <label for="budget-rollover">Rollover<input id="budget-rollover" value="0.00" required></label>
+            </div><label><input id="budget-rollover-enabled" type="checkbox" checked> Rollover enabled</label>
+            <div class="actions"><button type="submit">Monthly budget opslaan</button></div></form>
+            <p id="budget-status" class="notice" role="status">Budgets worden geladen.</p>
+            <table id="budget-table" class="detail-table"><thead><tr><th>Group</th><th>Category</th><th>Planned + rollover</th><th>Actual</th><th>Variance</th><th>Status</th></tr></thead><tbody></tbody></table>
+          </section>
+          <section id="money-flow-analysis" class="timetravel" data-testid="money-flow-analysis" aria-labelledby="money-flow-analysis-title">
+            <h3 id="money-flow-analysis-title">Money Flow analysis</h3>
+            <p>Analyseer Income, Saving en Spending per periode en account scope. Klik op een category voor de onderliggende transacties; Parent/child totals blijven consistent.</p>
+            <div class="timetravel-controls"><label for="analysis-start">Periode start<input id="analysis-start" type="date" value="2026-10-01"></label><label for="analysis-end">Periode einde<input id="analysis-end" type="date" value="2026-10-31"></label><button id="analysis-run" type="button">Analyseer Money Flow</button></div>
+            <p id="analysis-status" class="notice" role="status">Money Flow analysis wordt geladen.</p>
+            <div id="analysis-totals" class="kpis" aria-label="Money Flow analysis totals"></div>
+            <table id="analysis-table" class="detail-table"><thead><tr><th>Flow</th><th>Category</th><th>Total</th><th>Transactions</th></tr></thead><tbody></tbody></table>
+            <div id="analysis-drilldown" class="timetravel" hidden><h4>Drill-down</h4><p id="analysis-drilldown-status" class="notice" role="status">Klik op een category.</p><table class="detail-table"><thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Currency</th></tr></thead><tbody id="analysis-drilldown-rows"></tbody></table></div>
+          </section>
+          <section id="money-flow-currency-report" class="timetravel" data-testid="money-flow-currency-report" aria-labelledby="money-flow-currency-report-title">
+            <h3 id="money-flow-currency-report-title">Currency report</h3>
+            <p>Native currency blijft zichtbaar naast de Base currency. Period-end FX gebruikt de koers op de einddatum van de periode.</p>
+            <div class="timetravel-controls"><label for="currency-report-start">Periode start<input id="currency-report-start" type="date" value="2026-10-01"></label><label for="currency-report-end">Periode einde<input id="currency-report-end" type="date" value="2026-10-31"></label><label for="currency-report-base">Base currency<select id="currency-report-base"></select></label><button id="currency-report-run" type="button">Load currency report</button></div>
+            <p id="currency-report-status" class="notice" role="status">Currency report wordt geladen.</p>
+            <table id="currency-report-table" class="detail-table"><thead><tr><th>Native amount</th><th>Native currency</th><th>Period-end FX</th><th>Base amount</th><th>Base currency</th></tr></thead><tbody></tbody></table>
+          </section>
+          <section id="import-panel" class="timetravel" aria-labelledby="import-title">
+            <h3 id="import-title">Veilige import-upload</h3>
+            <p>Upload een synthetisch CSV-, TSV- of JSON-bestand. De ledger blijft alleen via de importworkflow schrijfbaar.</p>
+            <form id="import-form">
+              <label for="import-file">Importbestand<input id="import-file" type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" required></label>
+              <div class="actions"><button id="import-upload" type="submit">Upload importbestand</button></div>
+            </form>
+            <p id="import-status" class="notice" role="status">Nog geen bestand geüpload.</p>
+            <p id="import-evidence" class="timetravel-evidence">Checksum en object storage key verschijnen na upload.</p>
+          </section>
+          <section id="mapping-panel" class="timetravel" aria-labelledby="mapping-title">
+            <h3 id="mapping-title">Import mapping template</h3>
+            <p>Koppel bronkolommen aan canonical fields. Ontbrekende velden moeten expliciet als uitzondering worden gemarkeerd.</p>
+            <form id="mapping-form">
+              <label for="mapping-name">Template naam<input id="mapping-name" required value="IMPORT-001 CSV"></label>
+              <label for="mapping-provider">Provider slug<input id="mapping-provider" required value="synthetic-broker"></label>
+              <label for="mapping-document-type">Document type<select id="mapping-document-type"><option>CSV</option><option>TSV</option><option>JSON</option></select></label>
+              <label for="mapping-parser-version">Parser version<input id="mapping-parser-version" required value="csv-v1"></label>
+              <label for="mapping-json">Canonical mapping JSON<textarea id="mapping-json" rows="6" required>{"date":"date","activity_type":"action","amount":"amount","currency_code":"currency","quantity":{"exception":"not present in cash-only source"}}</textarea></label>
+              <div class="actions"><button id="mapping-save" type="submit">Mapping template opslaan</button></div>
+            </form>
+            <p id="mapping-status" class="notice" role="status">Nog geen mapping template opgeslagen.</p>
+            <p id="mapping-evidence" class="timetravel-evidence">Template version: —</p>
+          </section>
+          <section id="validation-panel" class="timetravel" aria-labelledby="validation-title">
+            <h3 id="validation-title">Importvalidatie en preview</h3>
+            <p>Elke synthetische rij wordt read-only gevalideerd vóór een ledgercommit; fouten en unsupported data blijven afzonderlijk zichtbaar.</p>
+            <form id="validation-form">
+              <div class="actions"><button id="validation-run" type="submit">Valideer gekozen bestand</button></div>
+            </form>
+            <div id="validation-evidence" class="timetravel-evidence">Nog geen validatie uitgevoerd.</div>
+            <div class="validation-summary" aria-label="Importvalidatie resultaten">
+              <span id="validation-valid">Valid: 0</span>
+              <span id="validation-warning">Warnings: 0</span>
+              <span id="validation-error">Errors: 0</span>
+              <span id="validation-unsupported">Unsupported: 0</span>
+              <span id="validation-duplicate">Duplicates: 0</span>
+            </div>
+            <table id="validation-rows" class="detail-table"><thead><tr><th>Row</th><th>Status</th><th>Reason</th></tr></thead><tbody></tbody></table>
+            <section id="review-panel" class="timetravel" aria-labelledby="review-title">
+              <h4 id="review-title">Row review</h4>
+              <label for="review-correction">Correction JSON<textarea id="review-correction" rows="3">{"amount":"100.50"}</textarea></label>
+              <div class="actions"><button id="review-save" type="button">Rij corrigeren</button></div>
+              <p id="review-status" class="notice" role="status">Selecteer een error-rij uit de preview.</p>
+              <span id="duplicate-reason" hidden></span>
+              <p id="review-evidence" class="timetravel-evidence">Raw row, normalized row, actor en timestamp verschijnen na correctie.</p>
+            </section>
+            <section id="import-commit" class="timetravel" aria-labelledby="import-commit-title">
+              <h4 id="import-commit-title">Import commit</h4>
+              <p>Alleen niet-blocking rows worden atomair naar de canonical ledger geboekt.</p>
+              <div class="actions"><button id="import-commit-button" type="button">Commit importbatch</button></div>
+              <p id="commit-result" class="notice" role="status">Nog geen import commit uitgevoerd.</p>
+              <div class="actions"><button id="import-undo" type="button">Undo importbatch</button></div>
+              <p id="undo-result" class="notice" role="status">Geen undo uitgevoerd.</p>
+            </section>
+            <section id="reconciliation-panel" class="timetravel" aria-labelledby="reconciliation-title">
+              <h4 id="reconciliation-title">Reconciliation review queue</h4>
+              <p>Onbekende instrumenten, saldo-afwijkingen en ambigue transfers blijven zichtbaar voor handmatige review.</p>
+              <form id="reconciliation-form">
+                <label for="reconciliation-type">Issue type<select id="reconciliation-type"><option value="UNKNOWN_INSTRUMENT">Unknown instrument</option><option value="BALANCE_MISMATCH">Balance mismatch</option><option value="AMBIGUOUS_TRANSFER">Ambiguous transfer</option></select></label>
+                <label for="reconciliation-message">Omschrijving<input id="reconciliation-message" required value="Synthetische review issue"></label>
+                <div class="actions"><button id="reconciliation-create" type="submit">Add to review queue</button></div>
+              </form>
+              <p id="reconciliation-status" class="notice" role="status">Review queue wordt geladen.</p>
+              <table id="reconciliation-issues" class="detail-table"><thead><tr><th>Type</th><th>Severity</th><th>Status</th><th>Message</th><th>Action</th></tr></thead><tbody></tbody></table>
+            </section>
+            <section id="degiro-import-panel" class="timetravel" aria-labelledby="degiro-import-title">
+              <h4 id="degiro-import-title">DEGIRO CSV statement preview</h4>
+              <form id="degiro-import-form">
+                <label for="degiro-import-file">DEGIRO CSV<input id="degiro-import-file" type="file" accept=".csv,text/csv" required></label>
+                <div class="actions"><button id="degiro-import-submit" type="submit">Preview DEGIRO statement</button></div>
+              </form>
+              <p id="degiro-import-status" class="notice" role="status">Nog geen DEGIRO statement geanalyseerd.</p>
+              <p id="degiro-import-evidence" class="timetravel-evidence">Layout, parser version, ISIN, fees, tax, FX en cash verschijnen hier.</p>
+              <p id="degiro-reconciliation" class="timetravel-evidence">Reconciliation: —</p>
+            </section>
+          </section>
+          <section id="dividend-panel" class="timetravel" data-testid="dividend-panel" aria-labelledby="dividend-title">
+            <h3 id="dividend-title">Dividends — ontvangen en verwacht</h3>
+            <p id="dividend-status" class="notice" role="status">Dividends worden geladen.</p>
+            <div class="detail-grid">
+              <div class="metric"><small>Ontvangen dividends</small><strong id="dividend-received">—</strong></div>
+              <div class="metric"><small>Verwachte dividends</small><strong id="dividend-expected">—</strong></div>
+              <div class="metric"><small>Gross</small><strong id="dividend-gross-total">—</strong></div>
+              <div class="metric"><small>Tax</small><strong id="dividend-tax-total">—</strong></div>
+              <div class="metric"><small>Net</small><strong id="dividend-net-total">—</strong></div>
+              <div class="metric"><small>Yield</small><strong id="dividend-yield">—</strong></div>
+              <div class="metric"><small>Yield on cost</small><strong id="dividend-yield-on-cost">—</strong></div>
+              <div class="metric"><small>TTM net</small><strong id="dividend-ttm">—</strong></div>
+              <div class="metric"><small>PADI net</small><strong id="dividend-padi">—</strong></div>
+            </div>
+            <table id="dividend-received-table" class="detail-table"><thead><tr><th>Status</th><th>Instrument</th><th>Ex-date</th><th>Payment date</th><th>Net</th></tr></thead><tbody id="dividend-received-rows"></tbody></table>
+            <table id="dividend-expected-table" class="detail-table"><thead><tr><th>Status</th><th>Instrument</th><th>Ex-date</th><th>Payment date</th><th>Net</th></tr></thead><tbody id="dividend-expected-rows"></tbody></table>
+            <form id="dividend-form">
+              <label for="dividend-status-select">Status<select id="dividend-status-select"><option value="ANNOUNCED">Announced</option><option value="PROJECTED">Projected</option><option value="EX_DATE">Ex-date</option><option value="PAID">Paid</option></select></label>
+              <label for="dividend-ex-date">Ex-date<input id="dividend-ex-date" type="date" value="2026-11-06"></label>
+              <label for="dividend-payment-date">Payment date<input id="dividend-payment-date" type="date" value="2026-11-20"></label>
+              <label for="dividend-gross">Gross<input id="dividend-gross" inputmode="decimal" value="25.00"></label>
+              <label for="dividend-tax">Tax<input id="dividend-tax" inputmode="decimal" value="3.75"></label>
+              <div class="actions"><button id="dividend-add" type="submit">Dividend registreren</button></div>
+            </form>
+            <form id="dividend-forecast-form">
+              <label for="dividend-forecast-start">Forecast start<input id="dividend-forecast-start" type="date" value="2026-11-01"></label>
+              <label for="dividend-forecast-end">Forecast end<input id="dividend-forecast-end" type="date" value="2027-10-31"></label>
+              <label for="dividend-forecast-gross">Forecast gross<input id="dividend-forecast-gross" inputmode="decimal" value="120.00"></label>
+              <label for="dividend-forecast-tax">Forecast tax<input id="dividend-forecast-tax" inputmode="decimal" value="18.00"></label>
+              <label for="dividend-forecast-model">Model<input id="dividend-forecast-model" value="SYNTHETIC_RULE"></label>
+              <div class="actions"><button id="dividend-forecast-add" type="submit">Forecast registreren</button></div>
+            </form>
+            <p id="dividend-forecast-evidence" class="timetravel-evidence">PADI gebruikt uitsluitend expliciete dividend_forecast regels.</p>
+            <form id="dividend-growth-form">
+              <label for="dividend-growth-start">Growth start<input id="dividend-growth-start" type="date" value="2024-01-01"></label>
+              <label for="dividend-growth-end">Growth end<input id="dividend-growth-end" type="date" value="2026-12-31"></label>
+              <div class="actions"><button id="dividend-growth-run" type="submit">Growth berekenen</button></div>
+            </form>
+            <div class="detail-grid">
+              <div class="metric"><small>YoY</small><strong id="dividend-growth-yoy">—</strong></div>
+              <div class="metric"><small>CAGR</small><strong id="dividend-growth-cagr">—</strong></div>
+            </div>
+            <p id="dividend-growth-evidence" class="timetravel-evidence">YoY en CAGR worden uit kalenderjaar PAID-buckets berekend.</p>
+            <section id="market-events-calendar" class="timetravel" aria-labelledby="market-events-title">
+              <h4 id="market-events-title">Dividend- en events calendar</h4>
+              <form id="market-events-form">
+                <label for="market-events-type">Type<select id="market-events-type"><option value="EX_DIVIDEND">Ex-dividend</option><option value="DIVIDEND_PAYMENT">Payment</option><option value="AGM">AGM</option><option value="EARNINGS">Earnings</option><option value="ECONOMIC">Economic</option></select></label>
+                <label for="market-events-title-input">Titel<input id="market-events-title-input" value="Synthetisch event"></label>
+                <label for="market-events-start">Start<input id="market-events-start" type="datetime-local" value="2026-11-01T09:00"></label>
+                <label for="market-events-end">Einde<input id="market-events-end" type="datetime-local" value="2026-11-01T10:00"></label>
+                <div class="actions"><button id="market-events-add" type="submit">Event registreren</button></div>
+              </form>
+              <label for="market-events-filter">Filter type<select id="market-events-filter"><option value="">Alle events</option><option value="EX_DIVIDEND">Ex-dividend</option><option value="DIVIDEND_PAYMENT">Payment</option><option value="AGM">AGM</option><option value="EARNINGS">Earnings</option><option value="ECONOMIC">Economic</option></select></label>
+              <p id="market-events-status" class="notice" role="status">Events calendar wordt geladen.</p>
+              <table id="market-events-table" class="detail-table"><thead><tr><th>Type</th><th>Titel</th><th>Start</th><th>Bron</th></tr></thead><tbody id="market-events-rows"></tbody></table>
+              <p id="market-events-evidence" class="timetravel-evidence">market-events-v1 · filterbaar op type en periode.</p>
+            </section>
+            <section id="performance-comparison" class="timetravel" aria-labelledby="performance-comparison-title">
+              <h4 id="performance-comparison-title">Performance comparison</h4>
+              <form id="performance-comparison-form">
+                <label for="performance-start">Periode start<input id="performance-start" type="date" value="2026-01-01"></label>
+                <label for="performance-end">Periode einde<input id="performance-end" type="date" value="2026-10-17"></label>
+                <div class="actions"><button id="performance-comparison-run" type="submit">Performance berekenen</button></div>
+              </form>
+              <p id="performance-comparison-status" class="notice" role="status">Boundary snapshots zijn nodig.</p>
+              <div class="detail-grid">
+                <div class="metric"><small>TWR</small><strong id="performance-twr">—</strong></div>
+                <div class="metric"><small>MWRR</small><strong id="performance-mwrr">—</strong></div>
+                <div class="metric"><small>IRR</small><strong id="performance-irr">—</strong></div>
+                <div class="metric"><small>Modified Dietz</small><strong id="performance-dietz">—</strong></div>
+              </div>
+              <p id="performance-comparison-evidence" class="timetravel-evidence">Periode, cashflows, formula version en limitations worden apart getoond.</p>
+            </section>
+            <section id="benchmark-comparison" class="timetravel" aria-labelledby="benchmark-comparison-title">
+              <h4 id="benchmark-comparison-title">Benchmark comparison</h4>
+              <form id="benchmark-comparison-form">
+                <label for="benchmark-select">Benchmark<select id="benchmark-select"><option value="">Kies benchmark</option></select></label>
+                <div class="actions"><button id="benchmark-run" type="submit">Benchmark berekenen</button></div>
+              </form>
+              <p id="benchmark-status" class="notice" role="status">Benchmarkobservaties worden geladen.</p>
+              <div class="detail-grid">
+                <div class="metric"><small>Observation return</small><strong id="benchmark-observation-return">—</strong></div>
+                <div class="metric"><small>Cashflow-matched</small><strong id="benchmark-cashflow-matched">—</strong></div>
+              </div>
+              <p id="benchmark-evidence" class="timetravel-evidence">Benchmark observations en cashflow-matched variant blijven afzonderlijk.</p>
+            </section>
+            <section id="alerts-panel" class="timetravel" aria-labelledby="alerts-title">
+              <h4 id="alerts-title">Dividend- en portfolio alerts</h4>
+              <form id="alert-rules-form">
+                <label for="alert-name">Naam<input id="alert-name" value="Dividend alert"></label>
+                <label for="alert-condition">Condition JSON<input id="alert-condition" value='{"event_type":"PAID","minimum_net":"10.00"}'></label>
+                <label for="alert-channel">Channel<select id="alert-channel"><option value="IN_APP">In-app</option><option value="EMAIL">E-mail</option><option value="PUSH">Push</option></select></label>
+                <label for="alert-pause">Pauzeer <input id="alert-pause" type="checkbox"></label>
+                <div class="actions"><button id="alert-save" type="submit">Alert opslaan</button><button id="alert-test" type="button">Test delivery</button></div>
+              </form>
+              <p id="alert-status" class="notice" role="status">Nog geen alert rule opgeslagen.</p>
+              <p id="alert-delivery-history" class="timetravel-evidence">Delivery history: —</p>
+            </section>
+            <section id="provider-registry" class="timetravel" aria-labelledby="provider-registry-title">
+              <h4 id="provider-registry-title">Provider registry</h4>
+              <form id="provider-registry-form">
+                <label for="provider-slug">Slug<input id="provider-slug" value="synthetic-broker"></label>
+                <label for="provider-name">Naam<input id="provider-name" value="Synthetic Broker"></label>
+                <label for="provider-auth-mode">Auth mode<select id="provider-auth-mode"><option value="API_KEY">API key</option><option value="OAUTH2">OAuth 2</option><option value="NONE">Geen</option></select></label>
+                <label for="provider-api-version">API version<input id="provider-api-version" value="2026-01"></label>
+                <label for="provider-capabilities">Capabilities<input id="provider-capabilities" value="BALANCES,TRANSACTIONS"></label>
+                <div class="actions"><button id="provider-registry-save" type="submit">Provider opslaan</button><button id="provider-registry-pause" type="button">Pauzeer provider</button></div>
+              </form>
+              <p id="provider-registry-status" data-testid="provider-status" class="notice" role="status">Provider registry wordt geladen.</p>
+              <p id="provider-registry-evidence" class="timetravel-evidence">provider-registry-v1 · capabilities, auth mode, API version en status.</p>
+            </section>
+            <section id="bank-institutions-panel" class="timetravel" aria-labelledby="bank-institutions-title">
+              <h4 id="bank-institutions-title">GoCardless bankinstelling kiezen</h4>
+              <form id="bank-institutions-form">
+                <label for="bank-institution-region">Regio<select id="bank-institution-region"><option value="">Alle regio's</option><option value="NL">NL</option><option value="BE">BE</option><option value="DE">DE</option></select></label>
+                <label for="bank-institution-capabilities">Capability<select id="bank-institution-capabilities"><option value="">Alle capabilities</option><option value="ACCOUNTS">Accounts</option><option value="BALANCES">Balances</option><option value="TRANSACTIONS">Transactions</option></select></label>
+                <div class="actions"><button id="bank-institution-search" type="submit">Instellingen zoeken</button></div>
+              </form>
+              <p id="bank-institution-status" class="notice" role="status">Bankinstellingen worden geladen.</p>
+              <table id="bank-institution-availability" class="detail-table"><thead><tr><th>Instelling</th><th>Regio</th><th>Capabilities</th><th>Availability</th></tr></thead><tbody></tbody></table>
+              <p id="bank-institution-evidence" class="timetravel-evidence">bank-institution-catalog-v1 · BANK-001 · read-only · geen credentials.</p>
+            </section>
+            <section id="bank-consent-panel" class="timetravel" aria-labelledby="bank-consent-title">
+              <h4 id="bank-consent-title">Synthetische bankconsent</h4>
+              <form id="bank-consent-form">
+                <label for="bank-consent-institution">Instelling<select id="bank-consent-institution"><option value="synthetic-nl-bank">Synthetic Netherlands Bank · NL</option></select></label>
+                <label for="bank-consent-redirect">Redirect URI<input id="bank-consent-redirect" value="http://localhost:3000/bank/callback" required></label>
+                <label for="bank-consent-language">Taal<select id="bank-consent-language"><option value="nl">Nederlands</option><option value="en">English</option></select></label>
+                <div class="actions"><button id="bank-consent-start" type="submit">Start requisition</button><button id="bank-revoke" type="button">Bankconnectie intrekken</button><button id="bank-consent-expire" type="button">Simuleer consent verlopen</button><button id="bank-consent-reconnect" type="button">Nieuwe authorization</button></div>
+              </form>
+              <p id="bank-consent-status" class="notice" role="status">Nog geen consent gestart.</p>
+              <p id="bank-consent-evidence" class="timetravel-evidence">State/PKCE/CSRF · consent status · read-only · BANK-001.</p>
+              <p id="bank-revoke-status" class="notice" role="status">Connection disconnected: —</p>
+              <p id="bank-reconnect-status" class="notice" role="status">Reconnect required: — · historical data preserved: —</p>
+            </section>
+            <section id="bank-accounts-panel" class="timetravel" aria-labelledby="bank-accounts-title">
+              <h4 id="bank-accounts-title">Bankaccounts kiezen</h4>
+              <form id="bank-accounts-form">
+                <div id="bank-account-selection" role="group" aria-label="Bankaccounts"></div>
+                <div class="actions"><button id="bank-accounts-save" type="submit">Accounts opslaan</button></div>
+              </form>
+              <p id="bank-accounts-status" class="notice" role="status">Authorizeer eerst bankconsent.</p>
+              <p id="bank-accounts-evidence" class="timetravel-evidence">bank-account-selection-v1 · account type · currency · ledger untouched.</p>
+            </section>
+            <section id="report-run-panel" class="timetravel" data-testid="report-run-panel" aria-labelledby="report-run-title">
+              <h4 id="report-run-title">Portfolio report run</h4>
+              <p>Start een as-of report op basis van de canonical ledger. De run blijft read-only en is source-traceable.</p>
+              <form id="report-run-form">
+                <label for="report-run-start">Periode start<input id="report-run-start" type="date" value="2026-01-01" required></label>
+                <label for="report-run-end">Periode einde<input id="report-run-end" type="date" value="2026-10-17" required></label>
+                <div class="actions"><button type="submit">Report run starten</button><button id="report-run-complete" type="button">Complete artifact genereren</button><button id="report-run-download" type="button">Download report artifact</button></div>
+                <label for="report-export-format">Export formaat<select id="report-export-format"><option>CSV</option><option>XLSX</option><option>PDF</option></select></label><label for="report-export-locale">Locale<input id="report-export-locale" value="nl-NL" required></label><label for="report-export-currency">Currency<input id="report-export-currency" value="EUR" maxlength="3" required></label><button id="report-export-download" type="button">Export downloaden</button>
+                <label for="tax-report-year">Tax year<input id="tax-report-year" type="number" value="2026" min="2000" max="2100" required></label><label for="tax-report-security-status">Securities<select id="tax-report-security-status"><option>ALL</option><option>OPEN</option><option>CLOSED</option></select></label><button id="tax-report-run" type="button">Taxable income &amp; securities rapport</button>
+              </form>
+              <p id="report-run-status" class="notice" role="status">Nog geen report run gestart.</p>
+              <p id="report-run-evidence" class="timetravel-evidence">report-run-v1 · as-of · source: canonical ledger · filters: ALL</p><p id="report-export-status" class="notice" role="status">Nog geen CSV/XLSX/PDF-export gedownload.</p><p id="tax-report-status" class="notice" role="status">Nog geen taxable income/trades report gegenereerd.</p>
+            </section>
+            <section id="goal-panel" class="timetravel" data-testid="goal-panel" aria-labelledby="goal-title">
+              <h4 id="goal-title">Net-worth goal</h4>
+              <p>Stel een privé doel in voor je portfolio. De doelconfiguratie is user- en portfolio-scoped.</p>
+              <form id="goal-form">
+                <label for="goal-name">Naam<input id="goal-name" value="Synthetic net worth" required></label>
+                <label for="goal-target-amount">Target amount<input id="goal-target-amount" type="number" min="0" step="0.01" value="25000" required></label>
+                <label for="goal-target-date">Target date<input id="goal-target-date" type="date" value="2030-12-31" required></label>
+                <label for="goal-return">Expected annual return<input id="goal-return" type="number" min="0" step="0.001" value="0.05" required></label>
+                <label for="goal-contribution">Monthly contribution<input id="goal-contribution" type="number" min="0" step="0.01" value="500" required></label>
+                <div class="actions"><button type="submit">Goal opslaan</button></div>
+              </form>
+              <p id="goal-status" class="notice" role="status">Nog geen goal opgeslagen.</p>
+              <p id="goal-evidence" class="timetravel-evidence">goal-v1 · target/date/return/contribution · portfolio scoped</p>
+            </section>
+            <section id="bunq-oauth-gate" class="timetravel" aria-labelledby="bunq-oauth-gate-title">
+              <h4 id="bunq-oauth-gate-title">Directe bunq OAuth compliance gate</h4>
+              <form id="bunq-oauth-gate-form">
+                <label for="bunq-oauth-redirect">Redirect URI<input id="bunq-oauth-redirect" value="http://localhost:3000/bunq/callback" required></label>
+                <label for="bunq-oauth-legal">Legal decision<select id="bunq-oauth-legal"><option value="APPROVED">APPROVED</option><option value="PENDING">PENDING</option></select></label>
+                <label><input id="bunq-oauth-read-only" type="checkbox" checked> Read-only permissions</label>
+                <div class="actions"><button id="bunq-oauth-check" type="submit">Compliance check uitvoeren</button></div>
+              </form>
+              <p id="bunq-oauth-gate-status" class="notice" role="status">Directe bunq OAuth staat uit tot de gate slaagt.</p>
+              <p id="bunq-oauth-gate-evidence" class="timetravel-evidence">bunq-oauth-deployment-gate-v1 · scopes · redirect URI · legal decision · read-only permissions.</p>
+            </section>
+            <section id="bank-sync-panel" class="timetravel" aria-labelledby="bank-sync-title">
+              <h4 id="bank-sync-title">Balances en transacties synchroniseren</h4>
+              <form id="bank-sync-form">
+                <label for="bank-sync-window">Incremental window<input id="bank-sync-window" type="date" value="2026-10-15"></label>
+                <label for="bank-sync-window-to">Tot en met<input id="bank-sync-window-to" type="date" value="2026-10-17"></label>
+                <label for="bank-sync-scenario">Provider scenario<select id="bank-sync-scenario"><option value="SUCCESS">Succes</option><option value="AUTH_401">Provider 401</option><option value="PROVIDER_429">Provider 429</option></select></label>
+                <div class="actions"><button id="bank-sync-now" type="submit">Bank sync uitvoeren</button></div>
+              </form>
+              <p id="bank-sync-status" class="notice" role="status">Selecteer accounts en autoriseer consent vóór sync.</p>
+              <p id="bank-sync-freshness" class="timetravel-evidence">Freshness: — · incremental window: —</p>
+              <p id="bank-sync-provider-error" class="timetravel-evidence">Provider error: —</p>
+              <table id="bank-sync-balances" class="detail-table"><thead><tr><th>Account</th><th>Balance</th><th>Currency</th><th>As-of</th><th>Provider</th></tr></thead><tbody></tbody></table>
+            </section>
+            <section id="connections-panel" class="timetravel" aria-labelledby="connections-title">
+              <h4 id="connections-title">Read-only broker connections</h4>
+              <form id="connections-form">
+                <label for="connection-provider">Provider slug<input id="connection-provider" value="trading212"></label>
+                <label for="connection-vault-path">Vault reference<input id="connection-vault-path" value="local/synthetic/trading212"></label>
+                <label for="connection-accounts">Accounts<input id="connection-accounts" value="INVEST,STOCKS_ISA"></label>
+                <div class="actions"><button id="connection-save" type="submit">Verbinding opslaan</button><button id="connection-revoke" type="button">Verbinding intrekken</button></div>
+              </form>
+              <p id="connection-status" class="notice" role="status">Geen connection geladen.</p>
+              <p id="connection-evidence" class="timetravel-evidence">Read-only · vault reference · account mapping · revoke.</p>
+            </section>
+            <section id="sync-panel" class="timetravel" aria-labelledby="sync-title">
+              <h4 id="sync-title">Incremental provider sync</h4>
+              <p>Synchroniseer synthetische Trading 212-data incrementeel. Payloads blijven raw evidence; er wordt niet rechtstreeks naar de ledger geschreven.</p>
+              <label for="sync-scenario">Scenario<select id="sync-scenario"><option value="SUCCESS">Succes</option><option value="AUTH_401">Provider 401</option><option value="AUTH_403">Provider 403</option><option value="PROVIDER_429">Provider 429 / rate limit</option><option value="SCHEMA_FAILURE">Schema failure</option></select></label>
+              <div class="actions"><button id="sync-now" type="button">Synchroniseer fixture</button></div>
+              <p id="sync-status" class="notice" role="status">Nog geen sync uitgevoerd.</p>
+              <p id="sync-summary" class="timetravel-evidence">Positions, activities, dividends, rate-limit/retry en attention summary verschijnen hier.</p>
+              <p id="sync-run" class="timetravel-evidence">sync_run: —</p>
+              <p id="sync-incident" class="timetravel-evidence">Incident evidence: —</p>
+            </section>
+            <section id="sync-results-panel" class="timetravel" aria-labelledby="sync-results-title">
+              <h4 id="sync-results-title">Sync result review</h4>
+              <label for="sync-results-filter">Filter<select id="sync-results-filter"><option value="ALL">Alle</option><option value="NEW">New</option><option value="UPDATED">Updated</option><option value="DUPLICATE">Duplicate</option><option value="REJECTED">Rejected</option><option value="ATTENTION">Attention</option></select></label>
+              <p id="sync-results-status" class="notice" role="status">Voer eerst een synthetische sync uit.</p>
+              <p id="sync-results-evidence" class="timetravel-evidence">Voor posting: — · read-only review boundary.</p>
+              <table id="sync-results-table" class="detail-table"><thead><tr><th>External ID</th><th>Type</th><th>Posting</th><th>Review</th><th>Action</th></tr></thead><tbody></tbody></table>
+            </section>
+            <p id="dividend-evidence" class="timetravel-evidence">received / expected worden apart uit income_event getoond. Metrics: income-metrics-v1.</p>
+          </section>
+          <section id="timetravel" class="timetravel" aria-labelledby="timetravel-title">
+            <h3 id="timetravel-title">Historical Timetravel</h3>
+            <p>Bekijk dezelfde portfolio read model state op een historische datum.</p>
+            <div class="timetravel-controls">
+              <label for="timetravel-date">Datum<input id="timetravel-date" type="date" value="2026-10-17"></label>
+              <button id="timetravel-run" type="button">Bereken historische state</button>
+            </div>
+            <p id="timetravel-state" class="notice" role="status">Huidige portfolio state geladen.</p>
+            <p id="timetravel-evidence" class="timetravel-evidence" data-as-of="">Data-as-of: —</p>
+          </section>
+          <section aria-labelledby="positions-title">
+            <h3 id="positions-title">Positions</h3>
+            <div class="position-controls">
+              <label for="position-filter">Toon<select id="position-filter"><option value="open">Open positions</option><option value="closed">Closed positions</option><option value="all">Alle positions</option></select></label>
+              <fieldset id="position-columns" class="position-columns"><legend>Kolommen</legend><label><input id="column-name" type="checkbox" checked> Name</label><label><input id="column-value" type="checkbox" checked> Value</label><label><input id="column-currency" type="checkbox" checked> Currency</label></fieldset>
+            </div>
+            <table id="positions-table" class="positions-table"><thead><tr><th data-column="name">Name</th><th data-column="value">Value</th><th data-column="currency">Currency</th><th>Status</th></tr></thead><tbody id="positions-body"></tbody></table>
+            <p id="positions-empty" class="positions-empty" hidden>Geen gesloten positions.</p>
+            <section id="position-detail" class="position-detail" data-testid="position-detail" hidden aria-labelledby="position-detail-title">
+              <h3 id="position-detail-title">Position detail</h3>
+              <p id="position-detail-status">Selecteer een position voor details.</p>
+              <div class="detail-tabs" id="position-detail-tabs" role="tablist" aria-label="Position detail tabs">
+                <button id="tab-overview" type="button" role="tab" aria-selected="true">Overview</button>
+                <button id="tab-calendar" type="button" role="tab" aria-selected="false">Calendar</button>
+                <button id="tab-actions" type="button" role="tab" aria-selected="false">Actions</button>
+              </div>
+              <div id="detail-overview" role="tabpanel"><div class="detail-grid">
+                <div class="metric"><small>Identity</small><strong id="detail-identity">—</strong></div>
+                <div class="metric"><small>Cost basis</small><strong id="detail-cost-basis">—</strong></div>
+                <div class="metric"><small>Performance</small><strong id="detail-performance">—</strong></div>
+                <div class="metric"><small>Dividends</small><strong id="detail-dividends">—</strong></div>
+              </div></div>
+              <div id="detail-calendar" role="tabpanel" hidden><table class="detail-table"><thead><tr><th>Type</th><th>Date</th><th>Source</th></tr></thead><tbody id="detail-calendar-rows"></tbody></table><p id="detail-calendar-empty" class="positions-empty" hidden>Geen calendar events.</p></div>
+              <div id="detail-actions" role="tabpanel" hidden><table class="detail-table"><thead><tr><th>Date</th><th>Action</th><th>Quantity</th><th>Amount</th></tr></thead><tbody id="detail-action-rows"></tbody></table><p id="detail-actions-empty" class="positions-empty" hidden>Geen actions.</p></div>
+            </section>
+          </section>
+          <section id="allocation-panel" aria-labelledby="allocation-title">
+            <h3 id="allocation-title">Allocation</h3>
+            <label for="allocation-dimension">Groepeer op<select id="allocation-dimension"><option value="asset_class">Asset class</option><option value="sector">Sector</option><option value="region">Region</option><option value="currency">Currency</option><option value="broker">Broker</option></select></label>
+            <table class="allocation-table"><thead><tr><th>Dimension</th><th>Value</th></tr></thead><tbody id="allocation-rows"></tbody><tfoot><tr><th>Total</th><th id="allocation-total">0.00%</th></tr></tfoot></table>
+          </section>
+          <div class="summary"><div class="metric"><small>Portfolio</small><strong id="summary-portfolio"></strong></div><div class="metric"><small>Account</small><strong id="summary-account"></strong></div><div class="metric"><small>Eerste actie</small><strong id="summary-action"></strong></div></div>
+          <div class="actions"><button id="edit-action" type="button">Wijzig actie</button></div>
+          <form id="manual-action-form" data-testid="manual-action-form" hidden novalidate>
+            <h3>Handmatige action toevoegen of wijzigen</h3>
+            <p>Alle financiële velden worden gevalideerd vóór een commit naar de canonical ledger.</p>
+            <ul id="action-validation" class="validation" hidden></ul>
+            <label for="action-account">Account<select id="action-account" required><option value="">Kies een account</option></select></label>
+            <label for="action-instrument">Instrument<select id="action-instrument" required><option value="">Kies een instrument</option></select></label>
+            <label for="action-currency">Currency<select id="action-currency" required><option value="">Kies een currency</option></select></label>
+            <label for="action-date">Datum<input id="action-date" type="date" required></label>
+            <label for="action-amount">Bedrag<input id="action-amount" inputmode="decimal" required></label>
+            <div class="actions"><button type="submit">Action opslaan</button></div>
+          </form>
+        </div>
+      </section>
+    </main>
+    <script>
+      const API = "";
+      const state = { token: "", currencies: [], portfolio: null, account: null, instrument: null, action: null, reportRunId: null, goal: null, mappingTemplate: null, validationResult: null, selectedReview: null, allocationRows: [], selectedPosition: null, positionDetail: null, reconciliationIssues: [], income: null, alertRule: null, provider: null, connection: null, categories: [], payees: [], tags: [], moneyFlowAccounts: [], rules: [], reviewItems: [], budgets: [], analysis: null };
+      const $ = (id) => document.getElementById(id);
+      const authHeaders = () => ({ authorization: `Bearer ${state.token}` });
+      const setStatus = (message, kind = "") => { const el = $("status"); el.textContent = message; el.className = `notice ${kind}`; };
+      const setStep = (active) => ["empty", "portfolio", "account", "action"].forEach((step) => $("step-" + step).classList.toggle("active", step === active));
+      const showOnly = (id) => ["empty-state", "portfolio-form", "account-form", "action-form", "complete-state"].forEach((item) => $(item).hidden = item !== id);
+      const api = async (path, options = {}) => {
+        const response = await fetch(API + path, { ...options, headers: { "content-type": "application/json", ...authHeaders(), ...(options.headers || {}) } });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
+        return body;
+      };
+      const fillCurrencies = () => [$("reporting-currency"), $("base-currency")].forEach((select) => { select.innerHTML = state.currencies.map((currency) => `<option value="${currency.code}">${currency.code} — ${currency.name}</option>`).join(""); select.value = "EUR"; });
+      const fillManualActionFields = () => {
+        $("action-account").innerHTML = `<option value="">Kies een account</option><option value="${state.account.id}">${state.account.name}</option>`;
+        $("action-instrument").innerHTML = `<option value="">Kies een instrument</option><option value="${state.instrument.id}">${state.instrument.name}</option>`;
+        $("action-currency").innerHTML = `<option value="">Kies een currency</option>${state.currencies.map((currency) => `<option value="${currency.code}">${currency.code} — ${currency.name}</option>`).join("")}`;
+      };
+      const loadReconciliationIssues = async () => {
+        if (!state.portfolio) return;
+        try {
+          const result = await api(`/api/v1/reconciliation-issues?portfolio_id=${encodeURIComponent(state.portfolio.id)}`);
+          state.reconciliationIssues = result.issues || [];
+          $("reconciliation-issues").querySelector("tbody").replaceChildren(...state.reconciliationIssues.map((issue) => {
+            const row = document.createElement("tr");
+            [issue.issue_type, issue.severity, issue.status, issue.message].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; row.append(cell); });
+            const action = document.createElement("td");
+            if (["OPEN", "IN_REVIEW"].includes(issue.status)) { const button = document.createElement("button"); button.type = "button"; button.textContent = "Resolve issue"; button.addEventListener("click", async () => { await api(`/api/v1/reconciliation-issues/${issue.id}`, { method: "PATCH", body: JSON.stringify({ status: "RESOLVED", resolution: { action: "MANUAL_REVIEW", note: "Resolved in local synthetic UI" } }) }); await loadReconciliationIssues(); }); action.append(button); } else action.textContent = "—";
+            row.append(action); return row;
+          }));
+          $("reconciliation-status").textContent = `${state.reconciliationIssues.length} issue(s) in review queue.`;
+        } catch (error) { $("reconciliation-status").textContent = error.message; }
+      };
+      const loadMoneyFlowScope = async () => {
+        if (!state.portfolio) return;
+        try {
+          const result = await api(`/api/v1/money-flow/account-scope?portfolio_id=${encodeURIComponent(state.portfolio.id)}`);
+          state.moneyFlowAccounts = result.accounts || [];
+          const list = $("money-flow-scope-list");
+          list.replaceChildren(...result.accounts.map((account) => {
+            const label = document.createElement("label");
+            label.className = "scope-option";
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = account.is_enabled;
+            checkbox.dataset.accountId = account.id;
+            checkbox.addEventListener("change", async () => {
+              checkbox.disabled = true;
+              try {
+                await api("/api/v1/money-flow/account-scope", { method: "PUT", body: JSON.stringify({ portfolio_id: state.portfolio.id, financial_account_id: account.id, is_enabled: checkbox.checked }) });
+                $("money-flow-scope-status").textContent = `${account.name} ${checkbox.checked ? "toegevoegd aan" : "verwijderd uit"} Money Flow.`;
+                await loadMoneyFlowActivities();
+              } catch (error) {
+                checkbox.checked = !checkbox.checked;
+                $("money-flow-scope-status").textContent = error.message;
+              } finally { checkbox.disabled = false; }
+            });
+            label.append(checkbox, document.createTextNode(` ${account.name} · ${account.account_type} · ${account.base_currency_code}`));
+            return label;
+          }));
+          $("money-flow-scope-status").textContent = `${result.accounts.filter((account) => account.is_enabled).length} account(s) opt-in voor dit portfolio.`;
+          await loadMoneyFlowActivities();
+        } catch (error) { $("money-flow-scope-status").textContent = error.message; }
+      };
+      const loadMoneyFlowActivities = async () => {
+        if (!state.portfolio) return;
+        try {
+          const result = await api(`/api/v1/money-flow/activities?portfolio_id=${encodeURIComponent(state.portfolio.id)}&period_start=1900-01-01&period_end=2999-12-31`);
+          $("money-flow-activities-status").textContent = `${result.activities.length} activity(s) · money-flow-activities-v1 · read-only ledger projection.`;
+          $("money-flow-activity-totals").replaceChildren(...Object.entries(result.totals).map(([category, total]) => { const metric = document.createElement("div"); metric.className = "metric"; metric.innerHTML = `<small>${category}</small><strong>${total}</strong>`; return metric; }));
+          $("money-flow-activity-table").querySelector("tbody").replaceChildren(...result.activities.map((activity) => { const row = document.createElement("tr"); const selectCell = document.createElement("td"); const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.dataset.transactionId = activity.id; checkbox.setAttribute("aria-label", `Select ${activity.activity_type}`); selectCell.append(checkbox); row.append(selectCell); [activity.effective_date, activity.activity_type, activity.category_type, activity.is_contribution_neutral ? `Yes · ${activity.neutral_reason}` : "No", `${activity.signed_final_amount} ${activity.currency_code}`].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; row.append(cell); }); return row; }));
+        } catch (error) { $("money-flow-activities-status").textContent = error.message; }
+      };
+      const renderMoneyFlowCategories = () => {
+        const byId = new Map(state.categories.map((category) => [category.id, category]));
+        const options = state.categories.filter((category) => category.is_active).map((category) => `<option value="${category.id}">${category.name} · ${category.category_type}</option>`).join("");
+        $("category-parent").innerHTML = `<option value="">Geen parent (top-level)</option>${options}`;
+        $("category-reassign-target").innerHTML = `<option value="">Kies active category</option>${options}`;
+        $("rule-category").innerHTML = `<option value="">Geen category</option>${options}`;
+        $("review-category").innerHTML = `<option value="">Geen category</option>${options}`;
+        $("budget-category").innerHTML = `<option value="">Kies category</option>${options}`;
+        $("category-table").querySelector("tbody").replaceChildren(...state.categories.map((category) => { const row = document.createElement("tr"); const parent = category.parent_id ? byId.get(category.parent_id)?.name || category.parent_id : "—"; [category.name, category.category_type, parent, category.is_active ? "Active" : "Inactive"].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; row.append(cell); }); const action = document.createElement("td"); const button = document.createElement("button"); button.type = "button"; button.textContent = category.is_active ? "Deactivate" : "Activate"; button.addEventListener("click", async () => { try { await api(`/api/v1/money-flow/categories/${category.id}`, { method: "PATCH", body: JSON.stringify({ is_active: !category.is_active }) }); await loadMoneyFlowCategories(); } catch (error) { $("category-status").textContent = error.message; } }); action.append(button); row.append(action); return row; }));
+      };
+      const loadMoneyFlowCategories = async () => {
+        if (!state.portfolio) return;
+        try { const result = await api(`/api/v1/money-flow/categories?portfolio_id=${encodeURIComponent(state.portfolio.id)}`); state.categories = result.categories || []; renderMoneyFlowCategories(); $("category-status").textContent = `${state.categories.length} categor(ies) · parent-child hierarchy · inactive status.`; } catch (error) { $("category-status").textContent = error.message; }
+      };
+      const renderMoneyFlowPayeesTags = () => {
+        $("bulk-payee").innerHTML = `<option value="">Geen payee</option>${state.payees.filter((payee) => payee.is_active).map((payee) => `<option value="${payee.id}">${payee.name}</option>`).join("")}`;
+        $("bulk-tags").innerHTML = state.tags.map((tag) => `<option value="${tag.id}">${tag.name}</option>`).join("") || `<option value="">Geen tags</option>`;
+        $("rule-payee").innerHTML = `<option value="">Geen payee</option>${state.payees.filter((payee) => payee.is_active).map((payee) => `<option value="${payee.id}">${payee.name}</option>`).join("")}`;
+        $("review-payee").innerHTML = `<option value="">Geen payee</option>${state.payees.filter((payee) => payee.is_active).map((payee) => `<option value="${payee.id}">${payee.name}</option>`).join("")}`;
+        $("payee-list").replaceChildren(...state.payees.map((payee) => { const item = document.createElement("li"); item.textContent = `${payee.name} · ${payee.is_active ? "Active" : "Inactive"} · ${payee.normalized_name}`; return item; }));
+        $("tag-list").replaceChildren(...state.tags.map((tag) => { const item = document.createElement("li"); item.textContent = `${tag.name}${tag.color ? ` · ${tag.color}` : ""}`; return item; }));
+      };
+      const loadMoneyFlowPayeesTags = async () => {
+        if (!state.portfolio) return;
+        try {
+          const [payees, tags] = await Promise.all([api("/api/v1/money-flow/payees"), api("/api/v1/money-flow/tags")]);
+          state.payees = payees.payees || [];
+          state.tags = tags.tags || [];
+          renderMoneyFlowPayeesTags();
+          $("payees-tags-status").textContent = `${state.payees.length} normalized payee(s) · ${state.tags.length} tag(s) · bulk edit beschikbaar.`;
+        } catch (error) { $("payees-tags-status").textContent = error.message; }
+      };
+      const renderMoneyFlowRules = () => {
+        $("rule-account").innerHTML = `<option value="">Alle eligible accounts</option>${state.moneyFlowAccounts.map((account) => `<option value="${account.id}">${account.name} · ${account.account_type}</option>`).join("")}`;
+        $("rule-payee").innerHTML = `<option value="">Geen payee</option>${state.payees.filter((payee) => payee.is_active).map((payee) => `<option value="${payee.id}">${payee.name}</option>`).join("")}`;
+        $("rule-category").innerHTML = `<option value="">Geen category</option>${state.categories.filter((category) => category.is_active).map((category) => `<option value="${category.id}">${category.name} · ${category.category_type}</option>`).join("")}`;
+        $("rules-table").querySelector("tbody").replaceChildren(...state.rules.map((rule) => { const row = document.createElement("tr"); [rule.name, `${rule.conditions.match_type} · ${rule.conditions.value}`, rule.priority, rule.account_id ? (state.moneyFlowAccounts.find((account) => account.id === rule.account_id)?.name || rule.account_id) : "All accounts", rule.is_active ? "Active" : "Inactive"].forEach((value) => { const cell = document.createElement("td"); cell.textContent = String(value); row.append(cell); }); return row; }));
+      };
+      const loadMoneyFlowRules = async () => {
+        if (!state.portfolio) return;
+        try { const result = await api("/api/v1/money-flow/rules"); state.rules = result.rules || []; renderMoneyFlowRules(); $("rules-status").textContent = `${state.rules.length} rule(s) · priority · fixed matcher order · account scope.`; } catch (error) { $("rules-status").textContent = error.message; }
+      };
+      const loadMoneyFlowReviewQueue = async () => {
+        if (!state.portfolio) return;
+        try {
+          const result = await api(`/api/v1/money-flow/review-queue?portfolio_id=${encodeURIComponent(state.portfolio.id)}`);
+          state.reviewItems = result.items || [];
+          $("review-table").querySelector("tbody").replaceChildren(...state.reviewItems.map((item) => {
+            const row = document.createElement("tr");
+            [item.effective_date, item.description || "—", item.classification_source, item.confidence || "—", item.status].forEach((value) => { const cell = document.createElement("td"); cell.textContent = String(value); row.append(cell); });
+            const action = document.createElement("td");
+            const accept = document.createElement("button"); accept.type = "button"; accept.textContent = "Accept review"; accept.addEventListener("click", async () => { try { await api(`/api/v1/money-flow/review-queue/${item.transaction_id}`, { method: "PATCH", body: JSON.stringify({ action: "ACCEPT" }) }); await loadMoneyFlowReviewQueue(); } catch (error) { $("money-flow-review-status").textContent = error.message; } });
+            const override = document.createElement("button"); override.type = "button"; override.textContent = "Override"; override.addEventListener("click", async () => { try { await api(`/api/v1/money-flow/review-queue/${item.transaction_id}`, { method: "PATCH", body: JSON.stringify({ action: "OVERRIDE", payee_id: $("review-payee").value || null, category_id: $("review-category").value || null, tag_ids: [] }) }); await loadMoneyFlowReviewQueue(); } catch (error) { $("money-flow-review-status").textContent = error.message; } });
+            action.append(accept, override); row.append(action); return row;
+          }));
+          $("money-flow-review-status").textContent = `${state.reviewItems.length} pending review item(s) · confidence · source · Review audit.`;
+        } catch (error) { $("money-flow-review-status").textContent = error.message; }
+      };
+      const loadMoneyFlowBudgets = async () => {
+        if (!state.portfolio) return;
+        try {
+          const params = new URLSearchParams({ portfolio_id: state.portfolio.id, period_start: $("budget-start").value, period_end: $("budget-end").value });
+          const result = await api(`/api/v1/money-flow/budgets?${params}`);
+          state.budgets = result.budgets || [];
+          const rows = state.budgets.flatMap((budget) => (budget.groups || []).flatMap((group) => (group.lines || []).map((line) => ({ group, line }))));
+          $("budget-table").querySelector("tbody").replaceChildren(...rows.map(({ group, line }) => { const row = document.createElement("tr"); [group.name, line.category_name, `${line.planned_amount} + ${line.rollover_amount}`, line.actual_amount, line.variance_amount, line.status].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; row.append(cell); }); return row; }));
+          $("budget-status").textContent = `${rows.length} budget line(s) · actual-versus-budget · ${result.calculation_version}`;
+        } catch (error) { $("budget-status").textContent = error.message; }
+      };
+      const loadMoneyFlowAnalysis = async () => {
+        if (!state.portfolio) return;
+        try {
+          const params = new URLSearchParams({ portfolio_id: state.portfolio.id, period_start: $("analysis-start").value, period_end: $("analysis-end").value });
+          const result = await api(`/api/v1/money-flow/analysis?${params}`);
+          state.analysis = result;
+          $("analysis-totals").replaceChildren(...["INCOME", "SAVING", "SPENDING"].map((type) => { const metric = document.createElement("div"); metric.className = "metric"; metric.innerHTML = `<small>${type}</small><strong>${result.totals[type] || "0.000000000000"}</strong>`; return metric; }));
+          const rows = [];
+          const addRows = (flow, categories, depth = 0) => categories.forEach((category) => { const row = document.createElement("tr"); const flowCell = document.createElement("td"); flowCell.textContent = flow; const categoryCell = document.createElement("td"); categoryCell.style.paddingLeft = `${0.4 + depth * 1.2}rem`; if (category.id) { const button = document.createElement("button"); button.type = "button"; button.textContent = category.name; button.dataset.categoryId = category.id; button.addEventListener("click", () => loadMoneyFlowDrilldown(category)); categoryCell.append(button); } else categoryCell.textContent = category.name; const totalCell = document.createElement("td"); totalCell.textContent = category.total; const countCell = document.createElement("td"); countCell.textContent = String(category.transactions.length + category.children.reduce((sum, child) => sum + child.transactions.length, 0)); row.append(flowCell, categoryCell, totalCell, countCell); rows.push(row); addRows(flow, category.children, depth + 1); });
+          result.flows.filter((flow) => ["INCOME", "SAVING", "SPENDING"].includes(flow.category_type)).forEach((flow) => addRows(flow.category_type, flow.categories));
+          $("analysis-table").querySelector("tbody").replaceChildren(...rows);
+          $("analysis-status").textContent = `${result.period_start} → ${result.period_end} · account scope ${result.account_scope} · ${result.calculation_version}`;
+        } catch (error) { $("analysis-status").textContent = error.message; }
+      };
+      const loadMoneyFlowDrilldown = async (category) => {
+        if (!category.id) return;
+        try {
+          const params = new URLSearchParams({ portfolio_id: state.portfolio.id, category_id: category.id, period_start: $("analysis-start").value, period_end: $("analysis-end").value });
+          const result = await api(`/api/v1/money-flow/analysis/drilldown?${params}`);
+          $("analysis-drilldown").hidden = false;
+          $("analysis-drilldown-status").textContent = `Drill-down: ${category.name} · ${result.transactions.length} transaction(s) · ${result.calculation_version}`;
+          $("analysis-drilldown-rows").replaceChildren(...result.transactions.map((transaction) => { const row = document.createElement("tr"); [transaction.effective_date, transaction.description, transaction.signed_amount, transaction.currency_code].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; row.append(cell); }); return row; }));
+        } catch (error) { $("analysis-drilldown").hidden = false; $("analysis-drilldown-status").textContent = error.message; }
+      };
+      const loadMoneyFlowCurrencyReport = async () => {
+        if (!state.portfolio) return;
+        try {
+          const params = new URLSearchParams({ portfolio_id: state.portfolio.id, period_start: $("currency-report-start").value, period_end: $("currency-report-end").value, base_currency_code: $("currency-report-base").value || state.portfolio.reporting_currency_code });
+          const result = await api(`/api/v1/money-flow/currency-report?${params}`);
+          $("currency-report-table").querySelector("tbody").replaceChildren(...result.activities.map((activity) => {
+            const row = document.createElement("tr");
+            [activity.native_amount, activity.native_currency_code, `${activity.fx_rate} · period-end`, activity.base_amount, activity.base_currency_code].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; row.append(cell); });
+            return row;
+          }));
+          $("currency-report-status").textContent = `${result.period_start} → ${result.period_end} · Base currency ${result.base_currency_code} · ${result.period_end_fx.length} period-end FX rate(s) · ${result.calculation_version}`;
+        } catch (error) { $("currency-report-status").textContent = error.message; }
+      };
+      const dividendInstrumentLabel = (instrumentId) => (instrumentId && state.instrument && instrumentId === state.instrument.id ? state.instrument.name : (instrumentId || "Portfolio"));
+      const renderDividendRows = (targetId, events) => {
+        $(targetId).replaceChildren(...events.map((event) => {
+          const tr = document.createElement("tr");
+          const net = event.net_amount ?? event.gross_amount;
+          [event.status, dividendInstrumentLabel(event.instrument_id), event.ex_date || "—", event.payment_date || "—", `${Number(net || 0).toFixed(2)} ${event.currency_code}`].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; tr.append(cell); });
+          return tr;
+        }));
+      };
+      const renderDividends = (income) => {
+        state.income = income;
+        $("dividend-received").textContent = `${income.counts.received} paid`;
+        $("dividend-expected").textContent = `${income.counts.expected} verwacht`;
+        renderDividendRows("dividend-received-rows", income.received);
+        renderDividendRows("dividend-expected-rows", income.expected);
+        $("dividend-status").textContent = `Ontvangen: ${income.counts.received} · Verwacht: ${income.counts.expected}`;
+        $("dividend-evidence").textContent = `income_event · announced ${income.counts.announced} · projected ${income.counts.projected} · ex-date ${income.counts.ex_date} · paid ${income.counts.paid}`;
+      };
+      const loadIncomeEvents = async () => {
+        if (!state.portfolio) return;
+        try {
+          renderDividends(await api(`/api/v1/income-events?portfolio_id=${encodeURIComponent(state.portfolio.id)}`));
+          const metrics = await api(`/api/v1/income-metrics?portfolio_id=${encodeURIComponent(state.portfolio.id)}`);
+          const metric = metrics.metrics[0];
+          if (metric) {
+            $("dividend-gross-total").textContent = `${Number(metric.gross_amount).toFixed(2)} ${metric.currency_code}`;
+            $("dividend-tax-total").textContent = `${Number(metric.tax_amount).toFixed(2)} ${metric.currency_code}`;
+            $("dividend-net-total").textContent = `${Number(metric.net_amount).toFixed(2)} ${metric.currency_code}`;
+            $("dividend-yield").textContent = metric.yield === null ? "—" : `${Number(metric.yield).toFixed(2)}%`;
+            $("dividend-yield-on-cost").textContent = metric.yield_on_cost === null ? "—" : `${Number(metric.yield_on_cost).toFixed(2)}%`;
+            $("dividend-evidence").textContent += ` · ${metrics.calculation_version}`;
+          }
+          const summary = await api(`/api/v1/dividend-summary?portfolio_id=${encodeURIComponent(state.portfolio.id)}`);
+          const currency = state.portfolio.reporting_currency_code;
+          $("dividend-ttm").textContent = `${Number(summary.ttm.net_amount).toFixed(2)} ${currency}`;
+          $("dividend-padi").textContent = `${Number(summary.padi.net_amount).toFixed(2)} ${currency}`;
+          $("dividend-forecast-evidence").textContent = `TTM: ${summary.ttm.event_count} paid events · PADI: ${summary.padi.forecast_count} dividend_forecast regels · ${summary.calculation_version}`;
+          await loadDividendGrowth();
+          await loadMarketEvents();
+          await loadPerformanceComparison();
+          await loadBenchmarkCatalog();
+          await loadAlertRules();
+          await loadProviderRegistry();
+          await loadBankInstitutions();
+          await loadConnections();
+        } catch (error) { $("dividend-status").textContent = error.message; }
+      };
+      const loadDividendGrowth = async () => {
+        if (!state.portfolio) return;
+        const startDate = $("dividend-growth-start").value;
+        const endDate = $("dividend-growth-end").value;
+        const growth = await api(`/api/v1/dividend-growth?portfolio_id=${encodeURIComponent(state.portfolio.id)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`);
+        const currency = state.portfolio.reporting_currency_code;
+        $("dividend-growth-yoy").textContent = growth.yoy.net_growth === null ? "—" : `${Number(growth.yoy.net_growth).toFixed(2)}%`;
+        $("dividend-growth-cagr").textContent = growth.cagr.net_growth === null ? "—" : `${Number(growth.cagr.net_growth).toFixed(2)}%`;
+        $("dividend-growth-evidence").textContent = `${growth.annual_periods.length} calendar-year PAID buckets · ${growth.period_start} → ${growth.period_end} · dividend-growth-v1 · ${currency}`;
+      };
+      const loadMarketEvents = async () => {
+        if (!state.portfolio) return;
+        const filter = $("market-events-filter").value;
+        const params = new URLSearchParams({ portfolio_id: state.portfolio.id, start_date: "2026-01-01", end_date: "2027-12-31" });
+        if (filter) params.set("event_type", filter);
+        const result = await api(`/api/v1/market-events?${params}`);
+        $("market-events-rows").replaceChildren(...result.events.map((event) => {
+          const row = document.createElement("tr");
+          [event.event_type, event.title, event.starts_at || "—", event.source || "—"].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; row.append(cell); });
+          return row;
+        }));
+        $("market-events-status").textContent = `${result.counts.total} event(s) zichtbaar.`;
+        $("market-events-evidence").textContent = `market-events-v1 · ${result.counts.total} events · filter: ${filter || "alle"}`;
+      };
+      const loadPerformanceComparison = async () => {
+        if (!state.portfolio) return;
+        const params = new URLSearchParams({ portfolio_id: state.portfolio.id, period_start: $("performance-start").value, period_end: $("performance-end").value });
+        try {
+          const result = await api(`/api/v1/performance-comparison?${params}`);
+          const percent = (method) => method.return_pct === null ? "—" : `${Number(method.return_pct).toFixed(2)}%`;
+          $("performance-twr").textContent = percent(result.methods.TWR);
+          $("performance-mwrr").textContent = percent(result.methods.MWRR);
+          $("performance-irr").textContent = percent(result.methods.IRR);
+          $("performance-dietz").textContent = percent(result.methods.MODIFIED_DIETZ);
+          $("performance-comparison-status").textContent = `${result.cashflows.length} external cashflow(s) · ${result.beginning_value} → ${result.ending_value}`;
+          $("performance-comparison-evidence").textContent = `${result.period_start} → ${result.period_end} · ${result.calculation_version} · TWR ${result.methods.TWR.formula_version} · MWRR/IRR ${result.methods.MWRR.formula_version} · Dietz ${result.methods.MODIFIED_DIETZ.formula_version}`;
+        } catch (error) {
+          $("performance-comparison-status").textContent = `Nog geen performance: ${error.message}`;
+          ["performance-twr", "performance-mwrr", "performance-irr", "performance-dietz"].forEach((id) => $(id).textContent = "—");
+        }
+      };
+      const loadBenchmarkCatalog = async () => {
+        if (!state.portfolio) return;
+        try {
+          const result = await api("/api/v1/benchmarks");
+          const select = $("benchmark-select");
+          select.replaceChildren(new Option("Kies benchmark", ""), ...result.benchmarks.map((benchmark) => new Option(`${benchmark.name} (${benchmark.currency_code})`, benchmark.id)));
+          $("benchmark-status").textContent = result.benchmarks.length ? "Benchmark klaar voor vergelijking." : "Nog geen benchmarkobservaties beschikbaar.";
+        } catch (error) { $("benchmark-status").textContent = error.message; }
+      };
+      const loadBenchmarkComparison = async () => {
+        if (!state.portfolio || !$("benchmark-select").value) { $("benchmark-status").textContent = "Kies eerst een benchmark."; return; }
+        const params = new URLSearchParams({ portfolio_id: state.portfolio.id, benchmark_id: $("benchmark-select").value, period_start: $("performance-start").value, period_end: $("performance-end").value });
+        try {
+          const result = await api(`/api/v1/performance-benchmark?${params}`);
+          $("benchmark-observation-return").textContent = result.observation_return_pct === null ? "—" : `${Number(result.observation_return_pct).toFixed(2)}%`;
+          $("benchmark-cashflow-matched").textContent = result.cashflow_matched_return_pct === null ? "—" : `${Number(result.cashflow_matched_return_pct).toFixed(2)}%`;
+          $("benchmark-status").textContent = `${result.benchmark.name} · ${result.period_start} → ${result.period_end}`;
+          $("benchmark-evidence").textContent = `${result.currency_code} · ${result.calculation_version} · observation ${result.variants.observation.formula_version} · cashflow-matched ${result.variants.cashflow_matched.formula_version}`;
+        } catch (error) { $("benchmark-status").textContent = `Nog geen benchmark: ${error.message}`; }
+      };
+      const loadAlertRules = async () => {
+        if (!state.portfolio) return;
+        try {
+          const result = await api(`/api/v1/alert-rules?portfolio_id=${encodeURIComponent(state.portfolio.id)}`);
+          state.alertRule = result.alert_rules[0] || null;
+          if (state.alertRule) {
+            $("alert-name").value = state.alertRule.name;
+            $("alert-condition").value = JSON.stringify(state.alertRule.condition);
+            $("alert-channel").value = state.alertRule.channels[0] || "IN_APP";
+            $("alert-pause").checked = !state.alertRule.is_active;
+            $("alert-status").textContent = `${state.alertRule.name} · ${state.alertRule.is_active ? "actief" : "gepauzeerd"}`;
+          }
+        } catch (error) { $("alert-status").textContent = error.message; }
+      };
+      const testAlertDelivery = async () => {
+        if (!state.alertRule) { $("alert-status").textContent = "Sla eerst een alert rule op."; return; }
+        try {
+          const notification = await api(`/api/v1/alert-rules/${state.alertRule.id}/test`, { method: "POST", body: JSON.stringify({ event: { event_type: "PAID", net: "21.25" } }) });
+          const delivery = notification.payload.delivery_history?.[0];
+          $("alert-delivery-history").textContent = `Delivery history: ${delivery?.status || "TESTED"} · ${(delivery?.channels || []).join(", ")} · ${delivery?.tested_at || "—"}`;
+          $("alert-status").textContent = "Test delivery aangemaakt.";
+        } catch (error) { $("alert-status").textContent = error.message; }
+      };
+      const loadProviderRegistry = async () => {
+        try {
+          const result = await api("/api/v1/providers");
+          state.provider = result.providers[0] || null;
+          $("provider-registry-status").textContent = `${result.providers.length} provider(s) geregistreerd${state.provider ? ` · ${state.provider.name} · ${state.provider.status}` : ""}.`;
+          $("provider-registry-evidence").textContent = `provider-registry-v1 · ${result.providers.length} providers · capabilities/auth/API version/status configureerbaar.`;
+        } catch (error) { $("provider-registry-status").textContent = error.message; }
+      };
+      const loadConnections = async () => {
+        try {
+          const result = await api("/api/v1/connections");
+          state.connection = result.connections[0] || null;
+          $("connection-status").textContent = state.connection ? `${state.connection.provider_slug} · ${state.connection.status} · read-only` : "Geen connection geladen.";
+          if (state.connection) { $("connection-provider").value = state.connection.provider_slug; $("connection-vault-path").value = state.connection.vault_path || "local/synthetic/trading212"; $("connection-accounts").value = state.connection.accounts.map((account) => account.account_type).join(","); }
+          $("connection-evidence").textContent = `connection-registry-v1 · ${result.connections.length} connection(s) · vault reference · read-only · revoke.`;
+        } catch (error) { $("connection-status").textContent = error.message; }
+      };
+      const loadBankInstitutions = async () => {
+        try {
+          const query = new URLSearchParams({ provider: "gocardless" });
+          if ($("bank-institution-region").value) query.set("region", $("bank-institution-region").value);
+          if ($("bank-institution-capabilities").value) query.set("capability", $("bank-institution-capabilities").value);
+          const result = await api(`/api/v1/bank-institutions?${query.toString()}`);
+          $("bank-institution-availability").querySelector("tbody").replaceChildren(...result.institutions.map((institution) => {
+            const row = document.createElement("tr");
+            [institution.name, `${institution.region} (${institution.country_code})`, institution.capabilities.join(", "), `${institution.availability.status} · ${institution.availability.message}`].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; row.append(cell); });
+            return row;
+          }));
+          $("bank-institution-status").textContent = `${result.institutions.length} synthetische GoCardless-instelling(en) gevonden.`;
+          $("bank-institution-evidence").textContent = `${result.calculation_version} · ${result.fixture} · regio/capability filter · read-only · credentials buiten scope.`;
+        } catch (error) { $("bank-institution-status").textContent = `Instellingen niet beschikbaar: ${error.message}`; }
+      };
+      const loadSyncResults = async (syncRunId = "") => {
+        if (!state.connection?.id) { $("sync-results-status").textContent = "Sla eerst een connection op."; return; }
+        try {
+          const query = new URLSearchParams({ connection_id: state.connection.id });
+          if (syncRunId) query.set("sync_run_id", syncRunId);
+          const result = await api(`/api/v1/sync-results?${query.toString()}`);
+          const filter = $("sync-results-filter").value;
+          const items = filter === "ALL" ? result.items : result.items.filter((item) => item.item_type === filter);
+          $("sync-results-status").textContent = `${items.length} result(s) zichtbaar · ${result.posting_status} · read-only`;
+          $("sync-results-evidence").textContent = `sync-review-v1 · new ${result.counts.new} · updated ${result.counts.updated} · duplicate ${result.counts.duplicate} · rejected ${result.counts.rejected} · attention ${result.counts.attention} · voor posting: ${result.posting_status}`;
+          $("sync-results-table").querySelector("tbody").replaceChildren(...items.map((item) => {
+            const tr = document.createElement("tr");
+            [item.external_id, item.item_type, item.posting_status, item.review_decision || "—"].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; tr.append(cell); });
+            const action = document.createElement("td");
+            if (item.posting_status === "NOT_POSTED") { const button = document.createElement("button"); button.type = "button"; button.textContent = "Accept review"; button.addEventListener("click", async () => { await api(`/api/v1/sync-results/${item.id}`, { method: "PATCH", body: JSON.stringify({ review_decision: "ACCEPT" }) }); await loadSyncResults(syncRunId); }); action.append(button); } else action.textContent = "—";
+            tr.append(action); return tr;
+          }));
+        } catch (error) { $("sync-results-status").textContent = `Syncresultaten niet beschikbaar: ${error.message}`; }
+      };
+      const validateManualAction = () => {
+        const missing = [];
+        if (!$("action-account").value) missing.push("Account is verplicht");
+        if (!$("action-instrument").value) missing.push("Instrument is verplicht");
+        if (!$("action-currency").value) missing.push("Currency is verplicht");
+        if (!$("action-date").value) missing.push("Datum is verplicht");
+        if (!$("action-amount").value) missing.push("Bedrag is verplicht");
+        const validation = $("action-validation");
+        validation.replaceChildren(...missing.map((message) => { const item = document.createElement("li"); item.textContent = message; return item; }));
+        validation.hidden = missing.length === 0;
+        return missing.length === 0;
+      };
+      const formatKpi = (value, currency) => `${Number(value || 0).toFixed(2)} ${currency}`;
+      const renderKpis = (snapshot) => {
+        const currency = snapshot.reporting_currency_code || state.portfolio.reporting_currency_code;
+        $("portfolio-value").textContent = formatKpi(snapshot.portfolio_value, currency);
+        $("invested-capital").textContent = formatKpi(snapshot.invested_capital, currency);
+        $("free-cash").textContent = formatKpi(snapshot.free_cash, currency);
+        $("snapshot-evidence").textContent = `KPI’s uit calculation read model snapshot ${snapshot.calculation_version}.`;
+      };
+      const renderHistoricalState = (snapshot, requestedDate) => {
+        state.snapshot = snapshot;
+        renderKpis(snapshot);
+        renderPositions(snapshot);
+        $("position-detail").hidden = true;
+        const dataAsOf = snapshot.snapshot_at || `${requestedDate}T23:59:59.999Z`;
+        $("timetravel-state").textContent = `Historische portfolio state geladen voor ${requestedDate}.`;
+        $("timetravel-state").className = "notice success";
+        $("timetravel-evidence").dataset.asOf = dataAsOf;
+        $("timetravel-evidence").textContent = `Data-as-of: ${dataAsOf} · calculation ${snapshot.calculation_version}`;
+      };
+      const loadHistoricalState = async () => {
+        const requestedDate = $("timetravel-date").value;
+        if (!requestedDate) {
+          $("timetravel-state").textContent = "Kies een historische datum.";
+          $("timetravel-state").className = "notice error";
+          return;
+        }
+        try {
+          $("timetravel-run").disabled = true;
+          $("timetravel-state").textContent = "Historische state wordt berekend…";
+          const snapshot = await api("/api/v1/portfolio-snapshots", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, snapshot_at: `${requestedDate}T23:59:59.999Z`, calculation_version: "portfolio-snapshot-v1" }) });
+          renderHistoricalState(snapshot, requestedDate);
+        } catch (error) {
+          $("timetravel-state").textContent = `Historische state niet beschikbaar: ${error.message}`;
+          $("timetravel-state").className = "notice error";
+        } finally { $("timetravel-run").disabled = false; }
+      };
+      const bytesToBase64 = (bytes) => { let binary = ""; for (const byte of bytes) binary += String.fromCharCode(byte); return btoa(binary); };
+      $("import-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const file = $("import-file").files[0];
+        if (!file) return;
+        try {
+          $("import-upload").disabled = true;
+          $("import-status").textContent = "Importbestand wordt gevalideerd…";
+          const content = new Uint8Array(await file.arrayBuffer());
+          const uploaded = await api("/api/v1/import-files", { method: "POST", body: JSON.stringify({ filename: file.name, content_type: file.type || "text/csv", content_base64: bytesToBase64(content) }) });
+          $("import-status").textContent = `Upload geslaagd: ${uploaded.filename} (${uploaded.file_size_bytes} bytes).`;
+          $("import-status").className = "notice success";
+          $("import-evidence").textContent = `Owner: ${uploaded.user_id} · SHA-256: ${uploaded.checksum_sha256} · object storage: ${uploaded.object_storage_key}`;
+        } catch (error) {
+          $("import-status").textContent = `Upload niet beschikbaar: ${error.message}`;
+          $("import-status").className = "notice error";
+        } finally { $("import-upload").disabled = false; }
+      });
+      $("degiro-import-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const file = $("degiro-import-file").files[0];
+        if (!file) return;
+        try {
+          const content = await file.arrayBuffer();
+          const result = await api("/api/v1/degiro-imports", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, filename: file.name, content_type: "text/csv", content_base64: bytesToBase64(content), statement_ending_balance: "954.90", calculated_balance: "954.90", fx_rates: { EUR: "1.00" } }) });
+          $("degiro-import-status").textContent = `${result.provider} · ${result.layout.status} · ${result.counts.candidates} canonical candidates · read-only`;
+          $("degiro-import-status").className = "notice success";
+          $("degiro-import-evidence").textContent = `${result.layout.parser_version} · ISIN ${result.candidates[0]?.isin || "—"} · fee ${result.candidates[0]?.fee_amount || "0.00"} · tax ${result.candidates[1]?.tax_amount || "0.00"} · FX ${result.candidates[0]?.fx_rate || "1.00"}`;
+          $("degiro-reconciliation").textContent = `Reconciliation: ${result.reconciliation.status} · statement ${result.reconciliation.statement_ending_balance} · calculated ${result.reconciliation.calculated_balance} · difference ${result.reconciliation.difference}`;
+        } catch (error) { $("degiro-import-status").textContent = `DEGIRO preview niet beschikbaar: ${error.message}`; $("degiro-import-status").className = "notice error"; }
+      });
+      $("validation-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const file = $("import-file").files[0];
+        if (!file) { $("validation-evidence").textContent = "Kies eerst een importbestand."; return; }
+        try {
+          $("validation-run").disabled = true;
+          const content = new Uint8Array(await file.arrayBuffer());
+          const result = await api("/api/v1/import-validations", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, filename: file.name, content_type: file.type || "text/csv", content_base64: bytesToBase64(content) }) });
+          $("validation-valid").textContent = `Valid: ${result.counts.rows_valid}`;
+          $("validation-warning").textContent = `Warnings: ${result.counts.rows_warning}`;
+          $("validation-error").textContent = `Errors: ${result.counts.rows_error}`;
+          $("validation-unsupported").textContent = `Unsupported: ${result.counts.rows_unsupported}`;
+          $("validation-duplicate").textContent = `Duplicates: ${result.counts.rows_duplicate || 0}`;
+          $("validation-evidence").textContent = `Session ${result.import_session_id} · ${result.status} · ${result.counts.rows_seen} rijen gecontroleerd.`;
+          state.validationResult = result;
+          const rows = result.rows;
+          $("validation-rows").querySelector("tbody").replaceChildren(...rows.map((row) => { const tr = document.createElement("tr"); [row.row_number, row.status, row.error_codes.join(", ") || row.duplicate_reason || "—"].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; tr.append(cell); }); if (["ERROR", "UNSUPPORTED", "DUPLICATE"].includes(row.status)) { tr.tabIndex = 0; tr.classList.add("reviewable-row"); tr.addEventListener("click", () => { state.selectedReview = row; $("duplicate-reason").textContent = row.duplicate_reason || ""; $("review-status").textContent = `Rij ${row.row_number} geselecteerd voor review (${row.duplicate_reason || row.status}).`; }); } return tr; }));
+        } catch (error) { $("validation-evidence").textContent = `Validatie niet beschikbaar: ${error.message}`; }
+        finally { $("validation-run").disabled = false; }
+      });
+      $("review-save").addEventListener("click", async () => {
+        if (!state.selectedReview) { $("review-status").textContent = "Selecteer eerst een error-rij."; return; }
+        try {
+          const correction = JSON.parse($("review-correction").value);
+          const normalized = { ...state.selectedReview.normalized_row, ...correction };
+          const reviewed = await api(`/api/v1/import-row-reviews/${state.selectedReview.id}`, { method: "PATCH", body: JSON.stringify({ status: "ACCEPTED", correction, normalized_row: normalized }) });
+          state.selectedReview = { ...state.selectedReview, ...reviewed };
+          $("review-status").textContent = `Rij ${reviewed.row_number} geaccepteerd met correction.`;
+          $("review-status").className = "notice success";
+          $("review-evidence").textContent = `Raw row behouden · actor: ${reviewed.actor_id} · resolved_at: ${reviewed.resolved_at} · status: ${reviewed.status}`;
+        } catch (error) { $("review-status").textContent = `Review niet opgeslagen: ${error.message}`; $("review-status").className = "notice error"; }
+      });
+      $("import-commit-button").addEventListener("click", async () => {
+        if (!state.validationResult?.import_session_id) { $("commit-result").textContent = "Voer eerst een importvalidatie uit."; return; }
+        try {
+          $("import-commit-button").disabled = true;
+          const result = await api(`/api/v1/import-sessions/${state.validationResult.import_session_id}/commit`, { method: "POST", body: JSON.stringify({ financial_account_id: state.account.id }) });
+          $("commit-result").textContent = `COMMITTED · ${result.rows_committed} rows · ${result.rows_skipped} skipped`;
+          $("commit-result").className = "notice success";
+        } catch (error) { $("commit-result").textContent = `Import commit niet uitgevoerd: ${error.message}`; $("commit-result").className = "notice error"; }
+        finally { $("import-commit-button").disabled = false; }
+      });
+      $("import-undo").addEventListener("click", async () => {
+        if (!state.validationResult?.import_session_id) { $("undo-result").textContent = "Voer eerst een importvalidatie uit."; return; }
+        try {
+          $("import-undo").disabled = true;
+          const result = await api(`/api/v1/import-sessions/${state.validationResult.import_session_id}/undo`, { method: "POST", body: JSON.stringify({ reason: "Frontend import undo" }) });
+          $("undo-result").textContent = `UNDONE · ${result.rows_undone} rows gevoid`;
+          $("undo-result").className = "notice success";
+        } catch (error) { $("undo-result").textContent = `Undo niet uitgevoerd: ${error.message}`; $("undo-result").className = "notice error"; }
+        finally { $("import-undo").disabled = false; }
+      });
+      $("reconciliation-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          await api("/api/v1/reconciliation-issues", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, issue_type: $("reconciliation-type").value, severity: "WARNING", message: $("reconciliation-message").value, evidence: { source: "synthetic-local-ui" } }) });
+          $("reconciliation-status").textContent = "Issue toegevoegd aan de review queue.";
+          await loadReconciliationIssues();
+        } catch (error) { $("reconciliation-status").textContent = error.message; }
+      });
+      $("dividend-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          await api("/api/v1/income-events", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, instrument_id: state.instrument?.id, event_type: "DIVIDEND", status: $("dividend-status-select").value, ex_date: $("dividend-ex-date").value, payment_date: $("dividend-payment-date").value, gross_amount: $("dividend-gross").value, tax_amount: $("dividend-tax").value, currency_code: state.portfolio.reporting_currency_code }) });
+          await loadIncomeEvents();
+        } catch (error) { $("dividend-status").textContent = error.message; }
+      });
+      $("dividend-forecast-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          await api("/api/v1/dividend-forecasts", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, instrument_id: state.instrument?.id, forecast_period_start: $("dividend-forecast-start").value, forecast_period_end: $("dividend-forecast-end").value, forecast_amount_gross: $("dividend-forecast-gross").value, forecast_tax: $("dividend-forecast-tax").value, currency_code: state.portfolio.reporting_currency_code, model: $("dividend-forecast-model").value, confidence: "0.90" }) });
+          await loadIncomeEvents();
+        } catch (error) { $("dividend-status").textContent = error.message; }
+      });
+      $("dividend-growth-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try { await loadDividendGrowth(); } catch (error) { $("dividend-status").textContent = error.message; }
+      });
+      $("market-events-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          await api("/api/v1/market-events", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, instrument_id: state.instrument?.id, event_type: $("market-events-type").value, title: $("market-events-title-input").value, starts_at: new Date($("market-events-start").value).toISOString(), ends_at: new Date($("market-events-end").value).toISOString(), source: "SYNTHETIC_UI", source_external_id: `ui-${Date.now()}` }) });
+          await loadMarketEvents();
+        } catch (error) { $("market-events-status").textContent = error.message; }
+      });
+      $("market-events-filter").addEventListener("change", loadMarketEvents);
+      $("performance-comparison-form").addEventListener("submit", async (event) => { event.preventDefault(); await loadPerformanceComparison(); });
+      $("benchmark-comparison-form").addEventListener("submit", async (event) => { event.preventDefault(); await loadBenchmarkComparison(); });
+      $("alert-rules-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const condition = JSON.parse($("alert-condition").value);
+          if (!state.alertRule) {
+            state.alertRule = await api("/api/v1/alert-rules", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, name: $("alert-name").value, alert_type: "DIVIDEND_EVENT", condition, channels: [$("alert-channel").value] }) });
+          } else {
+            state.alertRule = await api(`/api/v1/alert-rules/${state.alertRule.id}`, { method: "PATCH", body: JSON.stringify({ is_active: !$("alert-pause").checked }) });
+          }
+          $("alert-status").textContent = `${state.alertRule.name || $("alert-name").value} · ${state.alertRule.is_active ? "actief" : "gepauzeerd"}`;
+        } catch (error) { $("alert-status").textContent = `Alert niet opgeslagen: ${error.message}`; }
+      });
+      $("alert-test").addEventListener("click", testAlertDelivery);
+      $("provider-registry-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const capabilities = $("provider-capabilities").value.split(",").map((capability) => capability.trim().toUpperCase()).filter(Boolean).map((capability) => ({ capability, supported: true }));
+          state.provider = await api("/api/v1/providers", { method: "POST", body: JSON.stringify({ slug: $("provider-slug").value, name: $("provider-name").value, provider_type: "BROKER", auth_mode: $("provider-auth-mode").value, api_version: $("provider-api-version").value, status: "ACTIVE", capabilities }) });
+          $("provider-registry-status").textContent = `${state.provider.name} · ${state.provider.status} · ${state.provider.auth_mode}`;
+          $("provider-registry-evidence").textContent = `provider-registry-v1 · ${state.provider.capabilities.map((item) => item.capability).join(", ")} · API ${state.provider.api_version}`;
+        } catch (error) { $("provider-registry-status").textContent = `Provider niet opgeslagen: ${error.message}`; }
+      });
+      $("bank-institutions-form").addEventListener("submit", async (event) => { event.preventDefault(); await loadBankInstitutions(); });
+      async function loadBankAccounts(requisitionId) {
+        const result = await api(`/api/v1/bank-requisitions/${encodeURIComponent(requisitionId)}/accounts`);
+        $("bank-account-selection").innerHTML = result.accounts.map((account) => `<label class="bank-account-option"><input type="checkbox" name="bank-account-selection" data-account-id="${account.id}" value="${account.id}" ${account.selected ? "checked" : ""}> ${account.name} · <span class="bank-account-type">${account.account_type}</span> · <span class="bank-account-currency">${account.base_currency_code}</span></label>`).join("");
+        $("bank-accounts-status").textContent = `${result.accounts.filter((account) => account.selected).length} account(s) geselecteerd · ${result.institution_id}`;
+      }
+      $("bank-accounts-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const requisitionId = state.bankRequisition?.requisition_id;
+          const selectedAccountIds = [...document.querySelectorAll("#bank-account-selection input:checked")].map((input) => input.value);
+          const result = await api(`/api/v1/bank-requisitions/${encodeURIComponent(requisitionId)}/accounts`, { method: "POST", body: JSON.stringify({ selected_account_ids: selectedAccountIds, fixture: "BANK-001" }) });
+          $("bank-accounts-status").textContent = `${result.accounts.length} account(s) opgeslagen · ${result.accounts.map((account) => `${account.account_type}/${account.base_currency_code}`).join(", ")}`;
+          $("bank-accounts-evidence").textContent = `${result.calculation_version} · selected ${result.accounts.length} · type/currency zichtbaar · read-only · ledger untouched.`;
+        } catch (error) { $("bank-accounts-status").textContent = `Accounts opslaan mislukt: ${error.message}`; }
+      });
+      $("bank-sync-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const requisitionId = state.bankRequisition?.requisition_id;
+          if (!requisitionId) throw new Error("Autoriseer eerst bankconsent.");
+          const from = `${$("bank-sync-window").value}T00:00:00.000Z`;
+          const to = `${$("bank-sync-window-to").value}T23:59:59.000Z`;
+          const result = await api(`/api/v1/bank-requisitions/${encodeURIComponent(requisitionId)}/sync`, { method: "POST", body: JSON.stringify({ fixture: "BANK-001", scenario: $("bank-sync-scenario").value, cursor: `bank-browser-${Date.now()}`, window_from: from, window_to: to }) });
+          if (result.status === "FAILED") {
+            $("bank-sync-status").textContent = `Sync FAILED · ${result.provider_error.code} · provider ${result.provider_error.status_code}`;
+            $("bank-sync-provider-error").textContent = `Provider error: ${result.provider_error.code} · retryable ${result.provider_error.retryable} · read-only`;
+            return;
+          }
+          $("bank-sync-status").textContent = `Sync SUCCEEDED · ${result.balance_snapshots.length} balances · ${result.transactions.length} transactions · ${result.dedupe.duplicates} duplicate(s)`;
+          $("bank-sync-freshness").textContent = `Freshness: ${result.freshness.status} · incremental window: ${result.incremental_window.from} → ${result.incremental_window.to} · cursor ${result.cursor_after}`;
+          $("bank-sync-provider-error").textContent = "Provider error: geen · ledger untouched · read-only";
+          $("bank-sync-balances").querySelector("tbody").replaceChildren(...result.balance_snapshots.map((snapshot) => { const row = document.createElement("tr"); [snapshot.account_id, snapshot.balance, snapshot.currency_code, snapshot.as_of, snapshot.provider_id].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; row.append(cell); }); return row; }));
+        } catch (error) { $("bank-sync-status").textContent = `Bank sync mislukt: ${error.message}`; }
+      });
+      $("bank-consent-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const verifier = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "");
+          const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+          const challenge = btoa(String.fromCharCode(...new Uint8Array(digest))).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+          const requisition = await api("/api/v1/bank-requisitions", { method: "POST", body: JSON.stringify({ institution_id: $("bank-consent-institution").value, redirect_uri: $("bank-consent-redirect").value, language: $("bank-consent-language").value, code_challenge: challenge, fixture: "BANK-001" }) });
+          $("bank-consent-status").textContent = `Requisition gestart · ${requisition.consent_state} · ${requisition.requisition_id}`;
+          const callback = new URL(requisition.authorization_url);
+          callback.searchParams.set("code_verifier", verifier);
+          const authorized = await api(`${callback.pathname}${callback.search}`, { headers: { "content-type": "application/json" } });
+          state.bankRequisition = { ...requisition, ...authorized };
+          $("bank-consent-status").textContent = `Consent ${authorized.consent_state} · connection ${authorized.connection_status}`;
+          $("bank-consent-evidence").textContent = `${authorized.calculation_version} · state valid · PKCE valid · CSRF valid · read-only · ledger untouched.`;
+          await loadBankAccounts(requisition.requisition_id);
+        } catch (error) { $("bank-consent-status").textContent = `Consent mislukt: ${error.message}`; }
+      });
+      $("bank-revoke").addEventListener("click", async () => {
+        try {
+          const requisitionId = state.bankRequisition?.requisition_id;
+          if (!requisitionId) throw new Error("Start eerst bankconsent.");
+          const result = await api(`/api/v1/bank-requisitions/${encodeURIComponent(requisitionId)}/revoke`, { method: "POST", body: JSON.stringify({ fixture: "BANK-001" }) });
+          $("bank-revoke-status").textContent = `Connection disconnected · provider ${result.provider_revoke.status} · credential reference revoked`;
+          $("bank-consent-status").textContent = `Consent REVOKED · connection ${result.status}`;
+          $("bank-consent-evidence").textContent = `${result.calculation_version} · provider revoke · secret cleanup · ledger untouched.`;
+          $("bank-accounts-status").textContent = "Bankaccounts niet beschikbaar: connection disconnected.";
+          $("bank-sync-status").textContent = "Bank sync geblokkeerd: connection disconnected.";
+        } catch (error) { $("bank-revoke-status").textContent = `Revoke mislukt: ${error.message}`; }
+      });
+      $("bank-consent-expire").addEventListener("click", async () => {
+        try {
+          const requisitionId = state.bankRequisition?.requisition_id;
+          if (!requisitionId) throw new Error("Start eerst bankconsent.");
+          const result = await api(`/api/v1/bank-requisitions/${encodeURIComponent(requisitionId)}/expire`, { method: "POST", body: JSON.stringify({ fixture: "BANK-001" }) });
+          $("bank-consent-status").textContent = `Consent ${result.status} · reconnect required`;
+          $("bank-reconnect-status").textContent = `Reconnect required: ${result.reconnect_required} · historical data preserved: ${result.historical_data_preserved}`;
+          $("bank-consent-evidence").textContent = `${result.calculation_version} · historical data preserved · no double counting · ledger untouched.`;
+        } catch (error) { $("bank-reconnect-status").textContent = `Expiry mislukt: ${error.message}`; }
+      });
+      $("bank-consent-reconnect").addEventListener("click", () => $("bank-consent-form").requestSubmit());
+      $("report-run-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const result = await api("/api/v1/report-runs", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, report_type: "PORTFOLIO", period_start: $("report-run-start").value, period_end: $("report-run-end").value, filters: { account_scope: "ALL" }, output_format: "JSON", source_version: "ledger-v1" }) });
+          state.reportRunId = result.id;
+          $("report-run-status").textContent = `Report ${result.status} · ${result.period_start} → ${result.period_end} · ${result.id}`;
+          $("report-run-evidence").textContent = `${result.calculation_version} · as-of ${result.source_trace.as_of} · source ${result.source_trace.source} (${result.source_version}) · read-only · trace ${result.trace_id}`;
+        } catch (error) { $("report-run-status").textContent = `Report run mislukt: ${error.message}`; }
+      });
+      $("report-run-complete").addEventListener("click", async () => {
+        try {
+          const runId = state.reportRunId;
+          if (!runId) throw new Error("Start eerst een report run.");
+          const result = await api(`/api/v1/report-runs/${runId}/complete`, { method: "POST", body: JSON.stringify({ expiry_hours: 24 }) });
+          $("report-run-status").textContent = `Report ${result.status} · artifact ${result.object_storage_key}`;
+          $("report-run-evidence").textContent = `${result.calculation_version} · format ${result.output_format} · artifact expires ${new Date(result.artifact_expires_at).toISOString()} · source ${result.source_version} · read-only`;
+        } catch (error) { $("report-run-status").textContent = `Artifact completion mislukt: ${error.message}`; }
+      });
+      $("report-run-download").addEventListener("click", async () => {
+        try {
+          const runId = state.reportRunId;
+          if (!runId) throw new Error("Start eerst een report run.");
+          const artifact = await api(`/api/v1/report-runs/${runId}/artifact`);
+          $("report-run-status").textContent = `Download beschikbaar · ${artifact.format} · ${artifact.artifact_key}`;
+          $("report-run-evidence").textContent = `${artifact.calculation_version} · expires ${artifact.expires_at} · download_available ${artifact.download_available} · read-only`;
+        } catch (error) { $("report-run-status").textContent = `Download mislukt: ${error.message}`; }
+      });
+      $("report-export-download").addEventListener("click", async () => {
+        try {
+          const runId = state.reportRunId;
+          if (!runId) throw new Error("Start eerst een report run.");
+          const params = new URLSearchParams({ format: $("report-export-format").value, locale: $("report-export-locale").value, currency: $("report-export-currency").value });
+          const exported = await api(`/api/v1/report-runs/${runId}/export?${params.toString()}`);
+          $("report-export-status").textContent = `Export beschikbaar · ${exported.format} · ${exported.filename} · ${exported.locale} · ${exported.currency} · filters ${JSON.stringify(exported.filters)} · ${exported.download_available ? "download_available true" : "niet beschikbaar"}`;
+          $("report-run-evidence").textContent = `${exported.calculation_version} · ${exported.content_type} · privacy scoped · read-only · ${exported.content_disposition}`;
+        } catch (error) { $("report-export-status").textContent = `Export mislukt: ${error.message}`; }
+      });
+      $("tax-report-run").addEventListener("click", async () => {
+        try {
+          const runId = state.reportRunId;
+          if (!runId) throw new Error("Start eerst een report run.");
+          const params = new URLSearchParams({ fiscal_year: $("tax-report-year").value, security_status: $("tax-report-security-status").value });
+          const report = await api(`/api/v1/report-runs/${runId}/tax-report?${params.toString()}`);
+          $("tax-report-status").textContent = `Tax report beschikbaar · ${report.fiscal_year} · taxable income ${report.taxable_income.length} · trades ${report.trades.length} · sold ${report.sold_securities.length} · estimated ${report.estimated_fields.join(", ")} · ${report.calculation_version} · privacy scoped · read-only`;
+        } catch (error) { $("tax-report-status").textContent = `Tax report mislukt: ${error.message}`; }
+      });
+      $("goal-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          state.goal = await api("/api/v1/goals", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, name: $("goal-name").value, goal_type: "NET_WORTH", target_amount: $("goal-target-amount").value, target_currency_code: state.portfolio.reporting_currency_code, target_date: $("goal-target-date").value, expected_annual_return: $("goal-return").value, monthly_contribution: $("goal-contribution").value }) });
+          $("goal-status").textContent = `Goal opgeslagen · ${state.goal.status} · ${state.goal.target_amount} ${state.goal.target_currency_code} · ${state.goal.target_date}`;
+          $("goal-evidence").textContent = `${state.goal.calculation_version} · expected return ${state.goal.expected_annual_return} · monthly contribution ${state.goal.monthly_contribution} · privacy scoped · trace ${state.goal.trace_id}`;
+        } catch (error) { $("goal-status").textContent = `Goal opslaan mislukt: ${error.message}`; }
+      });
+      $("bunq-oauth-gate-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const result = await api("/api/v1/bunq-oauth/deployment-gate", { method: "POST", body: JSON.stringify({ fixture: "BANK-001", provider: "bunq", scopes: ["accounts:read", "balances:read", "transactions:read"], redirect_uri: $("bunq-oauth-redirect").value, legal_decision: $("bunq-oauth-legal").value, read_only_permissions: $("bunq-oauth-read-only").checked }) });
+          if (!result.eligible) throw new Error(`Gate blocked: ${result.gate_failures.join(", ")}`);
+          $("bunq-oauth-gate-status").textContent = `Compliance approved · OAuth NOT_ACTIVATED · human approval required`;
+          $("bunq-oauth-gate-evidence").textContent = `${result.calculation_version} · scopes read-only · redirect URI approved · legal decision APPROVED · no OAuth activation.`;
+        } catch (error) { $("bunq-oauth-gate-status").textContent = error.message; }
+      });
+      $("provider-registry-pause").addEventListener("click", async () => {
+        if (!state.provider) { $("provider-registry-status").textContent = "Laad of sla eerst een provider op."; return; }
+        try { state.provider = await api(`/api/v1/providers/${state.provider.slug}`, { method: "PATCH", body: JSON.stringify({ status: "PAUSED" }) }); $("provider-registry-status").textContent = `${state.provider.name} · ${state.provider.status}`; } catch (error) { $("provider-registry-status").textContent = error.message; }
+      });
+      $("connections-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const accounts = $("connection-accounts").value.split(",").map((accountType, index) => ({ external_account_id: `${accountType.trim().toLowerCase()}-001`, account_type: accountType.trim().toUpperCase(), name: `Synthetic ${accountType.trim()}`, base_currency_code: "EUR" })).filter((account) => account.account_type);
+          state.connection = await api("/api/v1/connections", { method: "POST", body: JSON.stringify({ provider_slug: $("connection-provider").value, display_name: "Trading 212 read-only", auth_mode: "API_KEY", vault_path: $("connection-vault-path").value, scopes: ["accounts:read", "positions:read", "transactions:read"], accounts }) });
+          $("connection-status").textContent = `${state.connection.provider_slug} · ${state.connection.status} · read-only · ${state.connection.accounts.length} account(s)`;
+          $("connection-evidence").textContent = `${state.connection.calculation_version} · vault reference · INVEST/STOCKS_ISA mapping · no order or ledger writes.`;
+        } catch (error) { $("connection-status").textContent = `Connection niet opgeslagen: ${error.message}`; }
+      });
+      $("connection-revoke").addEventListener("click", async () => {
+        if (!state.connection?.id) { $("connection-status").textContent = "Sla eerst een connection op."; return; }
+        try {
+          state.connection = await api(`/api/v1/connections/${state.connection.id}/revoke`, { method: "POST", body: JSON.stringify({}) });
+          $("connection-status").textContent = `${state.connection.provider_slug} · ${state.connection.status} · vault reference revoked`;
+          $("connection-evidence").textContent = `${state.connection.calculation_version} · credential reference revoked · scopes revoked · ledger untouched.`;
+        } catch (error) { $("connection-status").textContent = `Connection niet ingetrokken: ${error.message}`; }
+      });
+      $("sync-now").addEventListener("click", async () => {
+        if (!state.connection?.id) { $("sync-status").textContent = "Sla eerst een connection op."; return; }
+        try {
+          const suffix = Date.now();
+          const payload = { schema_version: "trading212-v1", cursor: `browser-cursor-${suffix}`, accounts: [{ external_account_id: "invest-001", account_type: "INVEST", balance: "1250.00", currency_code: "EUR", provider_updated_at: new Date().toISOString() }], positions: [{ external_id: `browser-position-${suffix}`, external_account_id: "invest-001", provider_symbol: "SYNTH", quantity: "10", market_value: "1250.00", currency_code: "EUR" }], activities: [{ external_id: `browser-activity-${suffix}`, external_account_id: "invest-001", activity_type: "BUY", amount: "100.00", currency_code: "EUR", occurred_at: new Date().toISOString() }], dividends: [{ external_id: `browser-dividend-${suffix}`, external_account_id: "invest-001", amount: "5.00", currency_code: "EUR", payment_date: new Date().toISOString().slice(0, 10) }] };
+          const scenario = $("sync-scenario").value;
+          const result = await api(`/api/v1/connections/${state.connection.id}/sync`, { method: "POST", body: JSON.stringify({ fixture: "PROVIDER-001", scenario, payload }) });
+          if (result.status === "FAILED") {
+            $("sync-status").textContent = `FAILED · ${result.error_code} · provider ${result.provider_status_code}`;
+            $("sync-summary").textContent = `retry policy · retryable ${result.retry_policy.retryable} · max attempts ${result.retry_policy.max_attempts} · retry after ${result.retry_policy.retry_after_seconds}s · read-only`;
+            $("sync-run").textContent = `sync_run: ${result.sync_run_id} · trace ${result.trace_id} · correlation ${result.correlation_id}`;
+            $("sync-incident").textContent = `Incident evidence: ${result.incident_id} · ${result.error_code} · posting boundary unchanged`;
+            return;
+          }
+          $("sync-status").textContent = `${result.status} · ${result.records_seen} records · ${result.records_created} new · ${result.records_duplicate} duplicate · read-only`;
+          $("sync-summary").textContent = `${result.calculation_version} · ${result.positions} positions · ${result.activities} activities · ${result.dividends} dividends · rate-limit attempts ${result.rate_limit.attempts} · attention ${result.attention_items}`;
+          $("sync-run").textContent = `sync_run: ${result.sync_run_id} · cursor ${result.cursor_after} · raw payload ${result.raw_payload_id}`;
+          $("sync-incident").textContent = "Incident evidence: geen foutincident; sync summary opgeslagen.";
+          await loadSyncResults(result.sync_run_id);
+        } catch (error) { $("sync-status").textContent = `Sync niet uitgevoerd: ${error.message}`; }
+      });
+      $("sync-results-filter").addEventListener("change", () => loadSyncResults());
+      $("mapping-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          $("mapping-save").disabled = true;
+          const mappingJson = JSON.parse($("mapping-json").value);
+          const body = { name: $("mapping-name").value, provider_slug: $("mapping-provider").value, document_type: $("mapping-document-type").value, parser_version: $("mapping-parser-version").value, mapping_json: mappingJson };
+          const path = state.mappingTemplate ? `/api/v1/import-mappings/${state.mappingTemplate.id}` : "/api/v1/import-mappings";
+          state.mappingTemplate = await api(path, { method: state.mappingTemplate ? "PATCH" : "POST", body: JSON.stringify(state.mappingTemplate ? { mapping_json: mappingJson, parser_version: body.parser_version } : body) });
+          $("mapping-status").textContent = `Mapping template opgeslagen: ${state.mappingTemplate.name}.`;
+          $("mapping-status").className = "notice success";
+          $("mapping-evidence").textContent = `Template version: ${state.mappingTemplate.template_version} · provider: ${state.mappingTemplate.provider_slug} · parser: ${state.mappingTemplate.parser_version}`;
+        } catch (error) {
+          $("mapping-status").textContent = `Mapping niet opgeslagen: ${error.message}`;
+          $("mapping-status").className = "notice error";
+        } finally { $("mapping-save").disabled = false; }
+      });
+      const renderPositions = (snapshot) => {
+        const currency = snapshot.reporting_currency_code || state.portfolio.reporting_currency_code;
+        state.positionRows = [{ name: "Cash", value: snapshot.free_cash, currency, status: "open", asset_class: "CASH", sector: "Other", region: "Global", broker: state.account.name }, ...(snapshot.positions || []).map((position) => ({ ...position, name: position.instrument_id, value: position.market_value, currency, status: Number(position.quantity) > 0 ? "open" : "closed", asset_class: "EQUITY", sector: "Other", region: "Global", broker: state.account.name }))];
+        const filter = $("position-filter").value;
+        const rows = state.positionRows.filter((row) => filter === "all" || row.status === filter);
+        $("positions-body").replaceChildren(...rows.map((row) => { const tr = document.createElement("tr"); tr.dataset.status = row.status; tr.tabIndex = row.instrument_id ? 0 : -1; tr.innerHTML = `<td data-column="name">${row.name}</td><td data-column="value">${formatKpi(row.value, row.currency)}</td><td data-column="currency">${row.currency}</td><td>${row.status}</td>`; if (row.instrument_id) { tr.dataset.instrumentId = row.instrument_id; tr.addEventListener("click", () => openPositionDetail(row)); tr.addEventListener("keydown", (event) => { if (event.key === "Enter") openPositionDetail(row); }); } return tr; }));
+        $("positions-empty").hidden = rows.length > 0;
+        $("positions-empty").textContent = filter === "closed" ? "Geen gesloten positions." : "Geen positions.";
+        ["name", "value", "currency"].forEach((column) => { const visible = $("column-" + column).checked; document.querySelectorAll(`[data-column="${column}"]`).forEach((cell) => { cell.hidden = !visible; }); });
+        renderAllocation($("allocation-dimension").value);
+      };
+      const setDetailTab = (tab) => {
+        ["overview", "calendar", "actions"].forEach((name) => {
+          $("detail-" + name).hidden = name !== tab;
+          $("tab-" + name).setAttribute("aria-selected", String(name === tab));
+        });
+      };
+      const renderPositionDetail = (detail, costBasis, pnl) => {
+        const instrument = detail.instrument;
+        $("position-detail").hidden = false;
+        $("position-detail-title").textContent = instrument.name;
+        $("position-detail-status").textContent = `${instrument.ticker || instrument.isin || "Custom asset"} · ${instrument.asset_class} · ${instrument.currency_code}`;
+        $("detail-identity").textContent = [instrument.name, instrument.ticker, instrument.isin, instrument.exchange].filter(Boolean).join(" · ");
+        $("detail-cost-basis").textContent = `${formatKpi(costBasis.cost_basis, instrument.currency_code)} · ${costBasis.method}`;
+        $("detail-performance").textContent = `${formatKpi(pnl.total_pnl, instrument.currency_code)} (price ${formatKpi(pnl.price_pnl, instrument.currency_code)}, FX ${formatKpi(pnl.fx_pnl, instrument.currency_code)})`;
+        const dividends = detail.transactions.filter((transaction) => transaction.activity_type === "DIVIDEND").reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+        $("detail-dividends").textContent = formatKpi(dividends, instrument.currency_code);
+        $("detail-calendar-rows").replaceChildren(...detail.calendar.map((event) => { const tr = document.createElement("tr"); [event.action_type, event.effective_date || event.ex_date || event.announced_on || "—", event.source || "—"].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; tr.append(cell); }); return tr; }));
+        $("detail-calendar-empty").hidden = detail.calendar.length > 0;
+        const actions = detail.transactions.filter((transaction) => ["BUY", "SELL", "DIVIDEND", "FEE", "TAX"].includes(transaction.activity_type));
+        $("detail-action-rows").replaceChildren(...actions.map((action) => { const tr = document.createElement("tr"); [action.effective_date, action.activity_type, action.quantity || "—", `${action.amount} ${action.currency_code}`].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; tr.append(cell); }); return tr; }));
+        $("detail-actions-empty").hidden = actions.length > 0;
+        setDetailTab("overview");
+      };
+      const openPositionDetail = async (row) => {
+        if (!row.instrument_id) return;
+        try {
+          $("position-detail").hidden = false;
+          $("position-detail-status").textContent = "Position detail laden…";
+          const params = new URLSearchParams({ portfolio_id: state.portfolio.id, instrument_id: row.instrument_id });
+          const detail = await api(`/api/v1/position-details?${params}`);
+          const instrument = detail.instrument;
+          const costBasis = await api(`/api/v1/cost-basis?${params}&method=FIFO`);
+          const pnl = await api(`/api/v1/pnl?${params}&method=FIFO&valuation_price=${encodeURIComponent(row.market_price || 0)}&valuation_fx_rate=1&cost_basis_fx_rate=1`);
+          state.selectedPosition = row;
+          state.positionDetail = detail;
+          renderPositionDetail(detail, costBasis, pnl);
+        } catch (error) { $("position-detail-status").textContent = `Position detail niet beschikbaar: ${error.message}`; }
+      };
+      // Explicit largest remainder rounding: allocate hundredths of a percent by fractional remainder.
+      // The rendered total is always formatted with two decimals, e.g. 100.00%.
+      const roundAllocation = (groups) => {
+        const total = groups.reduce((sum, group) => sum + group.value, 0);
+        if (!total) return groups.map((group) => ({ ...group, percentage: 0 }));
+        const scaled = groups.map((group, index) => { const exact = group.value / total * 10000; return { ...group, index, base: Math.floor(exact), fraction: exact - Math.floor(exact) }; });
+        let remaining = 10000 - scaled.reduce((sum, group) => sum + group.base, 0);
+        [...scaled].sort((a, b) => b.fraction - a.fraction || a.index - b.index).forEach((group) => { if (remaining > 0) { group.base += 1; remaining -= 1; } });
+        return scaled.map((group) => ({ ...group, percentage: group.base / 100 }));
+      };
+      const renderAllocation = (dimension) => {
+        const groups = new Map();
+        for (const row of state.positionRows || []) { const key = row[dimension] || "Unknown"; groups.set(key, (groups.get(key) || 0) + Number(row.value || 0)); }
+        state.allocationRows = roundAllocation([...groups].map(([name, value]) => ({ name, value })));
+        $("allocation-rows").replaceChildren(...state.allocationRows.map((row) => { const tr = document.createElement("tr"); tr.innerHTML = `<td>${row.name}</td><td>${row.percentage.toFixed(2)}%</td>`; return tr; }));
+        $("allocation-total").textContent = `${state.allocationRows.reduce((sum, row) => sum + row.percentage, 0).toFixed(2)}%`;
+      };
+      $("start-onboarding").addEventListener("click", async () => {
+        try {
+          $("start-onboarding").disabled = true;
+          const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+          const email = `synthetic-onboarding-${suffix}@example.test`;
+          const user = await api("/api/v1/users", { method: "POST", headers: {}, body: JSON.stringify({ email, display_name: "Synthetic lokale demo" }) });
+          const session = await api("/api/v1/sessions", { method: "POST", headers: {}, body: JSON.stringify({ email, ttl_seconds: 900 }) });
+          state.token = session.token;
+          state.user = user;
+          const currencies = await api("/api/v1/currencies");
+          state.currencies = currencies.currencies;
+          state.instrument = await api("/api/v1/instruments", { method: "POST", body: JSON.stringify({ name: "Synthetische demo-positie", instrument_type: "ETF", asset_class: "EQUITY", currency_code: "EUR", ticker: "SYNTH", isin: `SYN${suffix.replace(/[^0-9]/g, "").slice(-9)}`, valuation_source: "MANUAL", is_listed: false }) });
+          fillCurrencies();
+          showOnly("portfolio-form"); setStep("portfolio"); setStatus("Kies nu je portfolio en reporting currency.");
+        } catch (error) { $("start-onboarding").disabled = false; setStatus(error.message, "error"); }
+      });
+      $("portfolio-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const form = new FormData(event.currentTarget);
+          state.portfolio = await api("/api/v1/portfolios", { method: "POST", body: JSON.stringify({ name: form.get("name"), reporting_currency_code: form.get("reporting_currency_code") }) });
+          showOnly("account-form"); setStep("account"); setStatus("Portfolio opgeslagen. Voeg nu een account toe.");
+        } catch (error) { setStatus(error.message, "error"); }
+      });
+      $("account-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const form = new FormData(event.currentTarget);
+          state.account = await api("/api/v1/accounts", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, name: form.get("name"), account_type: form.get("account_type"), tracking_mode: "TRANSACTIONS", base_currency_code: form.get("base_currency_code") }) });
+          showOnly("action-form"); setStep("action"); setStatus("Account opgeslagen. Boek nu je eerste synthetische deposit.");
+        } catch (error) { setStatus(error.message, "error"); }
+      });
+      $("action-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const form = new FormData(event.currentTarget);
+          const action = await api("/api/v1/ledger/transactions", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, financial_account_id: state.account.id, activity_type: "DEPOSIT", occurred_at: `${form.get("effective_date")}T10:00:00.000Z`, effective_date: form.get("effective_date"), amount: form.get("amount"), currency_code: $("base-currency").value, source_type: "MANUAL", state: "POSTED", description: "Synthetic onboarding deposit" }) });
+          state.action = action;
+          state.snapshot = await api("/api/v1/portfolio-snapshots", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, snapshot_at: `${form.get("effective_date")}T10:00:00.000Z`, calculation_version: "portfolio-snapshot-v1" }) });
+          renderKpis(state.snapshot);
+          renderPositions(state.snapshot);
+          $("summary-portfolio").textContent = `${state.portfolio.name} (${state.portfolio.reporting_currency_code})`;
+          $("summary-account").textContent = state.account.name;
+          $("summary-action").textContent = `DEPOSIT ${action.amount} ${action.currency_code}`;
+          showOnly("complete-state"); setStep("action"); setStatus("Onboarding voltooid. Je eerste actie staat in de canonical ledger.", "success"); await loadMoneyFlowScope(); await loadMoneyFlowCategories(); await loadMoneyFlowPayeesTags(); await loadMoneyFlowRules(); await loadMoneyFlowReviewQueue(); await loadMoneyFlowBudgets(); $("currency-report-base").replaceChildren(...state.currencies.map((currency) => { const option = document.createElement("option"); option.value = currency.code; option.textContent = `${currency.code} · ${currency.name}`; option.selected = currency.code === state.portfolio.reporting_currency_code; return option; })); await loadMoneyFlowAnalysis(); await loadMoneyFlowCurrencyReport(); await loadReconciliationIssues(); await loadIncomeEvents();
+        } catch (error) { setStatus(error.message, "error"); }
+      });
+      $("position-filter").addEventListener("change", () => renderPositions(state.snapshot));
+      ["name", "value", "currency"].forEach((column) => $("column-" + column).addEventListener("change", () => renderPositions(state.snapshot)));
+      $("allocation-dimension").addEventListener("change", (event) => renderAllocation(event.currentTarget.value));
+      $("category-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          await api("/api/v1/money-flow/categories", { method: "POST", body: JSON.stringify({ name: $("category-name").value, category_type: $("category-type").value, parent_id: $("category-parent").value || undefined }) });
+          $("category-status").textContent = "Category opgeslagen.";
+          await loadMoneyFlowCategories(); await loadMoneyFlowRules();
+        } catch (error) { $("category-status").textContent = error.message; }
+      });
+      $("budget-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const result = await api("/api/v1/money-flow/budgets", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, period_start: $("budget-start").value, period_end: $("budget-end").value, rollover_enabled: $("budget-rollover-enabled").checked, groups: [{ name: $("budget-group").value, lines: [{ category_id: $("budget-category").value, planned_amount: $("budget-planned").value, rollover_amount: $("budget-rollover").value, currency_code: state.portfolio.reporting_currency_code }] }] }) });
+          $("budget-status").textContent = `${result.groups.flatMap((group) => group.lines).length} budget line(s) saved.`;
+          await loadMoneyFlowBudgets();
+        } catch (error) { $("budget-status").textContent = error.message; }
+      });
+      $("analysis-run").addEventListener("click", loadMoneyFlowAnalysis);
+      $("currency-report-run").addEventListener("click", loadMoneyFlowCurrencyReport);
+      $("category-reassign").addEventListener("click", async () => {
+        const categoryId = $("category-reassign-target").value;
+        const transactionIds = [...$("money-flow-activity-table").querySelectorAll("input[data-transaction-id]:checked")].map((checkbox) => checkbox.dataset.transactionId);
+        if (!categoryId || transactionIds.length === 0) { $("category-status").textContent = "Kies een active category en selecteer minimaal één activity."; return; }
+        try {
+          const result = await api("/api/v1/money-flow/categories/bulk-reassign", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, transaction_ids: transactionIds, category_id: categoryId }) });
+          $("category-status").textContent = `${result.updated_count} activity assignments bulk reassigned.`;
+        } catch (error) { $("category-status").textContent = error.message; }
+      });
+      $("payee-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try { await api("/api/v1/money-flow/payees", { method: "POST", body: JSON.stringify({ name: $("payee-name").value }) }); await loadMoneyFlowPayeesTags(); await loadMoneyFlowRules(); $("payees-tags-status").textContent = "Normalized payee opgeslagen."; } catch (error) { $("payees-tags-status").textContent = error.message; }
+      });
+      $("tag-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try { await api("/api/v1/money-flow/tags", { method: "POST", body: JSON.stringify({ name: $("tag-name").value, color: $("tag-color").value }) }); await loadMoneyFlowPayeesTags(); $("payees-tags-status").textContent = "Tag opgeslagen."; } catch (error) { $("payees-tags-status").textContent = error.message; }
+      });
+      $("bulk-payee-tags").addEventListener("click", async () => {
+        const transactionIds = [...$("money-flow-activity-table").querySelectorAll("input[data-transaction-id]:checked")].map((checkbox) => checkbox.dataset.transactionId);
+        const tagIds = [...$("bulk-tags").selectedOptions].map((option) => option.value).filter(Boolean);
+        if (transactionIds.length === 0) { $("payees-tags-status").textContent = "Selecteer minimaal één activity voor bulk edit."; return; }
+        try { const result = await api("/api/v1/money-flow/transactions/bulk-edit", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, transaction_ids: transactionIds, payee_id: $("bulk-payee").value || null, tag_ids: tagIds }) }); $("payees-tags-status").textContent = `${result.updated_count} activity assignments bulk edited.`; } catch (error) { $("payees-tags-status").textContent = error.message; }
+      });
+      $("rule-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try { await api("/api/v1/money-flow/rules", { method: "POST", body: JSON.stringify({ name: $("rule-name").value, priority: Number($("rule-priority").value), account_id: $("rule-account").value || null, review_required: $("rule-review-required").checked, conditions: { match_type: $("rule-match-type").value, field: "description", value: $("rule-value").value }, actions: { payee_id: $("rule-payee").value || undefined, category_id: $("rule-category").value || undefined } }) }); await loadMoneyFlowRules(); $("rules-status").textContent = "Rule opgeslagen."; } catch (error) { $("rules-status").textContent = error.message; }
+      });
+      $("rules-apply").addEventListener("click", async () => {
+        const transactionIds = [...$("money-flow-activity-table").querySelectorAll("input[data-transaction-id]:checked")].map((checkbox) => checkbox.dataset.transactionId);
+        if (transactionIds.length === 0) { $("rules-status").textContent = "Selecteer minimaal één activity om rules toe te passen."; return; }
+        try { const result = await api("/api/v1/money-flow/rules/apply", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, transaction_ids: transactionIds }) }); await loadMoneyFlowRules(); await loadMoneyFlowReviewQueue(); $("rules-status").textContent = `${result.applied_count} categorisation rule(s) toegepast.`; } catch (error) { $("rules-status").textContent = error.message; }
+      });
+      $("timetravel-run").addEventListener("click", loadHistoricalState);
+      $("tab-overview").addEventListener("click", () => setDetailTab("overview"));
+      $("tab-calendar").addEventListener("click", () => setDetailTab("calendar"));
+      $("tab-actions").addEventListener("click", () => setDetailTab("actions"));
+      $("edit-action").addEventListener("click", () => {
+        fillManualActionFields();
+        $("manual-action-form").hidden = false;
+        setStatus("Vul alle velden in om een gecorrigeerde action te boeken.");
+      });
+      $("manual-action-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!validateManualAction()) { setStatus("Controleer de ontbrekende action-velden.", "error"); return; }
+        try {
+          if (state.action?.id) await api(`/api/v1/ledger/transactions/${state.action.id}`, { method: "PATCH", body: JSON.stringify({ state: "VOID", correction_reason: "Handmatige wijziging" }) });
+          state.action = await api("/api/v1/ledger/transactions", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, financial_account_id: $("action-account").value, activity_type: "BUY", occurred_at: `${$("action-date").value}T10:00:00.000Z`, effective_date: $("action-date").value, amount: $("action-amount").value, currency_code: $("action-currency").value, instrument_id: $("action-instrument").value, source_type: "MANUAL", state: "POSTED", quantity: "1", unit_price: $("action-amount").value, description: "Handmatige synthetische action" }) });
+          state.snapshot = await api("/api/v1/portfolio-snapshots", { method: "POST", body: JSON.stringify({ portfolio_id: state.portfolio.id, snapshot_at: new Date().toISOString(), calculation_version: "portfolio-snapshot-v1" }) });
+          renderKpis(state.snapshot);
+          renderPositions(state.snapshot);
+          $("summary-action").textContent = `BUY ${state.action.amount} ${state.action.currency_code}`;
+          $("manual-action-form").hidden = true;
+          setStatus("Action gewijzigd en als correction vastgelegd in de canonical ledger.", "success");
+        } catch (error) { setStatus(error.message, "error"); }
+      });
+    </script>
+  </body>
+</html>

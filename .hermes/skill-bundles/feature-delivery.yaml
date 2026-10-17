@@ -1,0 +1,8 @@
+name: feature-delivery
+steps:
+  - spaartrack-feature
+  - spaartrack-tdd
+  - spaartrack-security-review
+  - spaartrack-e2e-verification
+  - spaartrack-release-gate
+mode: gated

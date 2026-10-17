@@ -1,0 +1,24 @@
+apiVersion: spaartrack.io/v1
+kind: CoolifyDevelopment
+metadata:
+  name: spaartrack-development
+spec:
+  provider: coolify
+  composeFile: compose.yaml
+  branch: main
+  domain: spaartrack-dev.local
+  deployment:
+    source: commit-sha
+    commitShaVariable: COOLIFY_COMMIT_SHA
+    preDeployHook: infra/coolify/hooks/pre-deploy.sh
+    postDeployHook: infra/coolify/hooks/post-deploy.sh
+    releasePath: /api/v1/release
+  runtime:
+    APP_ENV: development
+    APP_RELEASE: development
+    APP_COMMIT_SHA: COOLIFY_COMMIT_SHA
+    APP_IMAGE_DIGEST: COOLIFY_IMAGE_DIGEST
+    APP_MIGRATION_VERSION: COOLIFY_MIGRATION_VERSION
+  requirements:
+    secretsOutsideGit: true
+    syntheticDataOnly: true

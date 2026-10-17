@@ -1,0 +1,13 @@
+{
+  "backup_id": "local-20261017T201907Z",
+  "created_at": "2026-10-17T20:19:07Z",
+  "encrypted": true,
+  "cipher": "aes-256-cbc",
+  "retention_days": 30,
+  "source": "local-compose",
+  "schema": "spaartrack",
+  "artifacts": [
+    {"kind": "postgresql", "file": "postgres-20261017T201907Z.dump.enc", "sha256": "905373bbfc712706619a9cd9da10bc57a509be23983c2ca9a84f9abdda831dd1"},
+    {"kind": "object-storage", "file": "object-storage-20261017T201907Z.tar.enc", "sha256": "3b141e096e7e1cf9fbaa29ebfd29115fe5ff64bbbb6675237d2d7c635f948ddd"}
+  ]
+}

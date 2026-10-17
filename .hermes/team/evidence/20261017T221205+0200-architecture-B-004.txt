@@ -1,0 +1,51 @@
+B-004 evidence — captured 20261017T221205+0200
+
+RED first:
+$ node --test tests/smoke/backlog-refinement-contract.test.mjs
+1 test, 0 pass, 1 fail. Failed for ENOENT: docs/backlog/b-004-refinement.md did not yet exist. This established the red contract before writing the refinement.
+
+After refinement:
+$ node --test tests/smoke/backlog-refinement-contract.test.mjs
+✔ B-004 refinement covers all remaining parent stories and executable traceability
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+ℹ skipped 0
+
+Full local stack regression:
+$ STACK_SMOKE=1 API_URL=http://localhost:18080 WEB_URL=http://localhost:3000 S3_ENDPOINT=http://localhost:19000 node --test tests/smoke/*.test.mjs
+ℹ tests 169
+ℹ pass 169
+ℹ fail 0
+ℹ skipped 0
+
+Static TypeScript check:
+$ ./node_modules/.bin/tsc --noEmit
+exit code 0; no diagnostics.
+
+Compose/health:
+$ docker compose config --quiet
+exit code 0.
+$ curl -fsS http://localhost:18080/health/live
+{"status":"ok","service":"api","release":"local","environment":"local","startedAt":"2026-10-17T19:53:12.773Z","trace_id":"bd06d4ee-766b-4588-be41-9425a6a2963d","correlation_id":"b1232aac-a12d-4c8b-a327-96eab37f867d"}
+$ curl -fsS http://localhost:18080/health/ready
+{"status":"ready","service":"api","dependencies":{"database":{"status":"ready","reason":"tcp_connection_ok"},"redis":{"status":"ready","reason":"tcp_connection_ok"}},"failure_reason":null,"release":"local","trace_id":"28b061a7-2290-4441-addb-1c2e11c3e203","correlation_id":"31e22719-b757-4791-b7a3-41f8b44e47b2"}
+$ curl -fsS -o /dev/null -w 'web_http=%{http_code}\n' http://localhost:3000/
+web_http=200
+$ docker compose ps --format 'table {{.Service}}\t{{.Status}}'
+api Up 17 minutes (healthy)
+db Up 6 hours (healthy)
+grafana Up 6 hours
+object-storage Up 6 hours (healthy)
+otel-collector Up 6 hours
+prometheus Up 6 hours
+redis Up 6 hours (healthy)
+web Up 18 minutes (healthy)
+worker Up 5 hours (healthy)
+
+Toolchain/repository blockers:
+$ pnpm --version
+/bin/bash: pnpm: command not found
+$ git -C /Users/ruben/spaartrack rev-parse --show-toplevel
+fatal: not a git repository (or any of the parent directories): .git
+A direct default `node --test tests/smoke/*.test.mjs` run without STACK_SMOKE was 99 pass / 70 skipped / 0 fail; superseded by the complete STACK_SMOKE result above. No external Coolify deployment attempted or claimed.

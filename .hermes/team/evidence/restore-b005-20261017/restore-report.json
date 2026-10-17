@@ -1,0 +1,9 @@
+{
+  "status": "restored",
+  "temporary_database": "spaartrack-restore-12614",
+  "schema_count": 1,
+  "row_count": 104,
+  "raw_payload_count": 2,
+  "report_count": 1,
+  "object_storage_restore": true
+}

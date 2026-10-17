@@ -1,0 +1,4 @@
+Datum,Product,ISIN,Type,Stuks,Koers,Bruto bedrag,Transactiekosten,Transactiebelasting,Valuta,Mutatie,Saldo
+2026-10-14,Synthetic World ETF,IE00SYNTH001,BUY,2,50.00,100.00,2.50,0.00,EUR,-102.50,897.50
+2026-10-15,Synthetic World ETF,IE00SYNTH001,DIVIDEND,2,0.00,4.00,0.00,0.60,EUR,3.40,900.90
+2026-10-16,Synthetic World ETF,IE00SYNTH001,SELL,1,55.00,55.00,1.00,0.00,EUR,54.00,954.90

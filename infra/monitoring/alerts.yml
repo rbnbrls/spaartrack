@@ -1,0 +1,12 @@
+groups:
+  - name: spaartrack-bootstrap
+    rules:
+      - alert: SpaartrackApiDown
+        expr: up{job="spaartrack-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: Spaartrack API is unavailable
+          runbook: docs/runbooks/incident-response.md

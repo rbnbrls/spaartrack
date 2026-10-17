@@ -1,0 +1,8 @@
+name: incident-to-fix
+steps:
+  - spaartrack-incident-response
+  - spaartrack-tdd
+  - spaartrack-security-review
+  - spaartrack-e2e-verification
+  - spaartrack-release-gate
+mode: gated

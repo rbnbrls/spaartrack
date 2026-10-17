@@ -1,0 +1,7 @@
+name: release-verification
+steps:
+  - spaartrack-migration-review
+  - spaartrack-security-review
+  - spaartrack-e2e-verification
+  - spaartrack-release-gate
+mode: gated

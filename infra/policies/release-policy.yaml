@@ -1,0 +1,25 @@
+apiVersion: spaartrack.io/v1
+kind: ReleasePolicy
+metadata:
+  name: web-facing-release
+spec:
+  requiredChecks:
+    - lint
+    - typecheck
+    - unit
+    - financial-golden
+    - integration-contract
+    - e2e
+    - migration-dry-run
+    - restore-replay
+    - secret-scan
+    - dependency-scan
+    - sbom
+    - staging-smoke
+    - health-window
+  immutableArtifact: true
+  productionCredentialsInCi: false
+  humanApprovalFor:
+    - financial-model-change
+    - privacy-or-retention-change
+    - destructive-data-operation

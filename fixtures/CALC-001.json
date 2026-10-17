@@ -1,0 +1,95 @@
+{
+  "fixture_id": "CALC-001",
+  "version": "1.0.0",
+  "description": "Synthetic financial-kernel golden case for the local MacBook release.",
+  "reporting_currency_code": "EUR",
+  "as_of": "2026-04-05",
+  "coverage": [
+    "multi_currency",
+    "dividend_tax",
+    "fees",
+    "transfer",
+    "split",
+    "restore_replay"
+  ],
+  "fx_rate": {
+    "base_currency_code": "EUR",
+    "quote_currency_code": "USD",
+    "rate": "1.1000000000000000",
+    "source": "SYNTHETIC",
+    "source_version": "calc-001-v1"
+  },
+  "transactions": {
+    "deposit": {
+      "activity_type": "DEPOSIT",
+      "occurred_at": "2026-04-01T10:00:00.000Z",
+      "effective_date": "2026-04-01",
+      "amount": "100",
+      "currency_code": "EUR"
+    },
+    "transfer": {
+      "activity_type": "TRANSFER_OUT",
+      "occurred_at": "2026-04-01T11:00:00.000Z",
+      "effective_date": "2026-04-01",
+      "amount": "20",
+      "currency_code": "EUR"
+    },
+    "buy": {
+      "activity_type": "BUY",
+      "occurred_at": "2026-04-02T10:00:00.000Z",
+      "effective_date": "2026-04-02",
+      "amount": "100",
+      "currency_code": "USD",
+      "quantity": "10",
+      "unit_price": "10",
+      "fee_amount": "2",
+      "tax_amount": "0"
+    },
+    "dividend": {
+      "activity_type": "DIVIDEND",
+      "occurred_at": "2026-04-03T10:00:00.000Z",
+      "effective_date": "2026-04-03",
+      "amount": "10",
+      "currency_code": "USD",
+      "quantity": "1",
+      "unit_price": "10",
+      "fee_amount": "1",
+      "tax_amount": "2"
+    },
+    "sell": {
+      "activity_type": "SELL",
+      "occurred_at": "2026-04-05T10:00:00.000Z",
+      "effective_date": "2026-04-05",
+      "amount": "48",
+      "currency_code": "USD",
+      "quantity": "4",
+      "unit_price": "12",
+      "fee_amount": "1",
+      "tax_amount": "1"
+    }
+  },
+  "split": {
+    "action_type": "SPLIT",
+    "effective_date": "2026-04-04",
+    "ratio_from": "1",
+    "ratio_to": "2",
+    "source": "SYNTHETIC"
+  },
+  "expected": {
+    "cost_basis": {
+      "quantity": "16.000000000000",
+      "cost_basis": "81.600000000000",
+      "fees": "3.000000000000",
+      "taxes": "1.000000000000"
+    },
+    "pnl": {
+      "valuation_price": "12",
+      "valuation_fx_rate": "1.1",
+      "cost_basis_fx_rate": "1.1",
+      "quantity": "16.000000000000",
+      "unrealized_pnl": "121.440000000000",
+      "fees": "3.000000000000",
+      "taxes": "1.000000000000"
+    }
+  }
+}

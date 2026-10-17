@@ -1,0 +1,24 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const root = new URL("../..", import.meta.url);
+const html = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
+
+test("TC-US-0506: position detail contract exposes identity, performance, calendar and actions", () => {
+  for (const value of [
+    "position-detail", "position-detail-tabs", "tab-overview", "tab-calendar", "tab-actions",
+    "detail-identity", "detail-cost-basis", "detail-performance", "detail-dividends",
+    "detail-calendar", "detail-actions", "openPositionDetail", "renderPositionDetail",
+    "/api/v1/cost-basis", "/api/v1/pnl", "/api/v1/corporate-actions", "/api/v1/position-details",
+    "/api/v1/ledger/transactions/"
+  ]) {
+    assert.match(html + apiSource, new RegExp(value.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")));
+  }
+});
+
+test("TC-US-0506-runtime: detail endpoint keeps the portfolio access boundary", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
+  const unauthenticated = await fetch(`${process.env.API_URL || "http://localhost:18080"}/api/v1/position-details`);
+  assert.equal(unauthenticated.status, 401);
+});

@@ -1,0 +1,159 @@
+APPLY 0002-user-totp.sql
+psql:/tmp/0002-user-totp.sql:13: NOTICE:  relation "user_totp_factor" already exists, skipping
+CREATE TABLE
+CREATE INDEX
+psql:/tmp/0002-user-totp.sql:16: NOTICE:  relation "user_totp_factor_active_idx" already exists, skipping
+REAPPLY 0002-user-totp.sql
+CREATE TABLE
+psql:/tmp/0002-user-totp.sql:13: NOTICE:  relation "user_totp_factor" already exists, skipping
+psql:/tmp/0002-user-totp.sql:16: NOTICE:  relation "user_totp_factor_active_idx" already exists, skipping
+CREATE INDEX
+APPLY 0003-oidc-login-state.sql
+psql:/tmp/0003-oidc-login-state.sql:11: NOTICE:  relation "oidc_login_state" already exists, skipping
+CREATE TABLE
+psql:/tmp/0003-oidc-login-state.sql:15: NOTICE:  relation "oidc_login_state_active_idx" already exists, skipping
+CREATE INDEX
+REAPPLY 0003-oidc-login-state.sql
+CREATE TABLE
+psql:/tmp/0003-oidc-login-state.sql:11: NOTICE:  relation "oidc_login_state" already exists, skipping
+psql:/tmp/0003-oidc-login-state.sql:15: NOTICE:  relation "oidc_login_state_active_idx" already exists, skipping
+CREATE INDEX
+APPLY 0004-privacy-grant-revoke.sql
+psql:/tmp/0004-privacy-grant-revoke.sql:2: NOTICE:  column "revoked_at" of relation "portfolio_member" already exists, skipping
+ALTER TABLE
+psql:/tmp/0004-privacy-grant-revoke.sql:6: NOTICE:  relation "portfolio_member_active_idx" already exists, skipping
+CREATE INDEX
+REAPPLY 0004-privacy-grant-revoke.sql
+psql:/tmp/0004-privacy-grant-revoke.sql:2: NOTICE:  column "revoked_at" of relation "portfolio_member" already exists, skipping
+ALTER TABLE
+psql:/tmp/0004-privacy-grant-revoke.sql:6: NOTICE:  relation "portfolio_member_active_idx" already exists, skipping
+CREATE INDEX
+APPLY 0005-ledger-idempotency.sql
+psql:/tmp/0005-ledger-idempotency.sql:5: NOTICE:  relation "ledger_transaction_account_external_id_idx" already exists, skipping
+CREATE INDEX
+CREATE INDEX
+psql:/tmp/0005-ledger-idempotency.sql:9: NOTICE:  relation "ledger_transaction_account_external_hash_idx" already exists, skipping
+REAPPLY 0005-ledger-idempotency.sql
+CREATE INDEX
+psql:/tmp/0005-ledger-idempotency.sql:5: NOTICE:  relation "ledger_transaction_account_external_id_idx" already exists, skipping
+CREATE INDEX
+psql:/tmp/0005-ledger-idempotency.sql:9: NOTICE:  relation "ledger_transaction_account_external_hash_idx" already exists, skipping
+APPLY 0006-fx-source-version.sql
+psql:/tmp/0006-fx-source-version.sql:3: NOTICE:  column "source_version" of relation "fx_rate" already exists, skipping
+ALTER TABLE
+REAPPLY 0006-fx-source-version.sql
+psql:/tmp/0006-fx-source-version.sql:3: NOTICE:  column "source_version" of relation "fx_rate" already exists, skipping
+ALTER TABLE
+APPLY 0007-instrument-mapping.sql
+BEGIN
+CREATE TABLE
+psql:/tmp/0007-instrument-mapping.sql:16: NOTICE:  relation "instrument_mapping" already exists, skipping
+ALTER TABLE
+psql:/tmp/0007-instrument-mapping.sql:18: NOTICE:  column "resolved_at" of relation "instrument_mapping" already exists, skipping
+psql:/tmp/0007-instrument-mapping.sql:20: NOTICE:  relation "instrument_mapping_status_idx" already exists, skipping
+CREATE INDEX
+COMMIT
+REAPPLY 0007-instrument-mapping.sql
+BEGIN
+CREATE TABLE
+psql:/tmp/0007-instrument-mapping.sql:16: NOTICE:  relation "instrument_mapping" already exists, skipping
+psql:/tmp/0007-instrument-mapping.sql:18: NOTICE:  column "resolved_at" of relation "instrument_mapping" already exists, skipping
+ALTER TABLE
+psql:/tmp/0007-instrument-mapping.sql:20: NOTICE:  relation "instrument_mapping_status_idx" already exists, skipping
+CREATE INDEX
+COMMIT
+APPLY 0008-corporate-action-idempotency.sql
+BEGIN
+psql:/tmp/0008-corporate-action-idempotency.sql:4: NOTICE:  relation "corporate_action_identity_idx" already exists, skipping
+CREATE INDEX
+COMMIT
+REAPPLY 0008-corporate-action-idempotency.sql
+BEGIN
+CREATE INDEX
+psql:/tmp/0008-corporate-action-idempotency.sql:4: NOTICE:  relation "corporate_action_identity_idx" already exists, skipping
+COMMIT
+APPLY 0009-import-mapping-versioning.sql
+BEGIN
+ALTER TABLE
+psql:/tmp/0009-import-mapping-versioning.sql:4: NOTICE:  column "template_version" of relation "import_mapping" already exists, skipping
+CREATE INDEX
+psql:/tmp/0009-import-mapping-versioning.sql:7: NOTICE:  relation "import_mapping_owner_name_version_idx" already exists, skipping
+COMMIT
+REAPPLY 0009-import-mapping-versioning.sql
+BEGIN
+ALTER TABLE
+psql:/tmp/0009-import-mapping-versioning.sql:4: NOTICE:  column "template_version" of relation "import_mapping" already exists, skipping
+psql:/tmp/0009-import-mapping-versioning.sql:7: NOTICE:  relation "import_mapping_owner_name_version_idx" already exists, skipping
+CREATE INDEX
+COMMIT
+APPLY 0010-import-row-validation.sql
+BEGIN
+ALTER TABLE
+ALTER TABLE
+COMMIT
+REAPPLY 0010-import-row-validation.sql
+BEGIN
+ALTER TABLE
+ALTER TABLE
+COMMIT
+APPLY 0011-degiro-import.sql
+COMMENT
+REAPPLY 0011-degiro-import.sql
+COMMENT
+APPLY 0012-sync-result-review.sql
+psql:/tmp/0012-sync-result-review.sql:12: NOTICE:  relation "sync_result_item" already exists, skipping
+CREATE TABLE
+CREATE INDEX
+psql:/tmp/0012-sync-result-review.sql:15: NOTICE:  relation "sync_result_item_connection_idx" already exists, skipping
+REAPPLY 0012-sync-result-review.sql
+psql:/tmp/0012-sync-result-review.sql:12: NOTICE:  relation "sync_result_item" already exists, skipping
+CREATE TABLE
+CREATE INDEX
+psql:/tmp/0012-sync-result-review.sql:15: NOTICE:  relation "sync_result_item_connection_idx" already exists, skipping
+APPLY 0013-provider-sync-failures.sql
+COMMENT
+COMMENT
+REAPPLY 0013-provider-sync-failures.sql
+COMMENT
+COMMENT
+APPLY 0014-money-flow-account-scope.sql
+BEGIN
+CREATE TABLE
+psql:/tmp/0014-money-flow-account-scope.sql:11: NOTICE:  relation "money_flow_account_scope" already exists, skipping
+CREATE INDEX
+psql:/tmp/0014-money-flow-account-scope.sql:14: NOTICE:  relation "money_flow_account_scope_user_idx" already exists, skipping
+COMMIT
+REAPPLY 0014-money-flow-account-scope.sql
+BEGIN
+psql:/tmp/0014-money-flow-account-scope.sql:11: NOTICE:  relation "money_flow_account_scope" already exists, skipping
+CREATE TABLE
+CREATE INDEX
+COMMIT
+psql:/tmp/0014-money-flow-account-scope.sql:14: NOTICE:  relation "money_flow_account_scope_user_idx" already exists, skipping
+APPLY 0015-money-flow-budget-groups.sql
+BEGIN
+CREATE TABLE
+psql:/tmp/0015-money-flow-budget-groups.sql:9: NOTICE:  relation "budget_group" already exists, skipping
+psql:/tmp/0015-money-flow-budget-groups.sql:12: NOTICE:  column "budget_group_id" of relation "budget_line" already exists, skipping
+ALTER TABLE
+COMMIT
+REAPPLY 0015-money-flow-budget-groups.sql
+BEGIN
+CREATE TABLE
+psql:/tmp/0015-money-flow-budget-groups.sql:9: NOTICE:  relation "budget_group" already exists, skipping
+psql:/tmp/0015-money-flow-budget-groups.sql:12: NOTICE:  column "budget_group_id" of relation "budget_line" already exists, skipping
+ALTER TABLE
+COMMIT
+APPLY 0016-report-run-source-version.sql
+psql:/tmp/0016-report-run-source-version.sql:2: NOTICE:  column "source_version" of relation "report_run" already exists, skipping
+ALTER TABLE
+REAPPLY 0016-report-run-source-version.sql
+psql:/tmp/0016-report-run-source-version.sql:2: NOTICE:  column "source_version" of relation "report_run" already exists, skipping
+ALTER TABLE
+APPLY 0017-report-artifact-expiry.sql
+psql:/tmp/0017-report-artifact-expiry.sql:2: NOTICE:  column "artifact_expires_at" of relation "report_run" already exists, skipping
+ALTER TABLE
+REAPPLY 0017-report-artifact-expiry.sql
+psql:/tmp/0017-report-artifact-expiry.sql:2: NOTICE:  column "artifact_expires_at" of relation "report_run" already exists, skipping
+ALTER TABLE
+status=exit_0
