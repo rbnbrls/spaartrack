@@ -1,0 +1,14 @@
+{
+  "fixture_id": "TAX-001",
+  "version": "1.0.0",
+  "description": "Synthetic tax scenario: lots, fiscal years, jurisdictions, FX and wash-sale windows. No real taxpayer data.",
+  "lot_methods": ["FIFO", "LIFO", "WAC"],
+  "lots": [
+    { "ref": "lot-001", "quantity": "10", "unit_cost": "10", "currency_code": "USD", "acquired_at": "2026-04-02" },
+    { "ref": "lot-002", "quantity": "6", "unit_cost": "12", "currency_code": "USD", "acquired_at": "2026-04-10" }
+  ],
+  "disposal": { "quantity": "4", "unit_price": "12", "currency_code": "USD", "method": "FIFO", "expected_realized": "8.000000000000" },
+  "fiscal_years": [{ "jurisdiction": "NL", "starts": "2026-01-01", "ends": "2026-12-31" }],
+  "fx": { "base": "EUR", "quote": "USD", "rate": "1.1000000000000000", "source": "SYNTHETIC" },
+  "wash_sale_window_days": 30
+}

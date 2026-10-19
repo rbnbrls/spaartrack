@@ -1,0 +1,92 @@
+{
+  "fixture_id": "SPECIAL-001",
+  "version": "1.1.0",
+  "description": "Synthetic specialist instruments for slice 14. The bond block drives US-1401/1402/1403 (bond profile, pricing and curve scenarios); the option block drives US-1404 (option contract lifecycle and Black-Scholes-Merton Greeks). Future slices may extend this pack with crypto, metals, futures and FIRE scenarios.",
+  "bond": {
+    "instrument": {
+      "name": "Synthetic government bond",
+      "instrument_type": "BOND",
+      "asset_class": "FIXED_INCOME",
+      "currency_code": "EUR",
+      "ticker": "BONDSYNTH",
+      "valuation_source": "MANUAL",
+      "is_listed": false
+    },
+    "profile": {
+      "issuer_type": "GOVERNMENT",
+      "issuer_name": "Synthetic Treasury",
+      "coupon_rate": 0.04,
+      "coupon_frequency": "ANNUAL",
+      "issue_date": "2026-06-30",
+      "maturity_date": "2031-06-30",
+      "face_value": 1000,
+      "currency_code": "EUR",
+      "day_count_convention": "ACT_365"
+    },
+    "expected": {
+      "coupons": 5,
+      "principal_payments": 1,
+      "coupon_amount": "40.000000000000",
+      "coupon_total": "200.000000000000",
+      "principal_amount": "1000.000000000000",
+      "first_coupon_date": "2027-06-30",
+      "final_coupon_date": "2031-06-30",
+      "maturity_date": "2031-06-30"
+    }
+  },
+  "option": {
+    "underlying": {
+      "name": "Synthetic equity",
+      "instrument_type": "STOCK",
+      "asset_class": "EQUITY",
+      "currency_code": "EUR",
+      "ticker": "EQSYNTH",
+      "valuation_source": "MANUAL",
+      "is_listed": false
+    },
+    "instrument": {
+      "name": "Synthetic equity call 100",
+      "instrument_type": "OPTION",
+      "asset_class": "DERIVATIVE",
+      "currency_code": "EUR",
+      "ticker": "EQSYNTHC100",
+      "valuation_source": "MANUAL",
+      "is_listed": false
+    },
+    "contract": {
+      "option_type": "CALL",
+      "strike_price": 100,
+      "expiry_at": "2027-01-15T17:00:00.000Z",
+      "contract_multiplier": 100,
+      "implied_volatility": 0.25
+    },
+    "scenario": {
+      "as_of": "2026-10-17T17:00:00.000Z",
+      "spot_price": 105,
+      "risk_free_rate": 0.02,
+      "dividend_yield": 0
+    },
+    "expected": {
+      "lifecycle_status": "ACTIVE",
+      "time_to_expiry_years": "0.246575342466",
+      "moneyness": "ITM",
+      "theoretical_price": "8.272733654887",
+      "intrinsic_value": "5.000000000000",
+      "time_value": "3.272733654887",
+      "premium_value_per_contract": "827.273365488735",
+      "delta": "0.689635720946",
+      "gamma": "0.027079368944",
+      "theta": "-10.612469172322",
+      "vega": "18.403769749676",
+      "rho": "15.815100093146",
+      "put": {
+        "theoretical_price": "2.780796961524",
+        "delta": "-0.310364279054",
+        "gamma": "0.027079368944",
+        "theta": "-8.622307906189",
+        "vega": "18.403769749676",
+        "rho": "-8.721134694792"
+      }
+    }
+  }
+}

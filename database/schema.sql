@@ -255,6 +255,22 @@ CREATE TABLE sync_checkpoint (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE sync_result_item (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  sync_run_id uuid NOT NULL REFERENCES sync_run(id) ON DELETE CASCADE,
+  connection_id uuid NOT NULL REFERENCES external_connection(id) ON DELETE CASCADE,
+  external_id text NOT NULL,
+  item_type text NOT NULL CHECK (item_type IN ('NEW', 'UPDATED', 'DUPLICATE', 'REJECTED', 'ATTENTION')),
+  posting_status text NOT NULL DEFAULT 'NOT_POSTED' CHECK (posting_status IN ('NOT_POSTED', 'POSTING_REVIEW', 'POSTED', 'VOID')),
+  review_decision text CHECK (review_decision IN ('ACCEPT', 'REJECT', 'IGNORE')),
+  payload_json jsonb NOT NULL DEFAULT '{}',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (sync_run_id, external_id)
+);
+
+CREATE INDEX sync_result_item_connection_idx
+  ON sync_result_item (connection_id, created_at DESC);
+
 CREATE TABLE raw_provider_payload (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   connection_id uuid REFERENCES external_connection(id) ON DELETE SET NULL,
@@ -382,6 +398,23 @@ CREATE TABLE instrument (
 
 CREATE UNIQUE INDEX instrument_isin_uq ON instrument(isin) WHERE isin IS NOT NULL;
 CREATE INDEX instrument_search_idx ON instrument (lower(name), lower(ticker));
+
+CREATE TABLE instrument_lookthrough_component (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  etf_instrument_id uuid NOT NULL REFERENCES instrument(id) ON DELETE CASCADE,
+  underlying_instrument_id uuid REFERENCES instrument(id) ON DELETE SET NULL,
+  underlying_name text NOT NULL,
+  weight numeric(12, 8) NOT NULL CHECK (weight >= 0 AND weight <= 1),
+  resolution_status text NOT NULL CHECK (resolution_status IN ('RESOLVED', 'UNRESOLVED')),
+  source text NOT NULL,
+  source_version text NOT NULL,
+  as_of date NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK ((resolution_status = 'RESOLVED' AND underlying_instrument_id IS NOT NULL) OR (resolution_status = 'UNRESOLVED' AND underlying_instrument_id IS NULL))
+);
+
+CREATE INDEX instrument_lookthrough_lookup_idx
+  ON instrument_lookthrough_component (etf_instrument_id, as_of DESC, source_version);
 
 CREATE TABLE instrument_identifier (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1118,7 +1151,7 @@ CREATE TABLE portfolio_share_link (
   created_by uuid NOT NULL REFERENCES app_user(id),
   access_id text NOT NULL UNIQUE,
   token_hash text,
-  scope text NOT NULL DEFAULT 'VIEW' CHECK (scope IN ('RESTRICTED_VIEW', 'VIEW', 'MANAGE')),
+  scope text NOT NULL DEFAULT 'VIEW' CHECK (scope IN ('RESTRICTED_VIEW', 'VIEW')),
   exposure_policy jsonb NOT NULL DEFAULT '{}',
   expires_at timestamptz,
   revoked_at timestamptz,
@@ -1146,8 +1179,10 @@ CREATE TABLE bond_profile (
   issuer_name text,
   coupon_rate numeric(18, 10),
   coupon_frequency text,
+  issue_date date,
   maturity_date date,
   day_count_convention text,
+  face_value numeric(28, 12),
   benchmark_spread numeric(18, 10),
   credit_rating text
 );
@@ -1209,6 +1244,35 @@ CREATE TABLE backtest_scenario (
   status text NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'RUNNING', 'SUCCEEDED', 'FAILED')),
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE screener_watchlist (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  portfolio_id uuid REFERENCES portfolio(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  filters jsonb NOT NULL,
+  calculation_version text NOT NULL DEFAULT 'screener-watchlist-v1',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX screener_watchlist_user_idx ON screener_watchlist (user_id, updated_at DESC);
+
+CREATE TABLE allocation_target (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  portfolio_id uuid NOT NULL REFERENCES portfolio(id) ON DELETE CASCADE,
+  dimension text NOT NULL CHECK (dimension IN ('ASSET_CLASS', 'SECTOR', 'REGION', 'CURRENCY', 'HOLDING')),
+  target_key text NOT NULL,
+  target_label text NOT NULL,
+  target_percentage numeric(7, 4) NOT NULL CHECK (target_percentage >= 0 AND target_percentage <= 100),
+  calculation_version text NOT NULL DEFAULT 'allocation-targets-v1',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (portfolio_id, dimension, target_key)
+);
+
+CREATE INDEX allocation_target_portfolio_dimension_idx
+  ON allocation_target (portfolio_id, dimension, target_key);
 
 CREATE TABLE retirement_scenario (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1281,6 +1345,77 @@ CREATE TABLE addon_grant (
   revoked_at timestamptz,
   PRIMARY KEY (addon_id, user_id, permission)
 );
+
+CREATE TABLE addon_secret_ref (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  addon_id uuid NOT NULL REFERENCES addon_manifest(id) ON DELETE CASCADE,
+  secret_name text NOT NULL,
+  vault_path text NOT NULL CHECK (vault_path LIKE 'vault://%'),
+  status text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'REVOKED')),
+  revoked_at timestamptz,
+  UNIQUE (addon_id, secret_name)
+);
+
+CREATE TABLE addon_event_hook (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  addon_id uuid NOT NULL REFERENCES addon_manifest(id) ON DELETE CASCADE,
+  event_name text NOT NULL,
+  status text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'REVOKED')),
+  revoked_at timestamptz,
+  UNIQUE (addon_id, event_name)
+);
+
+CREATE TABLE addon_asset (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  addon_id uuid NOT NULL REFERENCES addon_manifest(id) ON DELETE CASCADE,
+  asset_path text NOT NULL,
+  content_type text NOT NULL,
+  sha256 text NOT NULL CHECK (sha256 ~ '^[0-9a-fA-F]{64}$'),
+  UNIQUE (addon_id, asset_path)
+);
+
+CREATE TABLE addon_sandbox_run (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  addon_id uuid NOT NULL REFERENCES addon_manifest(id) ON DELETE CASCADE,
+  status text NOT NULL DEFAULT 'STOPPED' CHECK (status IN ('STOPPED', 'RUNNING', 'REVOKED')),
+  permissions jsonb NOT NULL DEFAULT '[]',
+  asset_root text NOT NULL,
+  ledger_access text NOT NULL DEFAULT 'none' CHECK (ledger_access = 'none'),
+  started_at timestamptz,
+  stopped_at timestamptz,
+  revoked_at timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX addon_sandbox_run_addon_idx ON addon_sandbox_run (addon_id, updated_at DESC);
+
+CREATE TABLE push_consent (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  channel text NOT NULL CHECK (channel IN ('PUSH', 'IN_APP', 'EMAIL')),
+  status text NOT NULL DEFAULT 'GRANTED' CHECK (status IN ('GRANTED', 'REVOKED')),
+  device_label text NOT NULL DEFAULT '',
+  revoked_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX push_consent_user_idx ON push_consent (user_id, created_at DESC);
+
+CREATE TABLE model_session (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  provider text NOT NULL,
+  model text NOT NULL,
+  key_source text NOT NULL CHECK (key_source IN ('BYOK', 'LOCAL')),
+  key_material text NOT NULL DEFAULT 'vault-only' CHECK (key_material = 'vault-only'),
+  vault_path text NOT NULL,
+  session_label text NOT NULL DEFAULT '',
+  status text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'REVOKED')),
+  revoked_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX model_session_user_idx ON model_session (user_id, created_at DESC);
 
 CREATE TABLE ai_access_grant (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1513,4 +1648,22 @@ VALUES
   ('GBP', 'Pound Sterling', 2),
   ('CHF', 'Swiss Franc', 2)
 ON CONFLICT (code) DO NOTHING;
+
+-- Expand/contract: community content is isolated from the canonical ledger.
+CREATE TABLE IF NOT EXISTS community_post (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  visibility text NOT NULL CHECK (visibility IN ('PUBLIC', 'PRIVATE')),
+  status text NOT NULL CHECK (status IN ('VISIBLE', 'PRIVATE', 'PENDING', 'REJECTED', 'DELETED')),
+  title text NOT NULL,
+  body text NOT NULL,
+  public_metrics jsonb NOT NULL DEFAULT '{}',
+  moderation_reason text,
+  deleted_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS community_post_feed_idx ON community_post (status, visibility, created_at DESC);
+CREATE INDEX IF NOT EXISTS community_post_owner_idx ON community_post (owner_user_id, created_at DESC);
 

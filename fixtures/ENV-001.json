@@ -1,0 +1,17 @@
+{
+  "fixture_id": "ENV-001",
+  "version": "1.0.0",
+  "description": "Synthetic disposable local environment: Compose/Coolify services with PostgreSQL, Redis, object storage, API and worker. All hosts, ports and credentials are local-only placeholders.",
+  "services": {
+    "db": { "image": "postgres:16-alpine", "host": "db", "port": 5432, "database": "spaartrack_synthetic", "user": "spaartrack_synthetic" },
+    "redis": { "image": "redis:7-alpine", "host": "redis", "port": 6379 },
+    "object_storage": { "image": "rustfs/rustfs:1.0.2", "host": "object-storage", "port": 9000, "bucket": "spaartrack-local" },
+    "api": { "host": "api", "port": 8080, "liveness": "/health/live", "readiness": "/health/ready" },
+    "worker": { "queue": "spaartrack:jobs", "synthetic_job": "synthetic-us-0101-job" },
+    "web": { "host": "web", "port": 80, "local_url": "http://localhost:3000/" }
+  },
+  "health_expectation": {
+    "api_ready": { "database": "tcp_connection_ok", "redis": "tcp_connection_ok" },
+    "required_healthy": ["web", "api", "worker", "db", "redis", "object-storage"]
+  }
+}

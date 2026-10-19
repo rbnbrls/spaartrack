@@ -1,0 +1,14 @@
+{
+  "fixture_id": "BANK-001",
+  "version": "1.0.0",
+  "description": "Synthetic bank-sync scenario: requisition, accounts, balances, transactions and consent lifecycle. No real bank, IBAN or consent data.",
+  "requisition": { "ref": "synthetic-requisition", "status": "LINKED", "consent_days": 90 },
+  "accounts": [{ "ref": "synthetic-current", "account_type": "CURRENT", "currency_code": "EUR", "masked_identifier": "****0001" }],
+  "balances": [{ "account_ref": "synthetic-current", "amount": "1250.00", "currency_code": "EUR", "as_of": "2026-05-01" }],
+  "transactions": [
+    { "ref": "txn-001", "amount": "-42.50", "currency_code": "EUR", "category": "groceries", "booked_at": "2026-04-28" },
+    { "ref": "txn-002", "amount": "2100.00", "currency_code": "EUR", "category": "salary", "booked_at": "2026-04-30" }
+  ],
+  "consent_lifecycle": ["create", "link", "sync", "refresh", "revoke"],
+  "error_cases": ["401", "403", "429", "schema-drift"]
+}

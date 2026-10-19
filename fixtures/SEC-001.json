@@ -1,0 +1,19 @@
+{
+  "fixture_id": "SEC-001",
+  "version": "1.0.0",
+  "description": "Synthetic identity scenario: two users with roles, sessions, TOTP/OIDC factors and revoke flows. All emails, handles and factor material are fictitious.",
+  "users": [
+    { "ref": "synthetic-owner", "email": "owner.synthetic@example.invalid", "role": "OWNER", "status": "ACTIVE" },
+    { "ref": "synthetic-viewer", "email": "viewer.synthetic@example.invalid", "role": "VIEWER", "status": "INVITED" }
+  ],
+  "sessions": {
+    "token_scheme": "opaque-bearer-sha256",
+    "storage": "token_hash-only",
+    "flows": ["login", "me", "logout-revoke", "expiry"]
+  },
+  "factors": {
+    "totp": { "enrollment": "synthetic", "encryption": "AES-256-GCM", "flows": ["enroll", "verify", "invalid-reject", "revoke"] },
+    "oidc": { "provider": "synthetic-oidc", "flows": ["start", "callback", "replay-reject", "logout"] }
+  },
+  "revoke_expectation": ["sessions", "totp", "oidc-state", "portfolio-grants"]
+}

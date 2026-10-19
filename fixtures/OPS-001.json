@@ -1,0 +1,11 @@
+{
+  "fixture_id": "OPS-001",
+  "version": "1.0.0",
+  "description": "Synthetic operations scenario: failures, incidents, evidence, verifier findings, release and health windows. All alerts and traces are fictitious.",
+  "failure": { "kind": "synthetic-5xx", "window": "15m", "severity": "SEV-2" },
+  "incident": { "title": "synthetic latency spike", "release": "local", "grouping_window": "15m", "fingerprint_fields": ["cause", "path", "invariant"] },
+  "evidence": { "logs": 1, "traces": 1, "metrics": 1, "pii_redacted": true },
+  "diagnosis": { "confidence": 0.91, "invariant": "ledger remains untouched", "regression_test": "TC-US-1703-ledger-untouched" },
+  "fix_verification": { "from": "FAIL", "to": "PASS", "ledger_untouched": true },
+  "health": { "liveness": "ok", "readiness": "ready" }
+}

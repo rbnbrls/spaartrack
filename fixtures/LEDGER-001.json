@@ -1,0 +1,21 @@
+{
+  "fixture_id": "LEDGER-001",
+  "version": "1.0.0",
+  "description": "Synthetic canonical ledger scenario: EUR/USD account with buy, sell, cash movement, dividend, fee, tax, paired transfer and split. Mirrors the CALC-001 golden amounts.",
+  "reporting_currency_code": "EUR",
+  "accounts": [
+    { "ref": "eur-cash", "type": "CASH", "currency_code": "EUR" },
+    { "ref": "usd-brokerage", "type": "BROKERAGE", "currency_code": "USD" }
+  ],
+  "actions": [
+    { "activity_type": "DEPOSIT", "amount": "100", "currency_code": "EUR", "state": "POSTED" },
+    { "activity_type": "TRANSFER_OUT", "amount": "20", "currency_code": "EUR", "state": "POSTED", "paired": true },
+    { "activity_type": "BUY", "amount": "100", "currency_code": "USD", "quantity": "10", "unit_price": "10", "fee_amount": "2", "state": "POSTED" },
+    { "activity_type": "DIVIDEND", "amount": "10", "currency_code": "USD", "fee_amount": "1", "tax_amount": "2", "state": "POSTED" },
+    { "activity_type": "FEE", "amount": "1", "currency_code": "USD", "state": "POSTED" },
+    { "activity_type": "TAX", "amount": "1", "currency_code": "USD", "state": "POSTED" },
+    { "activity_type": "SELL", "amount": "48", "currency_code": "USD", "quantity": "4", "unit_price": "12", "fee_amount": "1", "tax_amount": "1", "state": "POSTED" }
+  ],
+  "corporate_action": { "action_type": "SPLIT", "effective_date": "2026-04-04", "ratio_from": "1", "ratio_to": "2", "source": "SYNTHETIC" },
+  "invariants": ["idempotency", "correction-void", "paired-transfer-neutrality", "deterministic-replay"]
+}
