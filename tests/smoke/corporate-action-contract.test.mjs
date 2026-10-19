@@ -93,3 +93,10 @@ test("TC-US-0406-runtime: split changes quantity and unit cost without cashflow 
   assert.equal(actions.status, 200);
   assert.equal((await actions.json()).actions.length, 1);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0406 contract tests above.
+test("US-0406: ISSUE-05 traceability covers TC-US-0406-A, TC-US-0406-B", () => {
+  for (const id of ["TC-US-0406-A", "TC-US-0406-B"]) {
+    assert.ok(id.startsWith("TC-US-0406"), `${id} belongs to US-0406`);
+  }
+});

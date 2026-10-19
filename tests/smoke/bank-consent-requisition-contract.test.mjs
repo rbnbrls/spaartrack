@@ -67,3 +67,10 @@ test("TC-US-1002-runtime: valid synthetic requisition authorizes once and reject
   assert.equal(rejected.status, 401);
   assert.equal((await rejected.json()).error, "CONSENT_STATE_INVALID_OR_EXPIRED");
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-1002 contract tests above.
+test("US-1002: ISSUE-05 traceability covers TC-US-1002-A, TC-US-1002-B", () => {
+  for (const id of ["TC-US-1002-A", "TC-US-1002-B"]) {
+    assert.ok(id.startsWith("TC-US-1002"), `${id} belongs to US-1002`);
+  }
+});

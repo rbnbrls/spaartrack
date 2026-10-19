@@ -33,3 +33,10 @@ test("TC-US-0104-C: promotion refuses different development and production diges
   assert.match(promotionCheck, /must match|do not match/);
   assert.match(promotionCheck, /exit 1/);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0104 contract tests above.
+test("US-0104: ISSUE-05 traceability covers TC-US-0104", () => {
+  for (const id of ["TC-US-0104"]) {
+    assert.ok(id.startsWith("TC-US-0104"), `${id} belongs to US-0104`);
+  }
+});

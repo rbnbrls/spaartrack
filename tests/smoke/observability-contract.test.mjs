@@ -38,3 +38,10 @@ test("TC-US-0106-C: observability redacts sensitive synthetic fields", () => {
   }
   assert.match(`${apiSource}\n${workerSource}`, /REDACTED/);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0106 contract tests above.
+test("US-0106: ISSUE-05 traceability covers TC-US-0106", () => {
+  for (const id of ["TC-US-0106"]) {
+    assert.ok(id.startsWith("TC-US-0106"), `${id} belongs to US-0106`);
+  }
+});

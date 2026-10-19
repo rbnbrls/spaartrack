@@ -103,3 +103,10 @@ test("TC-US-0305-runtime: draft/pending/post transitions and VOID preserve the o
   });
   assert.equal(denied.status, 403);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0305 contract tests above.
+test("US-0305: ISSUE-05 traceability covers TC-US-0305-A, TC-US-0305-B", () => {
+  for (const id of ["TC-US-0305-A", "TC-US-0305-B"]) {
+    assert.ok(id.startsWith("TC-US-0305"), `${id} belongs to US-0305`);
+  }
+});

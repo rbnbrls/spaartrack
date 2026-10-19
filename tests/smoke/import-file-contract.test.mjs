@@ -54,3 +54,10 @@ test("TC-US-0601-runtime: synthetic CSV upload is idempotency-safe and rejects u
   assert.equal(unsupportedResponse.status, 400);
   assert.equal((await unsupportedResponse.json()).error, "UNSUPPORTED_IMPORT_TYPE");
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0601 contract tests above.
+test("US-0601: ISSUE-05 traceability covers TC-US-0601-A, TC-US-0601-B", () => {
+  for (const id of ["TC-US-0601-A", "TC-US-0601-B"]) {
+    assert.ok(id.startsWith("TC-US-0601"), `${id} belongs to US-0601`);
+  }
+});

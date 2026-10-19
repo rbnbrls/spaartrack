@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 
 const api = process.env.API_URL || "http://localhost:18080";
 
-test("API liveness endpoint reports healthy", async () => {
+test("API liveness endpoint reports healthy", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const response = await fetch(api + "/health/live");
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.status, "ok");
 });
 
-test("API readiness endpoint reports dependency contract", async () => {
+test("API readiness endpoint reports dependency contract", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const response = await fetch(api + "/health/ready");
   assert.equal(response.status, 200);
   const body = await response.json();

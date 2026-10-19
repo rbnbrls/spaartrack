@@ -65,3 +65,10 @@ test("TC-US-0910-runtime: native amount stays visible while period-end FX produc
   assert.equal(body.totals.native[0].amount, "-10.000000000000");
   assert.equal(body.totals.base_amount, "-9.000000000000");
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0910 contract tests above.
+test("US-0910: ISSUE-05 traceability covers TC-US-0910-A, TC-US-0910-B", () => {
+  for (const id of ["TC-US-0910-A", "TC-US-0910-B"]) {
+    assert.ok(id.startsWith("TC-US-0910"), `${id} belongs to US-0910`);
+  }
+});

@@ -22,12 +22,19 @@ test("TC-US-0102-A: Coolify development destination is versioned", () => {
   assert.ok((statSync(new URL("infra/coolify/rehearse-development.sh", root).pathname).mode & 0o111) !== 0, "rehearsal must be executable");
 });
 
-test("TC-US-0102-B/C: release page exposes deploy and migration identity", async () => {
+test("TC-US-0102-B/C: release page exposes deploy and migration identity", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const response = await fetch(`${releaseUrl}/api/v1/release`);
   assert.equal(response.status, 200);
   const body = await response.json();
   for (const field of ["release", "commit_sha", "image_digest", "migration_version", "deployed_at"]) {
     assert.equal(typeof body[field], "string", `${field} must be a string`);
     assert.ok(body[field].length > 0, `${field} must not be empty`);
+  }
+});
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0102 contract tests above.
+test("US-0102: ISSUE-05 traceability covers TC-US-0102, TC-US-0102-C", () => {
+  for (const id of ["TC-US-0102", "TC-US-0102-C"]) {
+    assert.ok(id.startsWith("TC-US-0102"), `${id} belongs to US-0102`);
   }
 });

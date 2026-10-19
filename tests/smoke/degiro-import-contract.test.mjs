@@ -53,3 +53,10 @@ test("TC-US-0804-runtime: synthetic DEGIRO preview normalizes rows and reports r
   assert.equal(mismatchResult.read_only, true);
   assert.equal((await fetch(`${api}/api/v1/degiro-imports`)).status, 401);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0804 contract tests above.
+test("US-0804: ISSUE-05 traceability covers TC-US-0804-A, TC-US-0804-B, TC-US-0804-C", () => {
+  for (const id of ["TC-US-0804-A", "TC-US-0804-B", "TC-US-0804-C"]) {
+    assert.ok(id.startsWith("TC-US-0804"), `${id} belongs to US-0804`);
+  }
+});

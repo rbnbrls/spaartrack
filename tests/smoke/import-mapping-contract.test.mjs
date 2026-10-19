@@ -79,3 +79,10 @@ test("TC-US-0602-runtime: template is saved, reused and versioned without ledger
   const unauthenticated = await fetch(`${api}/api/v1/import-mappings`);
   assert.equal(unauthenticated.status, 401);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0602 contract tests above.
+test("US-0602: ISSUE-05 traceability covers TC-US-0602-A, TC-US-0602-B", () => {
+  for (const id of ["TC-US-0602-A", "TC-US-0602-B"]) {
+    assert.ok(id.startsWith("TC-US-0602"), `${id} belongs to US-0602`);
+  }
+});

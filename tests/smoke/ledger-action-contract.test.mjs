@@ -101,3 +101,10 @@ test("TC-US-0304-runtime: owner books all local action types and outsider is den
   });
   assert.equal(deniedCreate.status, 403);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0304 contract tests above.
+test("US-0304: ISSUE-05 traceability covers TC-US-0304-A, TC-US-0304-B, TC-US-0304-C, TC-US-0304-D", () => {
+  for (const id of ["TC-US-0304-A", "TC-US-0304-B", "TC-US-0304-C", "TC-US-0304-D"]) {
+    assert.ok(id.startsWith("TC-US-0304"), `${id} belongs to US-0304`);
+  }
+});

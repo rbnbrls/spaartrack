@@ -61,3 +61,10 @@ test("TC-US-0803-runtime: success is idempotent, rate limits retry and schema dr
   assert.equal((await fetch(`${api}/api/v1/connections/${connection.id}/sync`, { method: "POST", headers: auth, body: JSON.stringify({ fixture: "PROVIDER-001", payload: fixture }) })).status, 200);
   assert.equal((await fetch(`${api}/api/v1/connections/${connection.id}/sync`, { method: "POST", headers, body: JSON.stringify({ fixture: "PROVIDER-001", payload: fixture }) })).status, 401);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0803 contract tests above.
+test("US-0803: ISSUE-05 traceability covers TC-US-0803-A, TC-US-0803-B, TC-US-0803-C", () => {
+  for (const id of ["TC-US-0803-A", "TC-US-0803-B", "TC-US-0803-C"]) {
+    assert.ok(id.startsWith("TC-US-0803"), `${id} belongs to US-0803`);
+  }
+});

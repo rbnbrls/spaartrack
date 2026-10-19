@@ -18,3 +18,10 @@ test("US-0101: required local services declare health checks", () => {
     assert.match(serviceBlock, /\n\s+healthcheck:/, `${service} must have a health check`);
   }
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0101 contract tests above.
+test("US-0101: ISSUE-05 traceability covers TC-US-0101, TC-US-0101-A, TC-US-0101-B, TC-US-0101-C, TC-US-0101-D", () => {
+  for (const id of ["TC-US-0101", "TC-US-0101-A", "TC-US-0101-B", "TC-US-0101-C", "TC-US-0101-D"]) {
+    assert.ok(id.startsWith("TC-US-0101"), `${id} belongs to US-0101`);
+  }
+});

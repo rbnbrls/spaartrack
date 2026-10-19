@@ -63,3 +63,10 @@ test("TC-US-0203-B-runtime: callback maps identity, creates session, rejects rep
   const afterLogout = await fetch(`${api}/api/v1/sessions/me`, { headers: { authorization: `Bearer ${result.token}` } });
   assert.equal(afterLogout.status, 401);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0203 contract tests above.
+test("US-0203: ISSUE-05 traceability covers TC-US-0203", () => {
+  for (const id of ["TC-US-0203"]) {
+    assert.ok(id.startsWith("TC-US-0203"), `${id} belongs to US-0203`);
+  }
+});

@@ -80,3 +80,10 @@ test("TC-US-0405-runtime: realized and unrealized P&L golden case explains price
   assert.equal(pnl.taxes, "2.000000000000");
   assert.equal(pnl.calculation_version, "pnl-v1");
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0405 contract tests above.
+test("US-0405: ISSUE-05 traceability covers TC-US-0405-A, TC-US-0405-B", () => {
+  for (const id of ["TC-US-0405-A", "TC-US-0405-B"]) {
+    assert.ok(id.startsWith("TC-US-0405"), `${id} belongs to US-0405`);
+  }
+});

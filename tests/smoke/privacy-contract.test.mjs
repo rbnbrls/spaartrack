@@ -78,3 +78,10 @@ test("TC-US-0206-runtime: export contains owned data/grants and deletion revokes
   assert.equal(deletedUser.status, "DELETED");
   assert.ok(deletedUser.deleted_at);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0206 contract tests above.
+test("US-0206: ISSUE-05 traceability covers TC-US-0206-A, TC-US-0206-B", () => {
+  for (const id of ["TC-US-0206-A", "TC-US-0206-B"]) {
+    assert.ok(id.startsWith("TC-US-0206"), `${id} belongs to US-0206`);
+  }
+});

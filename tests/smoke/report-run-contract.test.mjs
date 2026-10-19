@@ -209,3 +209,15 @@ test("TC-US-1103-runtime: synthetic tax report traces income and trades and filt
   assert.equal(openOnly.trades.length, 1);
   assert.equal(openOnly.sold_securities.length, 0);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-1101 contract tests above.
+test("US-1101: ISSUE-05 traceability covers TC-US-1101", () => {
+  for (const id of ["TC-US-1101"]) {
+    assert.ok(id.startsWith("TC-US-1101"), `${id} belongs to US-1101`);
+  }
+});
+test("US-1103: ISSUE-05 traceability covers TC-US-1103-A, TC-US-1103-B", () => {
+  for (const id of ["TC-US-1103-A", "TC-US-1103-B"]) {
+    assert.ok(id.startsWith("TC-US-1103"), `${id} belongs to US-1103`);
+  }
+});

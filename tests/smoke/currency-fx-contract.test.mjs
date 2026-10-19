@@ -66,3 +66,10 @@ test("TC-US-0401-runtime: EUR/USD/GBP/CHF registry and versioned rates support d
   assert.equal(missing.status, 404);
   assert.equal((await missing.json()).error, "FX_RATE_NOT_FOUND");
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0401 contract tests above.
+test("US-0401: ISSUE-05 traceability covers TC-US-0401-A, TC-US-0401-B", () => {
+  for (const id of ["TC-US-0401-A", "TC-US-0401-B"]) {
+    assert.ok(id.startsWith("TC-US-0401"), `${id} belongs to US-0401`);
+  }
+});

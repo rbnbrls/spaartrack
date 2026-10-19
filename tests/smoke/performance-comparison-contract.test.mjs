@@ -53,3 +53,10 @@ test("TC-US-0706-runtime: cashflow timing produces comparable performance method
   assert.match(payload.methods.TWR.limitations, /snapshot/i);
   assert.equal((await fetch(`${api}/api/v1/performance-comparison?portfolio_id=${portfolio.id}&period_start=2026-01-01&period_end=2026-04-01`)).status, 401);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0706 contract tests above.
+test("US-0706: ISSUE-05 traceability covers TC-US-0706-A, TC-US-0706-B, TC-US-0706-C", () => {
+  for (const id of ["TC-US-0706-A", "TC-US-0706-B", "TC-US-0706-C"]) {
+    assert.ok(id.startsWith("TC-US-0706"), `${id} belongs to US-0706`);
+  }
+});

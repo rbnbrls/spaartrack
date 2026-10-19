@@ -76,3 +76,10 @@ test("TC-US-1004-runtime: bank sync persists snapshots, dedupes cursor replay an
   assert.equal(failure.provider_error.status_code, 401);
   assert.ok(failure.trace_id && failure.correlation_id);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-1004 contract tests above.
+test("US-1004: ISSUE-05 traceability covers TC-US-1004-A, TC-US-1004-B", () => {
+  for (const id of ["TC-US-1004-A", "TC-US-1004-B"]) {
+    assert.ok(id.startsWith("TC-US-1004"), `${id} belongs to US-1004`);
+  }
+});

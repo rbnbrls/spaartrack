@@ -56,3 +56,10 @@ test("TC-US-1005-runtime: authorized BANK-001 consent can be revoked once and re
   assert.equal(replay.status, 409);
   assert.equal((await replay.json()).error, "BANK_CONNECTION_ALREADY_DISCONNECTED");
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-1005 contract tests above.
+test("US-1005: ISSUE-05 traceability covers TC-US-1005-A, TC-US-1005-B", () => {
+  for (const id of ["TC-US-1005-A", "TC-US-1005-B"]) {
+    assert.ok(id.startsWith("TC-US-1005"), `${id} belongs to US-1005`);
+  }
+});

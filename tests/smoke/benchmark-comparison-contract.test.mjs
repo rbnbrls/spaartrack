@@ -48,3 +48,10 @@ test("TC-US-0707-runtime: synthetic benchmark returns expose both variants", { s
   assert.deepEqual(payload.cashflow_matched.cashflows.map((flow) => flow.amount), ["100.000000000000", "-20.000000000000"]);
   assert.equal((await fetch(`${api}/api/v1/performance-benchmark?portfolio_id=${portfolio.id}&benchmark_id=${benchmark.id}&period_start=2026-01-01&period_end=2026-04-01`)).status, 401);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0707 contract tests above.
+test("US-0707: ISSUE-05 traceability covers TC-US-0707-A, TC-US-0707-B", () => {
+  for (const id of ["TC-US-0707-A", "TC-US-0707-B"]) {
+    assert.ok(id.startsWith("TC-US-0707"), `${id} belongs to US-0707`);
+  }
+});

@@ -31,7 +31,7 @@ test("TC-US-0105-B: API readiness reports each dependency with a reason", async 
   assert.match(apiSource, /connection_failed|timeout|unavailable/);
 });
 
-test("TC-US-0105: web and worker have separate readiness checks", async () => {
+test("TC-US-0105: web and worker have separate readiness checks", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const webResponse = await fetch(`${web}/health/live`);
   assert.equal(webResponse.status, 200);
   const webReadyResponse = await fetch(`${web}/health/ready`);

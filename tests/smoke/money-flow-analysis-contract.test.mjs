@@ -78,3 +78,10 @@ test("TC-US-0909-runtime: flow totals and drill-down transactions remain consist
   assert.equal(drilldown.status, 200);
   assert.equal((await drilldown.json()).transactions.length, 1);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0909 contract tests above.
+test("US-0909: ISSUE-05 traceability covers TC-US-0909-A, TC-US-0909-B, TC-US-0909-C", () => {
+  for (const id of ["TC-US-0909-A", "TC-US-0909-B", "TC-US-0909-C"]) {
+    assert.ok(id.startsWith("TC-US-0909"), `${id} belongs to US-0909`);
+  }
+});

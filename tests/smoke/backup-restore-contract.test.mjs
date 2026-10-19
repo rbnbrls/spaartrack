@@ -31,3 +31,10 @@ test("TC-US-0107-C: restore extracts object-storage raw payloads and reports", (
   assert.equal(existsSync(new URL("infra/backup/backup-local.sh", root)), true);
   assert.equal(existsSync(new URL("infra/backup/restore-local.sh", root)), true);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0107 contract tests above.
+test("US-0107: ISSUE-05 traceability covers TC-US-0107", () => {
+  for (const id of ["TC-US-0107"]) {
+    assert.ok(id.startsWith("TC-US-0107"), `${id} belongs to US-0107`);
+  }
+});

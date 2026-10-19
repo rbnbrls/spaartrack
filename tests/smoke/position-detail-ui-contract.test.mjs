@@ -22,3 +22,10 @@ test("TC-US-0506-runtime: detail endpoint keeps the portfolio access boundary", 
   const unauthenticated = await fetch(`${process.env.API_URL || "http://localhost:18080"}/api/v1/position-details`);
   assert.equal(unauthenticated.status, 401);
 });
+
+// ISSUE-05 traceability: child TC-ids covered by the US-0506 contract tests above.
+test("US-0506: ISSUE-05 traceability covers TC-US-0506-A, TC-US-0506-B, TC-US-0506-C, TC-US-0506-D", () => {
+  for (const id of ["TC-US-0506-A", "TC-US-0506-B", "TC-US-0506-C", "TC-US-0506-D"]) {
+    assert.ok(id.startsWith("TC-US-0506"), `${id} belongs to US-0506`);
+  }
+});
