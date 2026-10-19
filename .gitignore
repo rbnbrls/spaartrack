@@ -11,3 +11,5 @@ coverage/
 tmp/
 data/
 backups/
+.commandcode/
+.worktrees/
