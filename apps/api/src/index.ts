@@ -2,6 +2,45 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createConnection } from "node:net";
 import { Pool } from "pg";
+import { calculateShareWeightedBalance, validateGoalFundingAllocations } from "./goal-funding.js";
+import { buildCashflowForecast } from "./forecast.js";
+import { buildAccountantShare } from "./accountant-access.js";
+import { calculateRiskMetrics } from "./risk-metrics.js";
+import { calculateRiskContributions } from "./risk-contribution.js";
+import { calculateEtfExposure } from "./etf-exposure.js";
+import { validateAllocationTargets } from "./allocation-targets.js";
+import { calculateDriftRebalance } from "./drift-rebalance.js";
+import { comparePortfolios } from "./portfolio-comparison.js";
+import { runWhatIfBacktest } from "./what-if-backtest.js";
+import { buildScreenerDefinition } from "./screener-watchlist.js";
+import { buildTaxLots, calculateRealizedGains, compareTaxLotMethods, type TaxLotMethod } from "./tax-lots.js";
+import { buildFiscalYearReport } from "./fiscal-year-report.js";
+import { buildTaxLossHarvestingCandidates } from "./tax-loss-harvesting.js";
+import { detectWashSaleRisks } from "./wash-sale.js";
+import { buildTaxWorksheet } from "./tax-worksheet.js";
+import { generateBondCashflows, validateBondProfile, type BondProfileInput, type BondCashflowEntry } from "./bond-profile.js";
+import { calculateBondMetrics } from "./bond-pricing.js";
+import { buildBondCurveScenario } from "./bond-curve-scenario.js";
+import { validateOptionContract, deriveOptionLifecycleStatus, type OptionLifecycleEventInput } from "./option-contract.js";
+import { calculateOptionGreeks } from "./option-greeks.js";
+import { planOptionLifecycleEvent, summarizeOptionPosition } from "./option-lifecycle.js";
+import { planWheelCycle } from "./wheel-strategy.js";
+import { describeAlternativeAssetValuation } from "./alternative-assets.js";
+import { planFireScenario } from "./fire-scenarios.js";
+import { buildPortfolioShareLink } from "./portfolio-share-links.js";
+import { projectRestrictedView } from "./restricted-view.js";
+import { validatePushConsent, recordPushDelivery } from "./push-consent.js";
+import { buildAssistantAnswer } from "./assistant-answer.js";
+import { buildAssistantProposal, decideAssistantProposal } from "./assistant-proposal.js";
+import { buildModelSession } from "./model-session.js";
+import { buildAgentScopeMatrix } from "./agent-scopes.js";
+import { validateAddonManifest, buildAddonSandboxPlan } from "./addon-sandbox.js";
+import { buildAddonSdkRead, validateAddonEventHook } from "./addon-sdk.js";
+import { buildCommunityExport, buildCommunityPost } from "./community-feed.js";
+import { buildIncidentAlert, incidentFingerprint, severityRank } from "./incident-routing.js";
+import { buildIncidentEvidenceBundle, type IncidentEvidenceInput } from "./incident-evidence.js";
+import { buildIncidentHypothesis, type IncidentHypothesisInput } from "./incident-diagnosis.js";
+import { buildFixVerification } from "./incident-fix-verification.js";
 
 const port = Number(process.env.PORT || 8080);
 const release = process.env.APP_RELEASE || "local";
@@ -57,15 +96,19 @@ function redactedLog(fields: Record<string, unknown>): string {
 function json(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store"
+    "cache-control": "no-store",
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
+    "access-control-allow-headers": "authorization,content-type,x-trace-id,x-correlation-id"
   });
   const traced = res as TracedResponse;
+  const payload = body as Record<string, unknown>;
   res.end(JSON.stringify({
-    ...(body as Record<string, unknown>),
+    ...payload,
     trace_id: traced.trace_id,
     correlation_id: traced.correlation_id,
     service: "api",
-    release
+    ...(payload.release === undefined ? { release } : {})
   }));
 }
 
@@ -436,6 +479,659 @@ async function oidcRoute(req: IncomingMessage, res: ServerResponse): Promise<boo
       token: session.token,
       expires_at: session.expiresAt
     });
+    return true;
+  }
+  return false;
+}
+
+async function accountantShareRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || (!req.url?.startsWith("/api/v1/portfolios/") && !req.url?.startsWith("/api/v1/accountant-shares/"))) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  const createMatch = req.url.match(/^\/api\/v1\/portfolios\/([0-9a-f-]{36})\/accountant-shares$/i);
+  const revokeMatch = req.url.match(/^\/api\/v1\/accountant-shares\/([0-9a-f-]{36})\/revoke$/i);
+  if (!createMatch && !revokeMatch) return false;
+  try {
+    if (createMatch) {
+      const portfolioId = createMatch[1];
+      const owner = await databasePool.query(
+        `SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND role = 'OWNER' AND revoked_at IS NULL`,
+        [portfolioId, userId]
+      );
+      if (!owner.rowCount) { json(res, 403, { error: "PORTFOLIO_OWNER_REQUIRED" }); return true; }
+      if (req.method === "GET") {
+        const shares = await databasePool.query(
+          `SELECT id, portfolio_id, grantee_email, scope, expires_at, revoked_at, created_at
+             FROM spaartrack.accountant_share WHERE portfolio_id = $1 ORDER BY created_at DESC`, [portfolioId]
+        );
+        json(res, 200, { portfolio_id: portfolioId, shares: shares.rows.map(accountantShareResponse), calculation_version: "accountant-access-v1" });
+        return true;
+      }
+      if (req.method !== "POST") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+      const body = await readJson(req);
+      const share = buildAccountantShare({ grantee_email: body.grantee_email, role: body.role, scope: body.scope, expires_at: body.expires_at }, new Date().toISOString());
+      const result = await databasePool.query(
+        `INSERT INTO spaartrack.accountant_share (portfolio_id, created_by, grantee_email, scope, expires_at)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id, portfolio_id, grantee_email, scope, expires_at, revoked_at, created_at`,
+        [portfolioId, userId, share.grantee_email, JSON.stringify({ role: share.role, permissions: share.scope }), share.expires_at]
+      );
+      await auditEvent(req, res, userId, "SHARE", "ACCOUNTANT_SHARE", String(result.rows[0].id), { portfolio_id: portfolioId, grantee_email: share.grantee_email, role: share.role, scope: share.scope, expires_at: share.expires_at });
+      json(res, 201, { ...accountantShareResponse(result.rows[0]), calculation_version: "accountant-access-v1", privacy_scope: "portfolio_owner", audit_action: "SHARE" });
+      return true;
+    }
+    if (!revokeMatch) { json(res, 404, { error: "NOT_FOUND" }); return true; }
+    const shareId = revokeMatch[1];
+    if (req.method !== "POST") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+    const share = await databasePool.query(
+      `SELECT s.id, s.portfolio_id, s.grantee_email, s.scope, s.expires_at, s.revoked_at, s.created_at
+         FROM spaartrack.accountant_share s
+         JOIN spaartrack.portfolio_member pm ON pm.portfolio_id = s.portfolio_id
+        WHERE s.id = $1 AND pm.user_id = $2 AND pm.role = 'OWNER' AND pm.revoked_at IS NULL`, [shareId, userId]
+    );
+    if (!share.rowCount) { json(res, 404, { error: "ACCOUNTANT_SHARE_NOT_FOUND" }); return true; }
+    const current = accountantShareResponse(share.rows[0]);
+    if (current.status === "REVOKED") { json(res, 200, { ...current, calculation_version: "accountant-access-v1", audit_action: "REVOKE" }); return true; }
+    const updated = await databasePool.query(
+      `UPDATE spaartrack.accountant_share SET revoked_at = now() WHERE id = $1
+       RETURNING id, portfolio_id, grantee_email, scope, expires_at, revoked_at, created_at`, [shareId]
+    );
+    await auditEvent(req, res, userId, "REVOKE", "ACCOUNTANT_SHARE", shareId, { portfolio_id: updated.rows[0].portfolio_id, grantee_email: updated.rows[0].grantee_email });
+    json(res, 200, { ...accountantShareResponse(updated.rows[0]), calculation_version: "accountant-access-v1", audit_action: "REVOKE" });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    const status = ["INVALID_EMAIL", "INVALID_ROLE", "INVALID_SCOPE", "INVALID_EXPIRY", "EXPIRY_IN_PAST"].includes(message) ? 400 : 500;
+    console.error(redactedLog({ level: "error", operation: "accountant_share_failed", error: message }));
+    json(res, status, { error: status === 400 ? message : "ACCOUNTANT_SHARE_REQUEST_FAILED" });
+    return true;
+  }
+}
+
+function accountantShareResponse(row: Record<string, unknown>): Record<string, unknown> {
+  const stored = row.scope && typeof row.scope === "object" ? row.scope as { role?: string; permissions?: string[] } : {};
+  const expiresAt = row.expires_at ? new Date(String(row.expires_at)) : null;
+  const status = row.revoked_at ? "REVOKED" : expiresAt && expiresAt.getTime() <= Date.now() ? "EXPIRED" : "ACTIVE";
+  return { id: row.id, portfolio_id: row.portfolio_id, grantee_email: row.grantee_email, role: stored.role, scope: stored.permissions || [], expires_at: row.expires_at, revoked_at: row.revoked_at, created_at: row.created_at, status };
+}
+
+async function pushConsentRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/push-consents")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  await ensurePushConsentTable();
+  const listMatch = req.url.match(/^\/api\/v1\/push-consents(\?.*)?$/i);
+  const createMatch = req.url.match(/^\/api\/v1\/push-consents$/i);
+  const revokeMatch = req.url.match(/^\/api\/v1\/push-consents\/([0-9a-f-]{36})\/revoke$/i);
+  const deliveryMatch = req.url.match(/^\/api\/v1\/push-consents\/([0-9a-f-]{36})\/deliveries$/i);
+  if (!listMatch && !revokeMatch && !deliveryMatch) return false;
+  try {
+    if (listMatch && req.method === "GET") {
+      const rows = await databasePool.query(
+        `SELECT id, channel, status, device_label, revoked_at, created_at FROM spaartrack.push_consent WHERE user_id = $1 ORDER BY created_at DESC`,
+        [userId]
+      );
+      json(res, 200, { consents: rows.rows.map(pushConsentResponse), calculation_version: "push-consent-v1" });
+      return true;
+    }
+    if (createMatch && req.method === "POST") {
+      const body = await readJson(req) as { channel?: string; enabled?: boolean; device_label?: string };
+      const consent = validatePushConsent({ channel: body.channel, enabled: body.enabled, device_label: body.device_label });
+      const result = await databasePool.query(
+        `INSERT INTO spaartrack.push_consent (user_id, channel, status, device_label) VALUES ($1, $2, $3, $4)
+         RETURNING id, channel, status, device_label, revoked_at, created_at`,
+        [userId, consent.channel, consent.status, consent.device_label]
+      );
+      await auditEvent(req, res, userId, "SHARE", "PUSH_CONSENT", String(result.rows[0].id), { channel: consent.channel, status: consent.status });
+      json(res, 201, { ...pushConsentResponse(result.rows[0]), calculation_version: "push-consent-v1", source: "push_consent", read_only: true, audit_action: "SHARE" });
+      return true;
+    }
+    if (revokeMatch && req.method === "POST") {
+      const current = await databasePool.query(
+        `SELECT id, channel, status, device_label, revoked_at, created_at FROM spaartrack.push_consent WHERE id = $1 AND user_id = $2`,
+        [revokeMatch[1], userId]
+      );
+      if (!current.rowCount) { json(res, 404, { error: "PUSH_CONSENT_NOT_FOUND" }); return true; }
+      const updated = await databasePool.query(
+        `UPDATE spaartrack.push_consent SET status = 'REVOKED', revoked_at = now() WHERE id = $1 AND user_id = $2
+         RETURNING id, channel, status, device_label, revoked_at, created_at`,
+        [revokeMatch[1], userId]
+      );
+      await auditEvent(req, res, userId, "REVOKE", "PUSH_CONSENT", String(revokeMatch[1]), { channel: updated.rows[0].channel });
+      json(res, 200, { ...pushConsentResponse(updated.rows[0]), calculation_version: "push-consent-v1", audit_action: "PUSH_CONSENT_REVOKED" });
+      return true;
+    }
+    if (deliveryMatch && req.method === "POST") {
+      const current = await databasePool.query(
+        `SELECT id, channel, status FROM spaartrack.push_consent WHERE id = $1 AND user_id = $2`,
+        [deliveryMatch[1], userId]
+      );
+      if (!current.rowCount) { json(res, 404, { error: "PUSH_CONSENT_NOT_FOUND" }); return true; }
+      const body = await readJson(req) as { event?: string; channel?: string; status?: string; failure_reason?: string };
+      const delivery = recordPushDelivery({ event: body.event, channel: body.channel ?? current.rows[0].channel, status: body.status, failure_reason: body.failure_reason });
+      const note = await databasePool.query(
+        `INSERT INTO spaartrack.notification (user_id, notification_type, title, body, severity, payload, delivered_at)
+         VALUES ($1, 'PUSH_DELIVERY', $2, $3, $4, $5, now())
+         RETURNING id, notification_type, title, body, severity, payload, delivered_at, created_at`,
+        [userId, String(delivery.event), `Push ${delivery.delivery_status}: ${delivery.event}`, delivery.delivery_status === "FAILED" ? "ERROR" : "INFO", JSON.stringify({ event: delivery.event, channel: delivery.channel, delivery_status: delivery.delivery_status, failure_reason: delivery.failure_reason, calculation_version: "push-delivery-v1" })]
+      );
+      await auditEvent(req, res, userId, "SHARE", "PUSH_DELIVERY", String(note.rows[0].id), { event: delivery.event, channel: delivery.channel, delivery_status: delivery.delivery_status });
+      json(res, 201, { ...delivery, notification_id: note.rows[0].id, consent_id: deliveryMatch[1] });
+      return true;
+    }
+    json(res, 405, { error: "METHOD_NOT_ALLOWED" });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    const status = ["INVALID_PUSH_CONSENT", "INVALID_PUSH_DELIVERY"].includes(message) ? 400 : 500;
+    console.error(redactedLog({ level: "error", operation: "push_consent_failed", error: message }));
+    json(res, status, { error: status === 400 ? message : "PUSH_CONSENT_REQUEST_FAILED" });
+    return true;
+  }
+}
+
+async function ensurePushConsentTable(): Promise<void> {
+  await databasePool.query(`CREATE TABLE IF NOT EXISTS spaartrack.push_consent (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES spaartrack.app_user(id) ON DELETE CASCADE,
+    channel text NOT NULL CHECK (channel IN ('PUSH', 'IN_APP', 'EMAIL')),
+    status text NOT NULL DEFAULT 'GRANTED' CHECK (status IN ('GRANTED', 'REVOKED')),
+    device_label text NOT NULL DEFAULT '',
+    revoked_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`);
+}
+
+function pushConsentResponse(row: Record<string, unknown>): Record<string, unknown> {
+  return { id: row.id, channel: row.channel, status: row.status, device_label: row.device_label, revoked_at: row.revoked_at, created_at: row.created_at };
+}
+
+async function modelSessionRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/model-sessions")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  await ensureModelSessionTable();
+  const listMatch = req.url.match(/^\/api\/v1\/model-sessions(\?.*)?$/i);
+  const createMatch = req.url.match(/^\/api\/v1\/model-sessions$/i);
+  const revokeMatch = req.url.match(/^\/api\/v1\/model-sessions\/([0-9a-f-]{36})\/revoke$/i);
+  if (!listMatch && !revokeMatch) return false;
+  try {
+    if (listMatch && req.method === "GET") {
+      const rows = await databasePool.query(
+        `SELECT id, provider, model, key_source, key_material, vault_path, session_label, status, revoked_at, created_at FROM spaartrack.model_session WHERE user_id = $1 ORDER BY created_at DESC`,
+        [userId]
+      );
+      json(res, 200, { sessions: rows.rows, calculation_version: "model-session-v1" });
+      return true;
+    }
+    if (createMatch && req.method === "POST") {
+      const body = await readJson(req) as { provider?: string; model?: string; key_source?: string; vault_path?: string; session_label?: string; provider_key?: unknown };
+      const session = buildModelSession(body);
+      const result = await databasePool.query(
+        `INSERT INTO spaartrack.model_session (user_id, provider, model, key_source, key_material, vault_path, session_label, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ACTIVE')
+         RETURNING id, provider, model, key_source, key_material, vault_path, session_label, status, revoked_at, created_at`,
+        [userId, session.provider, session.model, session.key_source, session.key_material, session.vault_path, session.session_label]
+      );
+      await auditEvent(req, res, userId, "SHARE", "MODEL_SESSION", String(result.rows[0].id), { provider: session.provider, model: session.model, key_source: session.key_source });
+      json(res, 201, { ...result.rows[0], calculation_version: "model-session-v1", source: "model_session", read_only: true, audit_action: "SHARE" });
+      return true;
+    }
+    if (revokeMatch && req.method === "POST") {
+      const current = await databasePool.query(
+        `SELECT id FROM spaartrack.model_session WHERE id = $1 AND user_id = $2`,
+        [revokeMatch[1], userId]
+      );
+      if (!current.rowCount) { json(res, 404, { error: "MODEL_SESSION_NOT_FOUND" }); return true; }
+      const updated = await databasePool.query(
+        `UPDATE spaartrack.model_session SET status = 'REVOKED', revoked_at = now() WHERE id = $1 AND user_id = $2
+         RETURNING id, provider, model, key_source, key_material, vault_path, session_label, status, revoked_at, created_at`,
+        [revokeMatch[1], userId]
+      );
+      await auditEvent(req, res, userId, "REVOKE", "MODEL_SESSION", String(revokeMatch[1]), { provider: updated.rows[0].provider, model: updated.rows[0].model });
+      json(res, 200, { ...updated.rows[0], calculation_version: "model-session-v1", audit_action: "MODEL_SESSION_REVOKED" });
+      return true;
+    }
+    json(res, 405, { error: "METHOD_NOT_ALLOWED" });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    const status = message === "INVALID_MODEL_SESSION" ? 400 : 500;
+    console.error(redactedLog({ level: "error", operation: "model_session_failed", error: message }));
+    json(res, status, { error: status === 400 ? message : "MODEL_SESSION_REQUEST_FAILED" });
+    return true;
+  }
+}
+
+async function ensureModelSessionTable(): Promise<void> {
+  await databasePool.query(`CREATE TABLE IF NOT EXISTS spaartrack.model_session (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES spaartrack.app_user(id) ON DELETE CASCADE,
+    provider text NOT NULL,
+    model text NOT NULL,
+    key_source text NOT NULL CHECK (key_source IN ('BYOK', 'LOCAL')),
+    key_material text NOT NULL DEFAULT 'vault-only' CHECK (key_material = 'vault-only'),
+    vault_path text NOT NULL,
+    session_label text NOT NULL DEFAULT '',
+    status text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'REVOKED')),
+    revoked_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`);
+}
+
+async function assistantAnswerRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/assistant-answers")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "POST" || req.url !== "/api/v1/assistant-answers") return false;
+  try {
+    const body = await readJson(req) as { question?: string; domain?: string; period_start?: string; period_end?: string; data_as_of?: string; read_scopes?: string[]; account_scope?: string[]; confidence?: number; summary?: string; mutation_tool_used?: boolean };
+    const answer = buildAssistantAnswer(body);
+    await auditEvent(req, res, userId, "CALCULATE", "ASSISTANT_ANSWER", randomUUID(), { domain: answer.domain, period: answer.period, read_scopes: answer.read_scopes });
+    json(res, 201, { ...answer, audit_action: "ASSISTANT_ANSWER" });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    const status = message === "INVALID_ASSISTANT_ANSWER" ? 400 : 500;
+    console.error(redactedLog({ level: "error", operation: "assistant_answer_failed", error: message }));
+    json(res, status, { error: status === 400 ? message : "ASSISTANT_ANSWER_REQUEST_FAILED" });
+    return true;
+  }
+}
+
+const assistantProposalStore = new Map<string, string>();
+
+async function agentScopesRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (req.url !== "/api/v1/agent-scopes") return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "GET") return false;
+  const matrix = buildAgentScopeMatrix();
+  await auditEvent(req, res, userId, "CALCULATE", "AGENT_SCOPES", randomUUID(), { version: matrix.version });
+  json(res, 200, { ...matrix, source: "agent_scope_matrix", audit_action: "AGENT_SCOPES" });
+  return true;
+}
+
+async function addonSandboxRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/addons")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  await ensureAddonSandboxTables();
+  const collection = req.url === "/api/v1/addons";
+  const actionMatch = req.url.match(/^\/api\/v1\/addons\/([0-9a-f-]{36})\/(sandbox\/(start|stop)|revoke)$/i);
+  if (!collection && !actionMatch) return false;
+  try {
+    if (collection && req.method === "GET") {
+      const result = await databasePool.query(`SELECT id, slug, version, manifest_json, status, created_at FROM spaartrack.addon_manifest WHERE owner_user_id = $1 ORDER BY created_at DESC`, [userId]);
+      json(res, 200, { addons: result.rows, calculation_version: "addon-sandbox-v1", source: "addon_manifest" });
+      return true;
+    }
+    if (collection && req.method === "POST") {
+      const body = await readJson(req) as { manifest?: Record<string, unknown> };
+      const manifest = validateAddonManifest(body.manifest ?? {});
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const inserted = await client.query(`INSERT INTO spaartrack.addon_manifest (owner_user_id, slug, version, manifest_json, status) VALUES ($1, $2, $3, $4, 'INSTALLED') RETURNING id, slug, version, status, created_at`, [userId, manifest.slug, manifest.version, JSON.stringify(manifest)]);
+        const addonId = String(inserted.rows[0].id);
+        for (const permission of manifest.permissions) await client.query(`INSERT INTO spaartrack.addon_grant (addon_id, user_id, permission) VALUES ($1, $2, $3)`, [addonId, userId, permission]);
+        for (const secret of manifest.secrets) await client.query(`INSERT INTO spaartrack.addon_secret_ref (addon_id, secret_name, vault_path) VALUES ($1, $2, $3)`, [addonId, secret.name, secret.vault_path]);
+        for (const eventName of manifest.entrypoints.events) await client.query(`INSERT INTO spaartrack.addon_event_hook (addon_id, event_name) VALUES ($1, $2)`, [addonId, eventName]);
+        for (const asset of manifest.assets) await client.query(`INSERT INTO spaartrack.addon_asset (addon_id, asset_path, content_type, sha256) VALUES ($1, $2, $3, $4)`, [addonId, asset.path, asset.content_type, asset.sha256]);
+        const plan = buildAddonSandboxPlan({ addon_id: addonId, permissions: manifest.permissions, assets: manifest.assets.map((asset) => asset.path), event_hooks: manifest.entrypoints.events });
+        const sandbox = await client.query(`INSERT INTO spaartrack.addon_sandbox_run (addon_id, status, permissions, asset_root, ledger_access) VALUES ($1, 'STOPPED', $2, $3, 'none') RETURNING id, status, permissions, asset_root, ledger_access`, [addonId, JSON.stringify(plan.granted_permissions), plan.asset_root]);
+        await client.query("COMMIT");
+        await auditEvent(req, res, userId, "SHARE", "ADDON", addonId, { permissions: manifest.permissions, secret_count: manifest.secrets.length, asset_count: manifest.assets.length, ledger_untouched: true });
+        json(res, 201, { id: addonId, ...inserted.rows[0], sandbox: { ...sandbox.rows[0], calculation_version: "addon-sandbox-v1", ledger_access: "none", revokable: true }, secret_count: manifest.secrets.length, asset_count: manifest.assets.length, event_hook_count: manifest.entrypoints.events.length, calculation_version: "addon-sandbox-v1", source: "addon_manifest", ledger_untouched: true });
+        return true;
+      } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+    }
+    if (actionMatch && req.method === "POST") {
+      const addonId = actionMatch[1];
+      const action = actionMatch[2].toLowerCase();
+      const current = await databasePool.query(`SELECT id FROM spaartrack.addon_manifest WHERE id = $1 AND owner_user_id = $2`, [addonId, userId]);
+      if (!current.rowCount) { json(res, 404, { error: "ADDON_NOT_FOUND" }); return true; }
+      if (action === "revoke") {
+        const client = await databasePool.connect();
+        try {
+          await client.query("BEGIN");
+          await client.query(`UPDATE spaartrack.addon_manifest SET status = 'REVOKED' WHERE id = $1 AND owner_user_id = $2`, [addonId, userId]);
+          const grants = await client.query(`UPDATE spaartrack.addon_grant SET revoked_at = COALESCE(revoked_at, now()) WHERE addon_id = $1 AND user_id = $2 AND revoked_at IS NULL RETURNING permission`, [addonId, userId]);
+          const secrets = await client.query(`UPDATE spaartrack.addon_secret_ref SET status = 'REVOKED', revoked_at = COALESCE(revoked_at, now()) WHERE addon_id = $1 AND status = 'ACTIVE' RETURNING id`, [addonId]);
+          await client.query(`UPDATE spaartrack.addon_event_hook SET status = 'REVOKED', revoked_at = COALESCE(revoked_at, now()) WHERE addon_id = $1 AND status = 'ACTIVE'`, [addonId]);
+          await client.query(`UPDATE spaartrack.addon_sandbox_run SET status = 'REVOKED', revoked_at = COALESCE(revoked_at, now()), updated_at = now() WHERE addon_id = $1`, [addonId]);
+          await client.query("COMMIT");
+          await auditEvent(req, res, userId, "REVOKE", "ADDON", addonId, { grants_revoked: grants.rowCount, secrets_revoked: secrets.rowCount, ledger_untouched: true });
+          json(res, 200, { id: addonId, status: "REVOKED", grants_revoked: grants.rowCount, secrets_revoked: secrets.rowCount, ledger_untouched: true, calculation_version: "addon-sandbox-v1", audit_action: "ADDON_REVOKED" });
+          return true;
+        } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+      }
+      const desired = action.endsWith("start") ? "RUNNING" : "STOPPED";
+      const updated = await databasePool.query(`UPDATE spaartrack.addon_sandbox_run SET status = $1, started_at = CASE WHEN $1 = 'RUNNING' THEN COALESCE(started_at, now()) ELSE started_at END, stopped_at = CASE WHEN $1 = 'STOPPED' THEN now() ELSE stopped_at END, updated_at = now() WHERE addon_id = $2 AND status <> 'REVOKED' RETURNING id, status, permissions, asset_root, ledger_access`, [desired, addonId]);
+      if (!updated.rowCount) { json(res, 409, { error: "ADDON_REVOKED" }); return true; }
+      await auditEvent(req, res, userId, desired === "RUNNING" ? "START" : "STOP", "ADDON_SANDBOX", addonId, { status: desired, ledger_untouched: true });
+      json(res, 200, { id: addonId, sandbox: { ...updated.rows[0], calculation_version: "addon-sandbox-v1", revokable: true }, ledger_untouched: true, audit_action: `ADDON_SANDBOX_${desired}` });
+      return true;
+    }
+    json(res, 405, { error: "METHOD_NOT_ALLOWED" });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    const status = message === "INVALID_ADDON_MANIFEST" || message === "INVALID_ADDON_SANDBOX" ? 400 : 500;
+    console.error(redactedLog({ level: "error", operation: "addon_sandbox_failed", error: message }));
+    json(res, status, { error: status === 400 ? message : "ADDON_SANDBOX_REQUEST_FAILED" });
+    return true;
+  }
+}
+
+async function ensureAddonSandboxTables(): Promise<void> {
+  await databasePool.query(`CREATE TABLE IF NOT EXISTS spaartrack.addon_secret_ref (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), addon_id uuid NOT NULL REFERENCES spaartrack.addon_manifest(id) ON DELETE CASCADE, secret_name text NOT NULL, vault_path text NOT NULL CHECK (vault_path LIKE 'vault://%'), status text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'REVOKED')), revoked_at timestamptz, UNIQUE (addon_id, secret_name));
+    CREATE TABLE IF NOT EXISTS spaartrack.addon_event_hook (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), addon_id uuid NOT NULL REFERENCES spaartrack.addon_manifest(id) ON DELETE CASCADE, event_name text NOT NULL, status text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'REVOKED')), revoked_at timestamptz, UNIQUE (addon_id, event_name));
+    CREATE TABLE IF NOT EXISTS spaartrack.addon_asset (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), addon_id uuid NOT NULL REFERENCES spaartrack.addon_manifest(id) ON DELETE CASCADE, asset_path text NOT NULL, content_type text NOT NULL, sha256 text NOT NULL, UNIQUE (addon_id, asset_path));
+    CREATE TABLE IF NOT EXISTS spaartrack.addon_sandbox_run (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), addon_id uuid NOT NULL REFERENCES spaartrack.addon_manifest(id) ON DELETE CASCADE, status text NOT NULL DEFAULT 'STOPPED' CHECK (status IN ('STOPPED', 'RUNNING', 'REVOKED')), permissions jsonb NOT NULL DEFAULT '[]', asset_root text NOT NULL, ledger_access text NOT NULL DEFAULT 'none' CHECK (ledger_access = 'none'), started_at timestamptz, stopped_at timestamptz, revoked_at timestamptz, updated_at timestamptz NOT NULL DEFAULT now())`);
+}
+
+async function addonSdkRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/addons/")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  await ensureAddonSandboxTables();
+  const readMatch = req.url.match(/^\/api\/v1\/addons\/([0-9a-f-]{36})\/sdk\/read$/i);
+  const eventMatch = req.url.match(/^\/api\/v1\/addons\/([0-9a-f-]{36})\/events\/([A-Za-z0-9_.-]{2,64})\/(emit|revoke)$/i);
+  if (!readMatch && !eventMatch) return false;
+  try {
+    const addonId = (readMatch ?? eventMatch)![1];
+    const addon = await databasePool.query(`SELECT id, status, manifest_json FROM spaartrack.addon_manifest WHERE id = $1 AND owner_user_id = $2`, [addonId, userId]);
+    if (!addon.rowCount) { json(res, 404, { error: "ADDON_NOT_FOUND" }); return true; }
+    if (String(addon.rows[0].status) !== "INSTALLED") { json(res, 409, { error: "ADDON_REVOKED" }); return true; }
+    const manifest = addon.rows[0].manifest_json as { permissions?: string[]; entrypoints?: { events?: string[] } };
+    if (readMatch && req.method === "POST") {
+      const body = await readJson(req) as { resource?: string };
+      const read = buildAddonSdkRead({ permissions: manifest.permissions, resource: body.resource });
+      await auditEvent(req, res, userId, "READ", "ADDON_SDK", addonId, { resource: read.resource, capability: read.capability, ledger_untouched: true });
+      json(res, 200, { addon_id: addonId, ...read, audit_action: "ADDON_SDK_READ" });
+      return true;
+    }
+    if (eventMatch && req.method === "POST") {
+      const eventName = String(eventMatch[2]).toUpperCase();
+      const hook = validateAddonEventHook({ event_name: eventName, registered_events: manifest.entrypoints?.events ?? [] });
+      if (eventMatch[3].toLowerCase() === "revoke") {
+        const revoked = await databasePool.query(`UPDATE spaartrack.addon_event_hook SET status = 'REVOKED', revoked_at = COALESCE(revoked_at, now()) WHERE addon_id = $1 AND event_name = $2 AND status = 'ACTIVE' RETURNING event_name`, [addonId, hook.event_name]);
+        if (!revoked.rowCount) { json(res, 409, { error: "ADDON_EVENT_REVOKED" }); return true; }
+        await auditEvent(req, res, userId, "REVOKE", "ADDON_EVENT_HOOK", addonId, { event_name: hook.event_name, ledger_untouched: true });
+        json(res, 200, { addon_id: addonId, event_name: hook.event_name, status: "REVOKED", calculation_version: "addon-sdk-v1", audit_action: "ADDON_EVENT_REVOKED", ledger_untouched: true });
+        return true;
+      }
+      const active = await databasePool.query(`SELECT id FROM spaartrack.addon_event_hook WHERE addon_id = $1 AND event_name = $2 AND status = 'ACTIVE'`, [addonId, hook.event_name]);
+      if (!active.rowCount) { json(res, 403, { error: "ADDON_EVENT_REVOKED" }); return true; }
+      const body = await readJson(req) as { payload?: unknown };
+      await auditEvent(req, res, userId, "DELIVER", "ADDON_EVENT", addonId, { event_name: hook.event_name, payload_present: body.payload !== undefined, ledger_untouched: true });
+      json(res, 200, { addon_id: addonId, event_name: hook.event_name, delivered: true, payload_scoped: true, calculation_version: "addon-sdk-v1", audit_action: "ADDON_EVENT_DELIVERED", ledger_untouched: true });
+      return true;
+    }
+    json(res, 405, { error: "METHOD_NOT_ALLOWED" });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    const status = ["ADDON_SCOPE_DENIED", "ADDON_EVENT_NOT_GRANTED", "INVALID_ADDON_EVENT"].includes(message) ? 403 : 500;
+    console.error(redactedLog({ level: "error", operation: "addon_sdk_failed", error: message }));
+    json(res, status, { error: status === 403 ? message : "ADDON_SDK_REQUEST_FAILED" });
+    return true;
+  }
+}
+
+async function assistantProposalRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/assistant-proposals")) return false;  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "POST" || (req.url !== "/api/v1/assistant-proposals" && !req.url?.startsWith("/api/v1/assistant-proposals/"))) return false;
+  const decisionMatch = req.url?.match(/^\/api\/v1\/assistant-proposals\/([0-9a-f-]{36})\/(confirm|cancel)$/i);
+  if (decisionMatch && req.method === "POST") {
+    try {
+      const body = await readJson(req) as { undo_token?: string };
+      const stored = assistantProposalStore.get(decisionMatch[1]);
+      const decision = decideAssistantProposal({ undo_token: stored ?? String(body.undo_token ?? "") }, { decision: decisionMatch[2], undo_token: String(body.undo_token ?? "") });
+      if (stored !== undefined && stored !== String(body.undo_token ?? "")) throw new Error("INVALID_PROPOSAL_DECISION");
+      await auditEvent(req, res, userId, "CALCULATE", "ASSISTANT_PROPOSAL_DECISION", decisionMatch[1], { decision: decision.status, undo_token: decision.undo_token });
+      json(res, 200, { ...decision, proposal_id: decisionMatch[1], audit_action: "ASSISTANT_PROPOSAL_DECISION" });
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown";
+      const status = message === "INVALID_PROPOSAL_DECISION" ? 400 : 500;
+      json(res, status, { error: status === 400 ? message : "ASSISTANT_PROPOSAL_DECISION_FAILED" });
+      return true;
+    }
+  }
+  if (req.url !== "/api/v1/assistant-proposals") return false;
+  try {
+    const body = await readJson(req) as { question?: string; kind?: string; diff?: Array<{ op: string; target: string; before: string; after: string }>; scope?: string[]; impact?: string; summary?: string; mutation_tool_used?: boolean };
+    const proposal = buildAssistantProposal(body);
+    const proposalId = randomUUID();
+    assistantProposalStore.set(proposalId, proposal.undo_token);
+    await auditEvent(req, res, userId, "CALCULATE", "ASSISTANT_PROPOSAL", proposalId, { kind: proposal.kind, diff_count: proposal.diff.length, scope: proposal.scope });
+    json(res, 201, { ...proposal, proposal_id: proposalId, audit_action: "ASSISTANT_PROPOSAL" });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    const status = message === "INVALID_ASSISTANT_PROPOSAL" ? 400 : 500;
+    console.error(redactedLog({ level: "error", operation: "assistant_proposal_failed", error: message }));
+    json(res, status, { error: status === 400 ? message : "ASSISTANT_PROPOSAL_REQUEST_FAILED" });
+    return true;
+  }
+}
+
+function communityPostResponse(row: Record<string, unknown>): Record<string, unknown> {
+  const visibility = String(row.visibility);
+  const status = String(row.status);
+  return {
+    id: row.id,
+    visibility,
+    status,
+    title: row.title,
+    body: row.body,
+    public_metrics: visibility === "PUBLIC" && status === "VISIBLE" ? (row.public_metrics ?? {}) : {},
+    created_at: row.created_at,
+    deleted_at: row.deleted_at,
+    calculation_version: "community-feed-v1",
+    source: "community_post",
+    read_only: true
+  };
+}
+
+async function ensureCommunityPostTable(): Promise<void> {
+  await databasePool.query(`CREATE TABLE IF NOT EXISTS spaartrack.community_post (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_user_id uuid NOT NULL REFERENCES spaartrack.app_user(id) ON DELETE CASCADE,
+    visibility text NOT NULL CHECK (visibility IN ('PUBLIC', 'PRIVATE')),
+    status text NOT NULL CHECK (status IN ('VISIBLE', 'PRIVATE', 'PENDING', 'REJECTED', 'DELETED')),
+    title text NOT NULL,
+    body text NOT NULL,
+    public_metrics jsonb NOT NULL DEFAULT '{}',
+    moderation_reason text,
+    deleted_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS community_post_feed_idx ON spaartrack.community_post (status, visibility, created_at DESC);
+  CREATE INDEX IF NOT EXISTS community_post_owner_idx ON spaartrack.community_post (owner_user_id, created_at DESC)`);
+}
+
+async function communityFeedRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/community/")) return false;
+  await ensureCommunityPostTable();
+  const userId = await authenticatedUserId(req);
+  const parsed = new URL(req.url, "http://localhost");
+  if (parsed.pathname === "/api/v1/community/feed" && req.method === "GET") {
+    const rows = await databasePool.query(`SELECT id, visibility, status, title, body, public_metrics, created_at, deleted_at
+      FROM spaartrack.community_post WHERE visibility = 'PUBLIC' AND status = 'VISIBLE' ORDER BY created_at DESC LIMIT 100`);
+    json(res, 200, { posts: rows.rows.map(communityPostResponse), count: rows.rowCount, calculation_version: "community-feed-v1", source: "community_post", read_only: true });
+    return true;
+  }
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (parsed.pathname === "/api/v1/community/posts" && req.method === "POST") {
+    try {
+      const body = await readJson(req) as { visibility?: string; title?: string; body?: string; public_metrics?: Record<string, unknown> };
+      const post = buildCommunityPost(body, new Date().toISOString());
+      const result = await databasePool.query(`INSERT INTO spaartrack.community_post (owner_user_id, visibility, status, title, body, public_metrics)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING id, visibility, status, title, body, public_metrics, created_at, deleted_at`,
+        [userId, post.visibility, post.status, post.title, post.body, JSON.stringify(post.public_metrics)]);
+      await auditEvent(req, res, userId, "SHARE", "COMMUNITY_POST", String(result.rows[0].id), { visibility: post.visibility, moderation_status: post.status });
+      json(res, 201, { ...communityPostResponse(result.rows[0]), audit_action: "COMMUNITY_POST_CREATED" });
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown";
+      const status = ["INVALID_COMMUNITY_POST", "PRIVATE_DATA_IN_PUBLIC_POST"].includes(message) ? 400 : 500;
+      json(res, status, { error: status === 400 ? message : "COMMUNITY_POST_REQUEST_FAILED" });
+      return true;
+    }
+  }
+  if (parsed.pathname === "/api/v1/community/export" && req.method === "GET") {
+    const rows = await databasePool.query(`SELECT id, visibility, status, title, body, public_metrics FROM spaartrack.community_post WHERE owner_user_id = $1 ORDER BY created_at`, [userId]);
+    json(res, 200, buildCommunityExport(rows.rows as Array<{ id: string; visibility: "PUBLIC" | "PRIVATE"; status: "VISIBLE" | "PRIVATE" | "PENDING" | "REJECTED" | "DELETED"; title: string; body: string; public_metrics?: Record<string, unknown> }>));
+    return true;
+  }
+  const postMatch = parsed.pathname.match(/^\/api\/v1\/community\/posts\/([0-9a-f-]{36})(?:\/(moderate|delete))?$/i);
+  if (!postMatch) return false;
+  const post = await databasePool.query(`SELECT id, visibility, status, title, body, public_metrics, created_at, deleted_at FROM spaartrack.community_post WHERE id = $1 AND owner_user_id = $2`, [postMatch[1], userId]);
+  if (!post.rowCount) { json(res, 404, { error: "COMMUNITY_POST_NOT_FOUND" }); return true; }
+  if (postMatch[2] === "moderate" && req.method === "POST") {
+    const body = await readJson(req) as { decision?: string };
+    const decision = String(body.decision ?? "").toUpperCase();
+    if (!["APPROVE", "REJECT"].includes(decision)) { json(res, 400, { error: "INVALID_MODERATION_DECISION" }); return true; }
+    const status = decision === "APPROVE" ? "VISIBLE" : "REJECTED";
+    const updated = await databasePool.query(`UPDATE spaartrack.community_post SET status = $2, moderation_reason = $3, updated_at = now() WHERE id = $1 RETURNING id, visibility, status, title, body, public_metrics, created_at, deleted_at`, [postMatch[1], status, decision === "REJECT" ? "MODERATOR_REJECTED" : null]);
+    await auditEvent(req, res, userId, "MODERATION", "COMMUNITY_POST", postMatch[1], { decision, status });
+    json(res, 200, { ...communityPostResponse(updated.rows[0]), audit_action: "COMMUNITY_POST_MODERATED" });
+    return true;
+  }
+  if (postMatch[2] === "delete" && req.method === "POST") {
+    const updated = await databasePool.query(`UPDATE spaartrack.community_post SET status = 'DELETED', deleted_at = now(), updated_at = now() WHERE id = $1 RETURNING id, visibility, status, title, body, public_metrics, created_at, deleted_at`, [postMatch[1]]);
+    await auditEvent(req, res, userId, "DELETE", "COMMUNITY_POST", postMatch[1], { deletion: "TOMBSTONE" });
+    json(res, 200, { ...communityPostResponse(updated.rows[0]), audit_action: "COMMUNITY_POST_DELETED" });
+    return true;
+  }
+  if (req.method === "GET") { json(res, 200, communityPostResponse(post.rows[0])); return true; }
+  json(res, 405, { error: "METHOD_NOT_ALLOWED" });
+  return true;
+}
+
+function shareLinkResponse(row: Record<string, unknown>): Record<string, unknown> {
+  const policy = row.exposure_policy && typeof row.exposure_policy === "object" ? row.exposure_policy as { hide_amounts?: boolean } : {};
+  const expiresAt = row.expires_at ? new Date(String(row.expires_at)) : null;
+  const status = row.revoked_at ? "REVOKED" : expiresAt && expiresAt.getTime() <= Date.now() ? "EXPIRED" : "ACTIVE";
+  return { id: row.id, portfolio_id: row.portfolio_id, access_id: row.access_id, scope: row.scope, exposure_policy: { hide_amounts: Boolean(policy.hide_amounts) }, expires_at: row.expires_at, revoked_at: row.revoked_at, created_at: row.created_at, status, calculation_version: "portfolio-share-link-v1", source: "portfolio_share_link", read_only: true };
+}
+
+async function portfolioShareLinkRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  const parsed = req.url ? new URL(req.url, "http://localhost") : null;
+  const createMatch = req.url?.match(/^\/api\/v1\/portfolios\/([0-9a-f-]{36})\/share-links$/i);
+  const revokeMatch = req.url?.match(/^\/api\/v1\/share-links\/([0-9a-f-]{36})\/revoke$/i);
+  const resolveMatch = req.url?.match(/^\/api\/v1\/shared\/([A-Za-z0-9_-]{12,})$/);
+  if (!createMatch && !revokeMatch && !resolveMatch && !(parsed && parsed.pathname === "/api/v1/portfolios" && false)) {
+    if (!req.url?.startsWith("/api/v1/portfolios/") && !req.url?.startsWith("/api/v1/share-links/") && !req.url?.startsWith("/api/v1/shared/")) return false;
+    if (!createMatch && !revokeMatch && !resolveMatch) return false;
+  }
+  if (resolveMatch) {
+    if (req.method !== "GET") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+    const row = await databasePool.query(
+      `SELECT id, portfolio_id::text AS portfolio_id, access_id, scope, exposure_policy, expires_at, revoked_at, created_at
+         FROM spaartrack.portfolio_share_link WHERE access_id = $1`, [resolveMatch[1]]
+    );
+    if (!row.rowCount) { json(res, 404, { error: "SHARE_LINK_NOT_FOUND" }); return true; }
+    const link = shareLinkResponse(row.rows[0]);
+    if (link.status === "REVOKED") { json(res, 410, { error: "SHARE_LINK_REVOKED" }); return true; }
+    if (link.status === "EXPIRED") { json(res, 410, { error: "SHARE_LINK_EXPIRED" }); return true; }
+    if (link.scope === "RESTRICTED_VIEW") {
+      const snapshot = await databasePool.query(
+        `SELECT id, portfolio_value::text AS portfolio_value, reporting_currency_code
+           FROM spaartrack.portfolio_snapshot WHERE portfolio_id = $1 ORDER BY snapshot_at DESC, id DESC LIMIT 1`,
+        [link.portfolio_id]
+      );
+      if (!snapshot.rowCount) { json(res, 404, { error: "SHARE_LINK_NO_SNAPSHOT" }); return true; }
+      const positions = await databasePool.query(
+        `SELECT ps.instrument_id::text AS instrument_id, COALESCE(i.name, ps.instrument_id::text) AS name,
+                COALESCE(ps.reporting_value, ps.market_value, 0)::text AS market_value
+           FROM spaartrack.position_snapshot ps LEFT JOIN spaartrack.instrument i ON i.id = ps.instrument_id
+          WHERE ps.portfolio_snapshot_id = $1 AND COALESCE(ps.reporting_value, ps.market_value, 0) > 0
+          ORDER BY ps.instrument_id`,
+        [snapshot.rows[0].id]
+      );
+      try {
+        const restricted = projectRestrictedView({
+          positions: positions.rows as Array<{ instrument_id?: string; name?: string; market_value?: number | string; currency_code?: string }>,
+          portfolio_value: String(snapshot.rows[0].portfolio_value),
+          currency_code: String(snapshot.rows[0].reporting_currency_code)
+        });
+        json(res, 200, { ...link, restricted_view: restricted, trace_id: traceId(req), correlation_id: correlationId(req) });
+      } catch {
+        json(res, 409, { error: "SHARE_LINK_NO_SNAPSHOT" });
+      }
+      return true;
+    }
+    json(res, 200, { ...link, trace_id: traceId(req), correlation_id: correlationId(req) });
+    return true;
+  }
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  try {
+    if (createMatch) {
+      const portfolioId = createMatch[1];
+      const owner = await databasePool.query(
+        `SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND role = 'OWNER' AND revoked_at IS NULL`,
+        [portfolioId, userId]
+      );
+      if (!owner.rowCount) { json(res, 403, { error: "PORTFOLIO_OWNER_REQUIRED" }); return true; }
+      if (req.method === "GET") {
+        const links = await databasePool.query(
+          `SELECT id, portfolio_id::text AS portfolio_id, access_id, scope, exposure_policy, expires_at, revoked_at, created_at
+             FROM spaartrack.portfolio_share_link WHERE portfolio_id = $1 ORDER BY created_at DESC`, [portfolioId]
+        );
+        json(res, 200, { portfolio_id: portfolioId, links: links.rows.map(shareLinkResponse), count: links.rowCount, calculation_version: "portfolio-share-link-v1" });
+        return true;
+      }
+      if (req.method !== "POST") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+      const body = await readJson(req);
+      const link = buildPortfolioShareLink(
+        { scope: body.scope as string | undefined, exposure_policy: (body.exposure_policy && typeof body.exposure_policy === "object" ? body.exposure_policy : {}) as Record<string, unknown>, expires_at: (body.expires_at as string | null | undefined) ?? null },
+        new Date().toISOString()
+      );
+      const result = await databasePool.query(
+        `INSERT INTO spaartrack.portfolio_share_link (portfolio_id, created_by, access_id, scope, exposure_policy, expires_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6) RETURNING id, portfolio_id::text AS portfolio_id, access_id, scope, exposure_policy, expires_at, revoked_at, created_at`,
+        [portfolioId, userId, link.access_id, link.scope, JSON.stringify(link.exposure_policy), link.expires_at]
+      );
+      await auditEvent(req, res, userId, "SHARE", "PORTFOLIO_SHARE_LINK", String(result.rows[0].id), { portfolio_id: portfolioId, scope: link.scope, expires_at: link.expires_at });
+      json(res, 201, { ...shareLinkResponse(result.rows[0]), trace_id: traceId(req), correlation_id: correlationId(req) });
+      return true;
+    }
+    if (revokeMatch) {
+      if (req.method !== "POST") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+      const link = await databasePool.query(
+        `SELECT l.id, l.portfolio_id::text AS portfolio_id, l.access_id, l.scope, l.exposure_policy, l.expires_at, l.revoked_at, l.created_at
+           FROM spaartrack.portfolio_share_link l JOIN spaartrack.portfolio_member pm ON pm.portfolio_id = l.portfolio_id
+          WHERE l.id = $1 AND pm.user_id = $2 AND pm.role = 'OWNER' AND pm.revoked_at IS NULL`, [revokeMatch[1], userId]
+      );
+      if (!link.rowCount) { json(res, 404, { error: "SHARE_LINK_NOT_FOUND" }); return true; }
+      const current = shareLinkResponse(link.rows[0]);
+      if (current.status === "REVOKED") { json(res, 200, { ...current, audit_action: "REVOKE" }); return true; }
+      const updated = await databasePool.query(
+        `UPDATE spaartrack.portfolio_share_link SET revoked_at = now() WHERE id = $1
+         RETURNING id, portfolio_id::text AS portfolio_id, access_id, scope, exposure_policy, expires_at, revoked_at, created_at`, [revokeMatch[1]]
+      );
+      await auditEvent(req, res, userId, "REVOKE", "PORTFOLIO_SHARE_LINK", revokeMatch[1], { portfolio_id: updated.rows[0].portfolio_id });
+      json(res, 200, { ...shareLinkResponse(updated.rows[0]), audit_action: "REVOKE" });
+      return true;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    if (message === "INVALID_SHARE_LINK") { json(res, 400, { error: message }); return true; }
+    console.error(redactedLog({ level: "error", operation: "portfolio_share_link_failed", error: message }));
+    json(res, 500, { error: "SHARE_LINK_REQUEST_FAILED" });
     return true;
   }
   return false;
@@ -1951,6 +2647,326 @@ function fixedAmount(value: number): string {
   return value.toFixed(12);
 }
 
+async function taxLotsRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) {
+    json(res, 401, { error: "UNAUTHENTICATED" });
+    return true;
+  }
+  if (req.method !== "GET" || !req.url?.startsWith("/api/v1/tax-lots")) return false;
+  const url = new URL(req.url, "http://localhost");
+  const portfolioId = url.searchParams.get("portfolio_id")?.trim() || "";
+  const instrumentId = url.searchParams.get("instrument_id")?.trim() || "";
+  const asOf = url.searchParams.get("as_of")?.trim() || new Date().toISOString().slice(0, 10);
+  if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !/^[0-9a-f-]{36}$/i.test(instrumentId) || !/^\d{4}-\d{2}-\d{2}$/.test(asOf)) {
+    json(res, 400, { error: "INVALID_TAX_LOT_QUERY" });
+    return true;
+  }
+  const access = await databasePool.query(
+    `SELECT 1 FROM spaartrack.portfolio_member
+     WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+    [portfolioId, userId]
+  );
+  if (!access.rowCount) {
+    json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" });
+    return true;
+  }
+  const rows = await databasePool.query(
+    `SELECT lt.id, lt.activity_type, lt.effective_date::text, lt.occurred_at,
+            le.quantity::text, le.amount::text, le.fee_amount::text, le.tax_amount::text,
+            le.currency_code
+     FROM spaartrack.ledger_transaction lt
+     JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+     WHERE lt.portfolio_id = $1 AND le.instrument_id = $2
+       AND le.entry_kind = 'POSITION' AND lt.state = 'POSTED'
+       AND lt.effective_date <= $3::date
+     ORDER BY lt.effective_date, lt.occurred_at, lt.id`,
+    [portfolioId, instrumentId, asOf]
+  );
+  const calculation = buildTaxLots({
+    asOf,
+    transactions: (rows.rows as Array<Record<string, string>>).map((row) => ({
+      id: String(row.id), activityType: String(row.activity_type), effectiveDate: String(row.effective_date), occurredAt: String(row.occurred_at),
+      quantity: Number(row.quantity || 0), amount: Number(row.amount || 0), fee: Number(row.fee_amount || 0), tax: Number(row.tax_amount || 0), currency: String(row.currency_code).trim().toUpperCase()
+    }))
+  });
+  await auditEvent(req, res, userId, "CALCULATE", "TAX_LOTS", instrumentId, { portfolio_id: portfolioId, instrument_id: instrumentId, as_of: asOf, calculation_version: calculation.calculation_version, lot_count: calculation.lots.length });
+  json(res, 200, { portfolio_id: portfolioId, instrument_id: instrumentId, ...calculation });
+  return true;
+}
+
+async function taxLotMethodsRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "GET" || !req.url?.startsWith("/api/v1/tax-lot-methods")) return false;
+  const url = new URL(req.url, "http://localhost");
+  const portfolioId = url.searchParams.get("portfolio_id")?.trim() || "";
+  const instrumentId = url.searchParams.get("instrument_id")?.trim() || "";
+  const asOf = url.searchParams.get("as_of")?.trim() || new Date().toISOString().slice(0, 10);
+  const method = (url.searchParams.get("method")?.trim().toUpperCase() || "ALL") as TaxLotMethod | "ALL";
+  if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !/^[0-9a-f-]{36}$/i.test(instrumentId) || !/^\d{4}-\d{2}-\d{2}$/.test(asOf)) { json(res, 400, { error: "INVALID_TAX_LOT_METHOD_QUERY" }); return true; }
+  if (!["ALL", "FIFO", "LIFO", "WAC", "HIFO", "SPECIFIC_ID"].includes(method)) { json(res, 400, { error: "INVALID_TAX_LOT_METHOD" }); return true; }
+  const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`, [portfolioId, userId]);
+  if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" }); return true; }
+  const rows = await databasePool.query(`SELECT lt.id, lt.activity_type, lt.effective_date::text, lt.occurred_at, le.quantity::text, le.amount::text, le.fee_amount::text, le.tax_amount::text, le.currency_code FROM spaartrack.ledger_transaction lt JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id WHERE lt.portfolio_id = $1 AND le.instrument_id = $2 AND le.entry_kind = 'POSITION' AND lt.state = 'POSTED' AND lt.effective_date <= $3::date ORDER BY lt.effective_date, lt.occurred_at, lt.id`, [portfolioId, instrumentId, asOf]);
+  const transactions = (rows.rows as Array<Record<string, string>>).map((row) => ({ id: String(row.id), activityType: String(row.activity_type), effectiveDate: String(row.effective_date), occurredAt: String(row.occurred_at), quantity: Number(row.quantity || 0), amount: Number(row.amount || 0), fee: Number(row.fee_amount || 0), tax: Number(row.tax_amount || 0), currency: String(row.currency_code).trim().toUpperCase() }));
+  const specificIds: Record<string, Array<{ acquisition_transaction_id: string; quantity: number }>> = {};
+  const acquisitions = transactions.filter((transaction) => transaction.activityType === "BUY");
+  for (const sell of transactions.filter((transaction) => transaction.activityType === "SELL")) {
+    let remaining = sell.quantity;
+    specificIds[sell.id] = [];
+    for (const acquisition of acquisitions) {
+      const quantity = Math.min(remaining, acquisition.quantity);
+      if (quantity > 0) specificIds[sell.id].push({ acquisition_transaction_id: acquisition.id, quantity });
+      remaining -= quantity;
+      if (remaining <= 0) break;
+    }
+  }
+  const calculation = compareTaxLotMethods({ asOf, method, transactions, specificIds });
+  await auditEvent(req, res, userId, "CALCULATE", "TAX_LOT_METHODS", instrumentId, { portfolio_id: portfolioId, instrument_id: instrumentId, as_of: asOf, allocation_method: method, calculation_version: calculation.calculation_version, method_count: calculation.methods.length });
+  json(res, 200, { portfolio_id: portfolioId, instrument_id: instrumentId, ...calculation });
+  return true;
+}
+
+async function realizedGainsRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "GET" || !req.url?.startsWith("/api/v1/realized-gains")) return false;
+  const url = new URL(req.url, "http://localhost");
+  const portfolioId = url.searchParams.get("portfolio_id")?.trim() || "";
+  const instrumentId = url.searchParams.get("instrument_id")?.trim() || "";
+  const asOf = url.searchParams.get("as_of")?.trim() || new Date().toISOString().slice(0, 10);
+  const baseCurrency = (url.searchParams.get("base_currency")?.trim().toUpperCase() || "EUR");
+  const acquisitionFxRate = Number(url.searchParams.get("acquisition_fx_rate") || "1");
+  const disposalFxRate = Number(url.searchParams.get("disposal_fx_rate") || "1");
+  if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !/^[0-9a-f-]{36}$/i.test(instrumentId) || !/^\d{4}-\d{2}-\d{2}$/.test(asOf) || !/^[A-Z]{3}$/.test(baseCurrency) || !Number.isFinite(acquisitionFxRate) || acquisitionFxRate <= 0 || !Number.isFinite(disposalFxRate) || disposalFxRate <= 0) { json(res, 400, { error: "INVALID_REALIZED_GAIN_QUERY" }); return true; }
+  const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`, [portfolioId, userId]);
+  if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" }); return true; }
+  const rows = await databasePool.query(`SELECT lt.id, lt.activity_type, lt.effective_date::text, lt.occurred_at, le.quantity::text, le.amount::text, le.fee_amount::text, le.tax_amount::text, le.currency_code FROM spaartrack.ledger_transaction lt JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id WHERE lt.portfolio_id = $1 AND le.instrument_id = $2 AND le.entry_kind = 'POSITION' AND lt.state = 'POSTED' AND lt.effective_date <= $3::date ORDER BY lt.effective_date, lt.occurred_at, lt.id`, [portfolioId, instrumentId, asOf]);
+  const transactions = (rows.rows as Array<Record<string, string>>).map((row) => ({ id: String(row.id), activityType: String(row.activity_type), effectiveDate: String(row.effective_date), occurredAt: String(row.occurred_at), quantity: Number(row.quantity || 0), amount: Number(row.amount || 0), fee: Number(row.fee_amount || 0), tax: Number(row.tax_amount || 0), currency: String(row.currency_code).trim().toUpperCase(), fxRateToBase: String(row.activity_type) === "BUY" ? acquisitionFxRate : disposalFxRate }));
+  const calculation = calculateRealizedGains({ asOf, baseCurrency, transactions });
+  await auditEvent(req, res, userId, "CALCULATE", "REALIZED_GAINS", instrumentId, { portfolio_id: portfolioId, instrument_id: instrumentId, as_of: asOf, base_currency: baseCurrency, calculation_version: calculation.calculation_version, disposal_count: calculation.disposals.length });
+  json(res, 200, { portfolio_id: portfolioId, instrument_id: instrumentId, ...calculation });
+  return true;
+}
+
+async function fiscalYearReportRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "GET" || !req.url?.startsWith("/api/v1/fiscal-year-reports")) return false;
+  const url = new URL(req.url, "http://localhost");
+  const portfolioId = url.searchParams.get("portfolio_id")?.trim() || "";
+  const fiscalYear = Number(url.searchParams.get("fiscal_year") || "");
+  const jurisdiction = (url.searchParams.get("jurisdiction")?.trim().toUpperCase() || "NL");
+  const baseCurrency = (url.searchParams.get("base_currency")?.trim().toUpperCase() || "EUR");
+  const fiscalYearStartMonth = Number(url.searchParams.get("fiscal_year_start_month") || "1");
+  const fiscalYearStartDay = Number(url.searchParams.get("fiscal_year_start_day") || "1");
+  if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !Number.isInteger(fiscalYear) || !/^[A-Z]{2,8}$/.test(jurisdiction) || !/^[A-Z]{3}$/.test(baseCurrency)) { json(res, 400, { error: "INVALID_FISCAL_YEAR_QUERY" }); return true; }
+  const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`, [portfolioId, userId]);
+  if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" }); return true; }
+  try {
+    const periodStart = `${fiscalYear}-${String(fiscalYearStartMonth).padStart(2, "0")}-${String(fiscalYearStartDay).padStart(2, "0")}`;
+    const nextYear = fiscalYearStartMonth === 1 && fiscalYearStartDay === 1 ? fiscalYear + 1 : fiscalYear + 1;
+    const incomeRows = await databasePool.query(`
+      SELECT id, event_type, status, payment_date::text, gross_amount::text, tax_amount::text, fee_amount::text, net_amount::text, currency_code
+      FROM spaartrack.income_event
+      WHERE portfolio_id = $1 AND status = 'PAID' AND payment_date >= $2::date
+        AND payment_date < make_date($3, $4, $5)
+      ORDER BY payment_date, id`, [portfolioId, periodStart, nextYear, fiscalYearStartMonth, fiscalYearStartDay]);
+    const tradeRows = await databasePool.query(`
+      SELECT lt.id, lt.activity_type, lt.effective_date::text, lt.occurred_at, le.quantity::text, le.amount::text,
+             le.fee_amount::text, le.tax_amount::text, le.currency_code, le.instrument_id
+      FROM spaartrack.ledger_transaction lt
+      JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+      WHERE lt.portfolio_id = $1 AND le.entry_kind = 'POSITION' AND lt.state = 'POSTED'
+      ORDER BY le.instrument_id, lt.effective_date, lt.occurred_at, lt.id`, [portfolioId]);
+    const byInstrument = new Map<string, Array<Record<string, string>>>();
+    for (const row of tradeRows.rows as Array<Record<string, string>>) {
+      const key = String(row.instrument_id);
+      const current = byInstrument.get(key) || [];
+      current.push(row);
+      byInstrument.set(key, current);
+    }
+    const realizedGains = [] as Array<{ id: string; disposalDate: string; taxableResult: number; currency: string; sourceActivityId: string }>;
+    for (const rows of byInstrument.values()) {
+      const calculation = calculateRealizedGains({
+        asOf: "2999-12-31", baseCurrency,
+        transactions: rows.map((row) => ({ id: String(row.id), activityType: String(row.activity_type), effectiveDate: String(row.effective_date), occurredAt: String(row.occurred_at), quantity: Number(row.quantity || 0), amount: Number(row.amount || 0), fee: Number(row.fee_amount || 0), tax: Number(row.tax_amount || 0), currency: String(row.currency_code).trim().toUpperCase(), fxRateToBase: 1 }))
+      });
+      for (const item of calculation.disposals) realizedGains.push({ id: `${item.acquisition_transaction_id}-${item.disposal_transaction_id}`, disposalDate: rows.find((row) => String(row.id) === item.disposal_transaction_id)?.effective_date || periodStart, taxableResult: Number(item.taxable_result), currency: String(item.currency), sourceActivityId: String(item.disposal_transaction_id) });
+    }
+    const report = buildFiscalYearReport({
+      fiscalYear, jurisdiction, fiscalYearStartMonth, fiscalYearStartDay, baseCurrency,
+      incomeEvents: (incomeRows.rows as Array<Record<string, string>>).map((row) => ({ id: String(row.id), eventType: String(row.event_type), status: String(row.status), paymentDate: String(row.payment_date), grossAmount: Number(row.gross_amount || 0), taxAmount: Number(row.tax_amount || 0), feeAmount: Number(row.fee_amount || 0), netAmount: Number(row.net_amount || 0), currency: String(row.currency_code).trim().toUpperCase() })),
+      realizedGains
+    });
+    await auditEvent(req, res, userId, "CALCULATE", "FISCAL_YEAR_REPORT", portfolioId, { portfolio_id: portfolioId, fiscal_year: fiscalYear, jurisdiction, calculation_version: report.calculation_version, income_count: report.income.items.length, realized_gain_count: report.realized_gains.items.length });
+    json(res, 200, { portfolio_id: portfolioId, ...report });
+  } catch (error) {
+    if ((error as Error).message === "INVALID_FISCAL_YEAR_CONFIGURATION") { json(res, 400, { error: "INVALID_FISCAL_YEAR_CONFIGURATION" }); return true; }
+    throw error;
+  }
+  return true;
+}
+
+async function taxLossHarvestingRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "GET" || !req.url?.startsWith("/api/v1/tax-loss-harvesting")) return false;
+  const url = new URL(req.url, "http://localhost");
+  const portfolioId = url.searchParams.get("portfolio_id")?.trim() || "";
+  const asOf = url.searchParams.get("as_of")?.trim() || new Date().toISOString().slice(0, 10);
+  const estimatedTaxRate = Number(url.searchParams.get("estimated_tax_rate") || "0.25");
+  if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !/^\d{4}-\d{2}-\d{2}$/.test(asOf) || !Number.isFinite(estimatedTaxRate) || estimatedTaxRate < 0 || estimatedTaxRate > 1) {
+    json(res, 400, { error: "INVALID_TAX_LOSS_HARVESTING_QUERY" }); return true;
+  }
+  const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`, [portfolioId, userId]);
+  if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" }); return true; }
+  const rows = await databasePool.query(`
+    SELECT lt.id, lt.activity_type, lt.effective_date::text, lt.occurred_at,
+           le.quantity::text, le.amount::text, le.fee_amount::text, le.tax_amount::text,
+           le.currency_code, le.instrument_id::text, i.name AS instrument_name,
+           latest.price::text AS market_price
+    FROM spaartrack.ledger_transaction lt
+    JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+    JOIN spaartrack.instrument i ON i.id = le.instrument_id
+    LEFT JOIN LATERAL (
+      SELECT ip.price FROM spaartrack.instrument_price ip
+      WHERE ip.instrument_id = le.instrument_id AND ip.price_at <= ($2::date + interval '1 day')
+      ORDER BY ip.price_at DESC, ip.captured_at DESC, ip.source DESC LIMIT 1
+    ) latest ON true
+    WHERE lt.portfolio_id = $1 AND le.entry_kind = 'POSITION' AND lt.state = 'POSTED'
+      AND lt.effective_date <= $2::date
+    ORDER BY le.instrument_id, lt.effective_date, lt.occurred_at, lt.id`, [portfolioId, asOf]);
+  const grouped = new Map<string, Array<Record<string, string>>>();
+  const metadata = new Map<string, { name: string; currency: string; marketPrice: number }>();
+  for (const row of rows.rows as Array<Record<string, string>>) {
+    const instrumentId = String(row.instrument_id);
+    const current = grouped.get(instrumentId) || [];
+    current.push(row);
+    grouped.set(instrumentId, current);
+    metadata.set(instrumentId, { name: String(row.instrument_name), currency: String(row.currency_code).trim().toUpperCase(), marketPrice: Number(row.market_price || 0) });
+  }
+  const candidates: Array<Record<string, unknown>> = [];
+  for (const [instrumentId, instrumentRows] of grouped) {
+    const details = metadata.get(instrumentId)!;
+    const lots = buildTaxLots({ asOf, transactions: instrumentRows.map((row) => ({
+      id: String(row.id), activityType: String(row.activity_type), effectiveDate: String(row.effective_date), occurredAt: String(row.occurred_at),
+      quantity: Number(row.quantity || 0), amount: Number(row.amount || 0), fee: Number(row.fee_amount || 0), tax: Number(row.tax_amount || 0), currency: details.currency
+    })) }).lots;
+    const calculation = buildTaxLossHarvestingCandidates({ asOf, estimatedTaxRate, lots: lots.filter((lot) => Number(lot.remaining_quantity) > 0).map((lot) => ({
+      acquisitionTransactionId: lot.acquisition_transaction_id, acquisitionDate: lot.acquisition_date, remainingQuantity: Number(lot.remaining_quantity),
+      costBasis: Number(lot.cost_basis), marketValue: Number(lot.remaining_quantity) * details.marketPrice, currency: details.currency
+    })) });
+    candidates.push(...calculation.candidates.map((candidate) => ({ ...candidate, instrument_id: instrumentId, instrument_name: details.name, market_price: fixedAmount(details.marketPrice) })));
+  }
+  const totalLoss = candidates.reduce((sum, candidate) => sum + Number(candidate.unrealized_loss), 0);
+  const totalSaving = candidates.reduce((sum, candidate) => sum + Number(candidate.estimated_tax_saving), 0);
+  const calculation = { as_of: asOf, estimated_tax_rate: estimatedTaxRate.toFixed(12), candidates, totals: { unrealized_loss: fixedAmount(totalLoss), estimated_tax_saving: fixedAmount(totalSaving) }, calculation_version: "tax-loss-harvesting-v1", source: "canonical-ledger", read_only: true };
+  await auditEvent(req, res, userId, "CALCULATE", "TAX_LOSS_HARVESTING", portfolioId, { portfolio_id: portfolioId, as_of: asOf, calculation_version: calculation.calculation_version, candidate_count: candidates.length });
+  json(res, 200, { portfolio_id: portfolioId, ...calculation });
+  return true;
+}
+
+async function washSaleRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "GET" || !req.url?.startsWith("/api/v1/wash-sale-risks")) return false;
+  const url = new URL(req.url, "http://localhost");
+  const portfolioId = url.searchParams.get("portfolio_id")?.trim() || "";
+  const asOf = url.searchParams.get("as_of")?.trim() || new Date().toISOString().slice(0, 10);
+  const windowDays = Number(url.searchParams.get("window_days") || "30");
+  if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !/^\d{4}-\d{2}-\d{2}$/.test(asOf) || !Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) { json(res, 400, { error: "INVALID_WASH_SALE_QUERY" }); return true; }
+  const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`, [portfolioId, userId]);
+  if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" }); return true; }
+  const rows = await databasePool.query(`
+    SELECT lt.id, lt.activity_type, lt.effective_date::text, lt.occurred_at,
+           le.quantity::text, le.amount::text, le.fee_amount::text, le.tax_amount::text,
+           le.currency_code, le.instrument_id::text, i.name AS instrument_name
+    FROM spaartrack.ledger_transaction lt
+    JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+    JOIN spaartrack.instrument i ON i.id = le.instrument_id
+    WHERE lt.portfolio_id = $1 AND le.entry_kind = 'POSITION' AND lt.state = 'POSTED'
+      AND lt.effective_date <= $2::date
+    ORDER BY le.instrument_id, lt.effective_date, lt.occurred_at, lt.id`, [portfolioId, asOf]);
+  const grouped = new Map<string, Array<Record<string, string>>>();
+  for (const row of rows.rows as Array<Record<string, string>>) {
+    const instrumentId = String(row.instrument_id);
+    const current = grouped.get(instrumentId) || [];
+    current.push(row);
+    grouped.set(instrumentId, current);
+  }
+  const lossSales: Array<{ id: string; instrumentId: string; instrumentName: string; disposalDate: string; quantity: number; lossAmount: number; currency: string }> = [];
+  const purchases: Array<{ id: string; instrumentId: string; instrumentName: string; purchaseDate: string; quantity: number; currency: string }> = [];
+  for (const [instrumentId, instrumentRows] of grouped) {
+    const lots: Array<{ id: string; remaining: number; unitCost: number }> = [];
+    for (const row of instrumentRows) {
+      const quantity = Number(row.quantity || 0);
+      const amount = Number(row.amount || 0);
+      const fee = Number(row.fee_amount || 0);
+      const tax = Number(row.tax_amount || 0);
+      const instrumentName = String(row.instrument_name);
+      const currency = String(row.currency_code).trim().toUpperCase();
+      if (String(row.activity_type) === "BUY") {
+        lots.push({ id: String(row.id), remaining: quantity, unitCost: (amount + fee + tax) / quantity });
+        purchases.push({ id: String(row.id), instrumentId, instrumentName, purchaseDate: String(row.effective_date), quantity, currency });
+      } else if (String(row.activity_type) === "SELL") {
+        let remaining = quantity;
+        let loss = 0;
+        while (remaining > 0.000000001) {
+          const lot = lots.find((candidate) => candidate.remaining > 0.000000001);
+          if (!lot) break;
+          const take = Math.min(remaining, lot.remaining);
+          loss += ((amount - fee) * take / quantity) - lot.unitCost * take;
+          lot.remaining -= take;
+          remaining -= take;
+        }
+        if (loss < -0.000000001) lossSales.push({ id: String(row.id), instrumentId, instrumentName, disposalDate: String(row.effective_date), quantity, lossAmount: Math.abs(loss), currency });
+      }
+    }
+  }
+  const calculation = detectWashSaleRisks({ windowDays, lossSales, purchases });
+  await auditEvent(req, res, userId, "CALCULATE", "WASH_SALE_RISK", portfolioId, { portfolio_id: portfolioId, as_of: asOf, window_days: windowDays, calculation_version: calculation.calculation_version, risk_count: calculation.risks.length });
+  json(res, 200, { portfolio_id: portfolioId, as_of: asOf, ...calculation });
+  return true;
+}
+
+async function taxWorksheetRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "GET" || !req.url?.startsWith("/api/v1/tax-worksheets")) return false;
+  const url = new URL(req.url, "http://localhost");
+  const portfolioId = url.searchParams.get("portfolio_id")?.trim() || "";
+  const jurisdiction = (url.searchParams.get("jurisdiction")?.trim().toUpperCase() || "NL");
+  const taxYear = Number(url.searchParams.get("tax_year") || "");
+  if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !Number.isInteger(taxYear) || !["NL", "UK"].includes(jurisdiction)) { json(res, 400, { error: "INVALID_TAX_WORKSHEET_QUERY" }); return true; }
+  const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`, [portfolioId, userId]);
+  if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" }); return true; }
+  const periodStart = jurisdiction === "NL" ? `${taxYear}-01-01` : `${taxYear}-04-06`;
+  const periodEndExclusive = jurisdiction === "NL" ? `${taxYear + 1}-01-01` : `${taxYear + 1}-04-06`;
+  const periodEndInclusive = jurisdiction === "NL" ? `${taxYear}-12-31` : `${taxYear + 1}-04-05`;
+  const incomeRows = await databasePool.query(`SELECT id, event_type, gross_amount::text, tax_amount::text, net_amount::text, currency_code FROM spaartrack.income_event WHERE portfolio_id = $1 AND status = 'PAID' AND payment_date >= $2::date AND payment_date < $3::date ORDER BY payment_date, id`, [portfolioId, periodStart, periodEndExclusive]);
+  const tradeRows = await databasePool.query(`SELECT lt.id, lt.activity_type, lt.effective_date::text, lt.occurred_at, le.quantity::text, le.amount::text, le.fee_amount::text, le.tax_amount::text, le.currency_code, le.instrument_id::text FROM spaartrack.ledger_transaction lt JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id WHERE lt.portfolio_id = $1 AND le.entry_kind = 'POSITION' AND lt.state = 'POSTED' AND lt.effective_date <= $2::date ORDER BY le.instrument_id, lt.effective_date, lt.occurred_at, lt.id`, [portfolioId, periodEndInclusive]);
+  const grouped = new Map<string, Array<Record<string, string>>>();
+  for (const row of tradeRows.rows as Array<Record<string, string>>) { const key = String(row.instrument_id); const current = grouped.get(key) || []; current.push(row); grouped.set(key, current); }
+  const gains: Array<{ taxableResult: number; currency: string; sourceActivityId: string }> = [];
+  for (const rows of grouped.values()) {
+    const calculation = calculateRealizedGains({ asOf: periodEndInclusive, baseCurrency: "EUR", transactions: rows.map((row) => ({ id: String(row.id), activityType: String(row.activity_type), effectiveDate: String(row.effective_date), occurredAt: String(row.occurred_at), quantity: Number(row.quantity || 0), amount: Number(row.amount || 0), fee: Number(row.fee_amount || 0), tax: Number(row.tax_amount || 0), currency: String(row.currency_code).trim().toUpperCase(), fxRateToBase: 1 })) });
+    for (const item of calculation.disposals) { const disposalDate = rows.find((row) => String(row.id) === item.disposal_transaction_id)?.effective_date || ""; if (disposalDate >= periodStart && disposalDate < periodEndExclusive) gains.push({ taxableResult: Number(item.taxable_result), currency: String(item.currency), sourceActivityId: String(item.disposal_transaction_id) }); }
+  }
+  const worksheet = buildTaxWorksheet({ jurisdiction, taxYear, ownerScope: `portfolio:${portfolioId}`, income: (incomeRows.rows as Array<Record<string, string>>).map((row) => ({ kind: String(row.event_type), gross: Number(row.gross_amount || 0), tax: Number(row.tax_amount || 0), net: Number(row.net_amount || 0), currency: String(row.currency_code).trim().toUpperCase() })), gains });
+  await auditEvent(req, res, userId, "CALCULATE", "TAX_WORKSHEET", portfolioId, { portfolio_id: portfolioId, jurisdiction, tax_year: taxYear, ruleset: worksheet.ruleset, calculation_version: worksheet.calculation_version });
+  json(res, 200, { portfolio_id: portfolioId, ...worksheet });
+  return true;
+}
+
 async function costBasisRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   if (environment !== "local") return false;
   const userId = await authenticatedUserId(req);
@@ -3203,6 +4219,1447 @@ function xirr(cashflows: Array<{ amount: number; date: string }>, endValue: numb
   return ((low + high) / 2) * 100;
 }
 
+async function riskContributionRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/risk-contributions")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "GET") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+  try {
+    const parsed = new URL(req.url, "http://localhost");
+    const portfolioId = parsed.searchParams.get("portfolio_id")?.trim() || "";
+    const periodStart = parsed.searchParams.get("period_start")?.trim() || "";
+    const periodEnd = parsed.searchParams.get("period_end")?.trim() || "";
+    if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart) || !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd) || periodStart > periodEnd) { json(res, 400, { error: "INVALID_RISK_CONTRIBUTION_QUERY" }); return true; }
+    const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`, [portfolioId, userId]);
+    if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ACCESS_FORBIDDEN" }); return true; }
+    const rows = await databasePool.query(`SELECT DISTINCT ON (ps.instrument_id) ps.instrument_id::text, i.name, i.asset_class, ps.portfolio_weight::text, snapshot.snapshot_at::text FROM spaartrack.position_snapshot ps JOIN spaartrack.portfolio_snapshot snapshot ON snapshot.id = ps.portfolio_snapshot_id JOIN spaartrack.instrument i ON i.id = ps.instrument_id WHERE snapshot.portfolio_id = $1 AND snapshot.snapshot_at::date BETWEEN $2::date AND $3::date AND COALESCE(ps.market_value, 0) > 0 ORDER BY ps.instrument_id, snapshot.snapshot_at DESC`, [portfolioId, periodStart, periodEnd]);
+    if (!rows.rowCount) { json(res, 409, { error: "RISK_CONTRIBUTION_HOLDINGS_REQUIRED", required: { period_start: periodStart, period_end: periodEnd } }); return true; }
+    const riskScores: Record<string, number> = { EQUITY: 1, FIXED_INCOME: 0.5, DERIVATIVE: 1.4, CRYPTO: 1.6, CASH: 0.1, REAL_ASSET: 0.7, LIABILITY: 0.2, OTHER: 0.8 };
+    const holdings = rows.rows.map((row) => ({ holdingId: String(row.instrument_id), name: String(row.name), category: String(row.asset_class), portfolioWeight: Number(row.portfolio_weight || 0), riskScore: riskScores[String(row.asset_class)] ?? 0.8 }));
+    const calculation = calculateRiskContributions(holdings);
+    const persistedIds: string[] = [];
+    for (const holding of calculation.holdings) {
+      const inserted = await databasePool.query(`INSERT INTO spaartrack.risk_metric_snapshot (portfolio_id, instrument_id, period_start, period_end, risk_contribution, calculation_version) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, [portfolioId, holding.holding_id, periodStart, periodEnd, holding.contribution_pct, calculation.methodology]);
+      persistedIds.push(String(inserted.rows[0].id));
+    }
+    await auditEvent(req, res, userId, "CALCULATE", "RISK_CONTRIBUTION_SNAPSHOT", persistedIds[0], { portfolio_id: portfolioId, period_start: periodStart, period_end: periodEnd, methodology: calculation.methodology, holding_count: calculation.holdings.length });
+    json(res, 200, { portfolio_id: portfolioId, period: { start: periodStart, end: periodEnd }, snapshot_as_of: rows.rows[0].snapshot_at, holdings: calculation.holdings, categories: calculation.categories, total_contribution_pct: calculation.total_contribution_pct, methodology: calculation.methodology, source: "position_snapshot", snapshot_ids: persistedIds });
+  } catch (error) {
+    console.error(redactedLog({ level: "error", operation: "risk_contribution_failed", error: error instanceof Error ? error.message : String(error) }));
+    if (!res.writableEnded) json(res, 400, { error: "RISK_CONTRIBUTION_REQUEST_FAILED" });
+  }
+  return true;
+}
+
+async function etfExposureRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || (!req.url?.startsWith("/api/v1/etf-exposure") && !req.url?.startsWith("/api/v1/instrument-lookthrough"))) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  try {
+    const parsed = new URL(req.url, "http://localhost");
+    if (req.method === "POST" && parsed.pathname === "/api/v1/instrument-lookthrough") {
+      const body = await readJson(req);
+      const portfolioId = typeof body.portfolio_id === "string" ? body.portfolio_id.trim() : "";
+      const etfInstrumentId = typeof body.etf_instrument_id === "string" ? body.etf_instrument_id.trim() : "";
+      const source = typeof body.source === "string" ? body.source.trim() : "";
+      const sourceVersion = typeof body.source_version === "string" ? body.source_version.trim() : "";
+      const asOf = typeof body.as_of === "string" ? body.as_of.trim() : "";
+      const components = Array.isArray(body.components) ? body.components : [];
+      if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !/^[0-9a-f-]{36}$/i.test(etfInstrumentId) || !source || !sourceVersion || !/^\d{4}-\d{2}-\d{2}$/.test(asOf) || !components.length) {
+        json(res, 400, { error: "ETF_LOOKTHROUGH_SOURCE_REQUIRED" }); return true;
+      }
+      const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL AND role IN ('OWNER', 'EDITOR')`, [portfolioId, userId]);
+      if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" }); return true; }
+      const etf = await databasePool.query(`SELECT id, instrument_type FROM spaartrack.instrument WHERE id = $1`, [etfInstrumentId]);
+      if (!etf.rowCount || etf.rows[0].instrument_type !== "ETF") { json(res, 400, { error: "ETF_INSTRUMENT_REQUIRED" }); return true; }
+      const normalized = components.map((component) => ({
+        underlying_instrument_id: typeof component.underlying_instrument_id === "string" && component.underlying_instrument_id.trim() ? component.underlying_instrument_id.trim() : null,
+        underlying_name: typeof component.underlying_name === "string" ? component.underlying_name.trim() : "",
+        weight: Number(component.weight),
+        resolution_status: component.resolution_status === "RESOLVED" ? "RESOLVED" : "UNRESOLVED"
+      }));
+      if (normalized.some((component) => !component.underlying_name || !Number.isFinite(component.weight) || component.weight < 0 || component.weight > 1 || (component.resolution_status === "RESOLVED" ? !component.underlying_instrument_id : component.underlying_instrument_id))) {
+        json(res, 400, { error: "INVALID_LOOKTHROUGH_COMPONENT" }); return true;
+      }
+      const totalWeight = normalized.reduce((sum, component) => sum + component.weight, 0);
+      if (Math.abs(totalWeight - 1) > 0.000001) { json(res, 400, { error: "INVALID_LOOKTHROUGH_COMPONENT_TOTAL" }); return true; }
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(`DELETE FROM spaartrack.instrument_lookthrough_component WHERE etf_instrument_id = $1 AND source = $2 AND source_version = $3 AND as_of = $4`, [etfInstrumentId, source, sourceVersion, asOf]);
+        const inserted: string[] = [];
+        for (const component of normalized) {
+          const result = await client.query(`INSERT INTO spaartrack.instrument_lookthrough_component (etf_instrument_id, underlying_instrument_id, underlying_name, weight, resolution_status, source, source_version, as_of) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`, [etfInstrumentId, component.underlying_instrument_id, component.underlying_name, component.weight, component.resolution_status, source, sourceVersion, asOf]);
+          inserted.push(String(result.rows[0].id));
+        }
+        await client.query("COMMIT");
+        await auditEvent(req, res, userId, "CREATE", "ETF_LOOKTHROUGH_SOURCE", inserted[0], { portfolio_id: portfolioId, etf_instrument_id: etfInstrumentId, source, source_version: sourceVersion, as_of: asOf, component_count: inserted.length });
+        json(res, 201, { portfolio_id: portfolioId, etf_instrument_id: etfInstrumentId, source, source_version: sourceVersion, as_of: asOf, component_ids: inserted, calculation_version: "etf-look-through-source-v1" });
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally { client.release(); }
+      return true;
+    }
+    if (req.method !== "GET" || parsed.pathname !== "/api/v1/etf-exposure") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+    const portfolioId = parsed.searchParams.get("portfolio_id")?.trim() || "";
+    const periodStart = parsed.searchParams.get("period_start")?.trim() || "";
+    const periodEnd = parsed.searchParams.get("period_end")?.trim() || "";
+    if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart) || !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd) || periodStart > periodEnd) { json(res, 400, { error: "INVALID_ETF_EXPOSURE_QUERY" }); return true; }
+    const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`, [portfolioId, userId]);
+    if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ACCESS_FORBIDDEN" }); return true; }
+    const rows = await databasePool.query(`SELECT DISTINCT ON (ps.instrument_id) ps.instrument_id::text, i.name, ps.portfolio_weight::text, snapshot.snapshot_at::text FROM spaartrack.position_snapshot ps JOIN spaartrack.portfolio_snapshot snapshot ON snapshot.id = ps.portfolio_snapshot_id JOIN spaartrack.instrument i ON i.id = ps.instrument_id WHERE snapshot.portfolio_id = $1 AND snapshot.snapshot_at::date BETWEEN $2::date AND $3::date AND i.instrument_type = 'ETF' AND COALESCE(ps.market_value, 0) > 0 ORDER BY ps.instrument_id, snapshot.snapshot_at DESC`, [portfolioId, periodStart, periodEnd]);
+    if (!rows.rowCount) { json(res, 409, { error: "ETF_HOLDINGS_REQUIRED", required: { period_start: periodStart, period_end: periodEnd } }); return true; }
+    const holdings = [];
+    for (const row of rows.rows) {
+      const sourceResult = await databasePool.query(`SELECT source, source_version, as_of::text FROM spaartrack.instrument_lookthrough_component WHERE etf_instrument_id = $1 AND as_of <= $2::date ORDER BY as_of DESC, id DESC LIMIT 1`, [row.instrument_id, periodEnd]);
+      if (!sourceResult.rowCount) { json(res, 409, { error: "ETF_LOOKTHROUGH_SOURCE_REQUIRED", etf_instrument_id: row.instrument_id }); return true; }
+      const source = sourceResult.rows[0];
+      const components = await databasePool.query(`SELECT underlying_instrument_id::text, underlying_name, weight::text, resolution_status FROM spaartrack.instrument_lookthrough_component WHERE etf_instrument_id = $1 AND source = $2 AND source_version = $3 AND as_of = $4::date ORDER BY id`, [row.instrument_id, source.source, source.source_version, source.as_of]);
+      holdings.push({ instrumentId: String(row.instrument_id), name: String(row.name), portfolioWeight: Number(row.portfolio_weight || 0), components: components.rows.map((component) => ({ holdingId: component.underlying_instrument_id ? String(component.underlying_instrument_id) : null, name: String(component.underlying_name), weight: Number(component.weight), resolved: component.resolution_status === "RESOLVED" })) });
+    }
+    const sources = await databasePool.query(`SELECT DISTINCT ON (etf_instrument_id) etf_instrument_id::text, source, source_version, as_of::text FROM spaartrack.instrument_lookthrough_component WHERE etf_instrument_id = ANY($1::uuid[]) AND as_of <= $2::date ORDER BY etf_instrument_id, as_of DESC, id DESC`, [holdings.map((holding) => holding.instrumentId), periodEnd]);
+    const calculation = calculateEtfExposure({ source: String(sources.rows[0].source), sourceVersion: String(sources.rows[0].source_version), asOf: String(sources.rows[0].as_of), holdings });
+    const snapshotIds: string[] = [];
+    for (const holding of holdings) {
+      const inserted = await databasePool.query(`INSERT INTO spaartrack.risk_metric_snapshot (portfolio_id, instrument_id, period_start, period_end, calculation_version) VALUES ($1, $2, $3, $4, $5) RETURNING id`, [portfolioId, holding.instrumentId, periodStart, periodEnd, calculation.methodology]);
+      snapshotIds.push(String(inserted.rows[0].id));
+    }
+    await auditEvent(req, res, userId, "CALCULATE", "ETF_LOOKTHROUGH_SNAPSHOT", snapshotIds[0], { portfolio_id: portfolioId, period_start: periodStart, period_end: periodEnd, source: calculation.source, source_version: calculation.source_version, as_of: calculation.as_of, methodology: calculation.methodology, unresolved_count: calculation.unresolved_holdings.length });
+    json(res, 200, { portfolio_id: portfolioId, period: { start: periodStart, end: periodEnd }, etf_count: holdings.length, ...calculation, snapshot_ids: snapshotIds, source_type: "instrument_lookthrough_component" });
+  } catch (error) {
+    console.error(redactedLog({ level: "error", operation: "etf_exposure_failed", error: error instanceof Error ? error.message : String(error) }));
+    if (!res.writableEnded) json(res, 400, { error: "ETF_EXPOSURE_REQUEST_FAILED" });
+  }
+  return true;
+}
+
+async function allocationTargetsRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/allocation-targets")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  try {
+    const parsed = new URL(req.url, "http://localhost");
+    const portfolioId = parsed.searchParams.get("portfolio_id")?.trim() || "";
+    if (!/^[0-9a-f-]{36}$/i.test(portfolioId)) { json(res, 400, { error: "INVALID_ALLOCATION_TARGET_QUERY" }); return true; }
+    const access = await databasePool.query(`SELECT role FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`, [portfolioId, userId]);
+    if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ACCESS_FORBIDDEN" }); return true; }
+    if (req.method === "GET") {
+      const dimension = parsed.searchParams.get("dimension")?.trim().toUpperCase() || "";
+      const params: string[] = [portfolioId];
+      let where = "portfolio_id = $1";
+      if (dimension) { params.push(dimension); where += " AND dimension = $2"; }
+      const result = await databasePool.query(`SELECT dimension, target_key, target_label, target_percentage::text, calculation_version, updated_at::text FROM spaartrack.allocation_target WHERE ${where} ORDER BY dimension, target_key`, params);
+      const grouped = new Map<string, Array<Record<string, unknown>>>();
+      for (const row of result.rows) {
+        const targets = grouped.get(String(row.dimension)) || [];
+        targets.push({ key: String(row.target_key), label: String(row.target_label), target_percentage: Number(row.target_percentage) });
+        grouped.set(String(row.dimension), targets);
+      }
+      json(res, 200, { portfolio_id: portfolioId, dimensions: [...grouped.entries()].map(([name, targets]) => ({ dimension: name, targets, total_percentage: Number(targets.reduce((sum, target) => sum + Number(target.target_percentage), 0).toFixed(4)), calculation_version: "allocation-targets-v1" })), calculation_version: "allocation-targets-v1", source: "allocation_target" });
+      return true;
+    }
+    if (req.method !== "POST") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+    if (!["OWNER", "EDITOR"].includes(String(access.rows[0].role))) { json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" }); return true; }
+    const body = await readJson(req);
+    const inputTargets = Array.isArray(body.targets) ? body.targets.map((target) => ({ key: String((target as Record<string, unknown>).key || ""), label: String((target as Record<string, unknown>).label || ""), targetPercentage: Number((target as Record<string, unknown>).target_percentage ?? (target as Record<string, unknown>).targetPercentage) })) : [];
+    const validated = validateAllocationTargets({ dimension: String(body.dimension || ""), targets: inputTargets });
+    const client = await databasePool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`DELETE FROM spaartrack.allocation_target WHERE portfolio_id = $1 AND dimension = $2`, [portfolioId, validated.dimension]);
+      for (const target of validated.targets) await client.query(`INSERT INTO spaartrack.allocation_target (portfolio_id, dimension, target_key, target_label, target_percentage, calculation_version) VALUES ($1, $2, $3, $4, $5, $6)`, [portfolioId, validated.dimension, target.key, target.label, target.target_percentage, validated.calculation_version]);
+      await client.query("COMMIT");
+    } catch (error) { await client.query("ROLLBACK"); throw error; }
+    finally { client.release(); }
+    await auditEvent(req, res, userId, "UPDATE", "ALLOCATION_TARGETS", portfolioId, { portfolio_id: portfolioId, dimension: validated.dimension, total_percentage: validated.total_percentage, target_count: validated.targets.length, calculation_version: validated.calculation_version });
+    json(res, 201, { portfolio_id: portfolioId, ...validated, source: "allocation_target", read_only_projection: true });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "ALLOCATION_TARGETS_REQUEST_FAILED";
+    if (["INVALID_ALLOCATION_DIMENSION", "ALLOCATION_TARGETS_REQUIRED", "DUPLICATE_ALLOCATION_TARGET", "INVALID_ALLOCATION_TARGET_PERCENTAGE", "ALLOCATION_TARGET_TOTAL_MUST_EQUAL_100"].includes(message)) { json(res, 400, { error: message }); return true; }
+    console.error(redactedLog({ level: "error", operation: "allocation_targets_failed", error: message }));
+    if (!res.writableEnded) json(res, 400, { error: "ALLOCATION_TARGETS_REQUEST_FAILED" });
+  }
+  return true;
+}
+
+async function screenerWatchlistRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/screener-watchlists")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  try {
+    const parsed = new URL(req.url, "http://localhost");
+    if (req.method === "GET") {
+      const portfolioId = parsed.searchParams.get("portfolio_id")?.trim() || "";
+      if (portfolioId && !/^[0-9a-f-]{36}$/i.test(portfolioId)) { json(res, 400, { error: "INVALID_SCREENER_PORTFOLIO" }); return true; }
+      const result = await databasePool.query(`SELECT id, portfolio_id, name, filters, calculation_version, created_at::text, updated_at::text FROM spaartrack.screener_watchlist WHERE user_id = $1 AND ($2 = '' OR portfolio_id = $2::uuid) ORDER BY updated_at DESC, id`, [userId, portfolioId]);
+      json(res, 200, { watchlists: result.rows, calculation_version: "screener-watchlist-v1", source: "portfolio_snapshot + position_snapshot + risk_metric_snapshot", read_only: true });
+      return true;
+    }
+    if (req.method !== "POST" || parsed.pathname !== "/api/v1/screener-watchlists") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+    const body = await readJson(req);
+    const portfolioId = typeof body.portfolio_id === "string" ? body.portfolio_id.trim() : null;
+    if (portfolioId && !/^[0-9a-f-]{36}$/i.test(portfolioId)) { json(res, 400, { error: "INVALID_SCREENER_PORTFOLIO" }); return true; }
+    if (portfolioId) {
+      const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL AND role IN ('OWNER', 'EDITOR')`, [portfolioId, userId]);
+      if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" }); return true; }
+    }
+    const definition = buildScreenerDefinition({ name: String(body.name || ""), portfolioId, filters: body.filters as never });
+    const inserted = await databasePool.query(`INSERT INTO spaartrack.screener_watchlist (user_id, portfolio_id, name, filters, calculation_version) VALUES ($1, $2, $3, $4::jsonb, $5) RETURNING id, created_at::text, updated_at::text`, [userId, portfolioId, definition.name, JSON.stringify(definition.filters), definition.calculation_version]);
+    const row = inserted.rows[0];
+    await auditEvent(req, res, userId, "CREATE", "SCREENER_WATCHLIST", String(row.id), { portfolio_id: portfolioId, dimensions: Object.keys(definition.filters), calculation_version: definition.calculation_version, read_only: true });
+    json(res, 201, { id: row.id, watchlist_id: row.id, portfolio_id: portfolioId, name: definition.name, filters: definition.filters, calculation_version: definition.calculation_version, created_at: row.created_at, updated_at: row.updated_at, source: "portfolio_snapshot + position_snapshot + risk_metric_snapshot", read_only: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "SCREENER_WATCHLIST_REQUEST_FAILED";
+    if (["INVALID_SCREENER_DEFINITION", "INVALID_SCREENER_NAME", "INVALID_SCREENER_FILTERS", "INVALID_SCREENER_FILTER_DIMENSION", "INVALID_SCREENER_FILTER", "INVALID_SCREENER_FILTER_FIELD", "INVALID_SCREENER_FILTER_OPERATOR", "INVALID_SCREENER_FILTER_VALUE", "SCREENER_FILTERS_REQUIRED"].includes(message)) { json(res, 400, { error: message }); return true; }
+    console.error(redactedLog({ level: "error", operation: "screener_watchlist_failed", error: message }));
+    if (!res.writableEnded) json(res, 400, { error: "SCREENER_WATCHLIST_REQUEST_FAILED" });
+  }
+  return true;
+}
+
+async function rebalanceSuggestionsRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/rebalance-suggestions")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "GET") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+  try {
+    const parsed = new URL(req.url, "http://localhost");
+    const portfolioId = parsed.searchParams.get("portfolio_id")?.trim() || "";
+    const dimension = parsed.searchParams.get("dimension")?.trim().toUpperCase() || "ASSET_CLASS";
+    const asOf = parsed.searchParams.get("as_of")?.trim() || "9999-12-31";
+    if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !["ASSET_CLASS", "SECTOR", "REGION", "CURRENCY", "HOLDING"].includes(dimension) || !/^\d{4}-\d{2}-\d{2}$/.test(asOf)) { json(res, 400, { error: "INVALID_REBALANCE_QUERY" }); return true; }
+    const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`, [portfolioId, userId]);
+    if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ACCESS_FORBIDDEN" }); return true; }
+    const snapshot = await databasePool.query(`SELECT id, snapshot_at::text, portfolio_value::text, free_cash::text FROM spaartrack.portfolio_snapshot WHERE portfolio_id = $1 AND snapshot_at::date <= $2::date ORDER BY snapshot_at DESC, id DESC LIMIT 1`, [portfolioId, asOf]);
+    if (!snapshot.rowCount) { json(res, 409, { error: "REBALANCE_SNAPSHOT_REQUIRED" }); return true; }
+    const dimensionColumn = { ASSET_CLASS: "i.asset_class", SECTOR: "i.sector", REGION: "i.country_code", CURRENCY: "i.currency_code", HOLDING: "ps.instrument_id::text" }[dimension];
+    const positions = await databasePool.query(`SELECT ${dimensionColumn} AS target_key, i.name, COALESCE(ps.reporting_value, ps.market_value, 0)::text AS current_value FROM spaartrack.position_snapshot ps JOIN spaartrack.instrument i ON i.id = ps.instrument_id WHERE ps.portfolio_snapshot_id = $1 AND COALESCE(ps.reporting_value, ps.market_value, 0) > 0`, [snapshot.rows[0].id]);
+    const targets = await databasePool.query(`SELECT target_key, target_label, target_percentage::text FROM spaartrack.allocation_target WHERE portfolio_id = $1 AND dimension = $2 ORDER BY target_key`, [portfolioId, dimension]);
+    if (!targets.rowCount) { json(res, 409, { error: "REBALANCE_TARGETS_REQUIRED", dimension }); return true; }
+    const grouped = new Map<string, { key: string; label: string; currentValue: number }>();
+    for (const row of positions.rows) { const key = String(row.target_key || "UNMAPPED"); const existing = grouped.get(key) || { key, label: String(row.name), currentValue: 0 }; existing.currentValue += Number(row.current_value || 0); grouped.set(key, existing); }
+    if (dimension === "ASSET_CLASS" && Number(snapshot.rows[0].free_cash || 0) > 0) grouped.set("CASH", { key: "CASH", label: "Cash", currentValue: Number(snapshot.rows[0].free_cash) });
+    const calculation = calculateDriftRebalance({ dimension, portfolioValue: Number(snapshot.rows[0].portfolio_value), holdings: [...grouped.values()], targets: targets.rows.map((row) => ({ key: String(row.target_key), label: String(row.target_label), targetPercentage: Number(row.target_percentage) })), cashAvailable: Number(snapshot.rows[0].free_cash || 0) });
+    await auditEvent(req, res, userId, "CALCULATE", "DRIFT_REBALANCE_SNAPSHOT", portfolioId, { portfolio_id: portfolioId, dimension, snapshot_as_of: snapshot.rows[0].snapshot_at, calculation_version: calculation.calculation_version, suggestion_count: calculation.suggestions.length });
+    json(res, 200, { portfolio_id: portfolioId, snapshot_as_of: snapshot.rows[0].snapshot_at, portfolio_value: Number(snapshot.rows[0].portfolio_value), ...calculation });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "REBALANCE_REQUEST_FAILED";
+    if (["ALLOCATION_TARGET_TOTAL_MUST_EQUAL_100", "INVALID_REBALANCE_PORTFOLIO_VALUE"].includes(message)) { json(res, 400, { error: message }); return true; }
+    console.error(redactedLog({ level: "error", operation: "rebalance_suggestions_failed", error: message }));
+    if (!res.writableEnded) json(res, 400, { error: "REBALANCE_REQUEST_FAILED" });
+  }
+  return true;
+}
+
+async function riskMetricsRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/risk-metrics")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "GET") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+  try {
+    const parsed = new URL(req.url, "http://localhost");
+    const portfolioId = parsed.searchParams.get("portfolio_id")?.trim() || "";
+    const benchmarkId = parsed.searchParams.get("benchmark_id")?.trim() || "";
+    const periodStart = parsed.searchParams.get("period_start")?.trim() || "";
+    const periodEnd = parsed.searchParams.get("period_end")?.trim() || "";
+    const riskFreeAnnual = Number(parsed.searchParams.get("risk_free_annual") || "0.02");
+    const periodsPerYear = Number(parsed.searchParams.get("periods_per_year") || "12");
+    if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !/^[0-9a-f-]{36}$/i.test(benchmarkId) || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart) || !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd) || periodStart > periodEnd) {
+      json(res, 400, { error: "INVALID_RISK_METRICS_QUERY" }); return true;
+    }
+    const access = await databasePool.query(`SELECT p.reporting_currency_code FROM spaartrack.portfolio p JOIN spaartrack.portfolio_member pm ON pm.portfolio_id = p.id WHERE p.id = $1 AND pm.user_id = $2 AND pm.revoked_at IS NULL`, [portfolioId, userId]);
+    if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ACCESS_FORBIDDEN" }); return true; }
+    const benchmark = await databasePool.query(`SELECT id, name, symbol, currency_code FROM spaartrack.benchmark WHERE id = $1 AND is_active = true`, [benchmarkId]);
+    if (!benchmark.rowCount) { json(res, 404, { error: "BENCHMARK_NOT_FOUND" }); return true; }
+    const snapshots = await databasePool.query(`SELECT snapshot_at::text, portfolio_value::text FROM spaartrack.portfolio_snapshot WHERE portfolio_id = $1 AND snapshot_at::date BETWEEN $2::date AND $3::date ORDER BY snapshot_at`, [portfolioId, periodStart, periodEnd]);
+    const observations = await databasePool.query(`SELECT observed_at::text, index_value::text FROM spaartrack.benchmark_observation WHERE benchmark_id = $1 AND observed_at BETWEEN $2::date AND $3::date ORDER BY observed_at`, [benchmarkId, periodStart, periodEnd]);
+    if (snapshots.rows.length < 2 || observations.rows.length < 2) {
+      json(res, 409, { error: "RISK_OBSERVATIONS_REQUIRED", required: { period_start: periodStart, period_end: periodEnd, minimum_observations: 2 } }); return true;
+    }
+    const portfolioReturns: Array<number | null> = [];
+    for (let index = 1; index < snapshots.rows.length; index += 1) {
+      const previous = Number(snapshots.rows[index - 1].portfolio_value);
+      const current = Number(snapshots.rows[index].portfolio_value);
+      portfolioReturns.push(previous > 0 && Number.isFinite(current) ? current / previous - 1 : null);
+    }
+    const benchmarkReturns: Array<number | null> = [];
+    for (let index = 1; index < observations.rows.length; index += 1) {
+      const previous = Number(observations.rows[index - 1].index_value);
+      const current = Number(observations.rows[index].index_value);
+      benchmarkReturns.push(previous > 0 && Number.isFinite(current) ? current / previous - 1 : null);
+    }
+    const metrics = calculateRiskMetrics({ periodStart, periodEnd, portfolioReturns, benchmarkReturns, riskFreeAnnual, periodsPerYear });
+    const persisted = await databasePool.query(`INSERT INTO spaartrack.risk_metric_snapshot (portfolio_id, period_start, period_end, volatility, beta, sharpe, sortino, max_drawdown, calculation_version) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, created_at`, [portfolioId, periodStart, periodEnd, metrics.volatility_pct === null ? null : metrics.volatility_pct, metrics.beta, metrics.sharpe, metrics.sortino, metrics.max_drawdown_pct, metrics.calculation_version]);
+    const result = { portfolio_id: portfolioId, period: { start: periodStart, end: periodEnd }, observations: metrics.observations, metrics: { volatility_pct: metrics.volatility_pct, beta: metrics.beta, max_drawdown_pct: metrics.max_drawdown_pct, sharpe: metrics.sharpe, sortino: metrics.sortino }, benchmark: benchmark.rows[0], assumptions: metrics.assumptions, calculation_version: metrics.calculation_version, source: "portfolio_snapshot + benchmark_observation", snapshot_id: persisted.rows[0].id, created_at: persisted.rows[0].created_at };
+    await auditEvent(req, res, userId, "CALCULATE", "RISK_METRIC_SNAPSHOT", String(persisted.rows[0].id), { portfolio_id: portfolioId, benchmark_id: benchmarkId, calculation_version: metrics.calculation_version, observations: metrics.observations });
+    json(res, 200, result);
+  } catch (error) {
+    console.error(redactedLog({ level: "error", operation: "risk_metrics_failed", error: error instanceof Error ? error.message : String(error) }));
+    if (!res.writableEnded) json(res, 400, { error: "RISK_METRICS_REQUEST_FAILED" });
+  }
+  return true;
+}
+
+async function portfolioComparisonRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/portfolio-comparisons")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "GET") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+  try {
+    const parsed = new URL(req.url, "http://localhost");
+    const portfolioIds = [...new Set((parsed.searchParams.get("portfolio_ids") || "").split(",").map((value) => value.trim()).filter(Boolean))];
+    const periodStart = parsed.searchParams.get("period_start")?.trim() || "";
+    const periodEnd = parsed.searchParams.get("period_end")?.trim() || "";
+    if (portfolioIds.length < 2 || portfolioIds.length > 4 || portfolioIds.some((id) => !/^[0-9a-f-]{36}$/i.test(id)) || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart) || !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd) || periodStart >= periodEnd) { json(res, 400, { error: "INVALID_PORTFOLIO_COMPARISON_QUERY" }); return true; }
+    const access = await databasePool.query(`SELECT p.id, p.name, p.reporting_currency_code FROM spaartrack.portfolio p JOIN spaartrack.portfolio_member pm ON pm.portfolio_id = p.id WHERE p.id = ANY(string_to_array($1, ',')::uuid[]) AND pm.user_id = $2 AND pm.revoked_at IS NULL`, [portfolioIds.join(","), userId]);
+    if (access.rowCount !== portfolioIds.length) { json(res, 403, { error: "PORTFOLIO_ACCESS_FORBIDDEN" }); return true; }
+    const portfolios = [];
+    for (const portfolioId of portfolioIds) {
+      const row = access.rows.find((item) => String(item.id) === portfolioId);
+      const snapshots = await databasePool.query(`SELECT snapshot_at::text, portfolio_value::text, free_cash::text FROM spaartrack.portfolio_snapshot WHERE portfolio_id = $1 AND snapshot_at::date IN ($2::date, $3::date) ORDER BY snapshot_at`, [portfolioId, periodStart, periodEnd]);
+      const start = snapshots.rows.find((item) => String(item.snapshot_at).slice(0, 10) === periodStart);
+      const end = snapshots.rows.find((item) => String(item.snapshot_at).slice(0, 10) === periodEnd);
+      if (!start || !end) { json(res, 409, { error: "COMPARISON_SNAPSHOTS_REQUIRED", portfolio_id: portfolioId }); return true; }
+      const positions = await databasePool.query(`SELECT i.asset_class, COALESCE(ps.reporting_value, ps.market_value, 0)::text AS value FROM spaartrack.position_snapshot ps JOIN spaartrack.instrument i ON i.id = ps.instrument_id JOIN spaartrack.portfolio_snapshot snapshot ON snapshot.id = ps.portfolio_snapshot_id WHERE snapshot.portfolio_id = $1 AND snapshot.snapshot_at::date = $2::date`, [portfolioId, periodEnd]);
+      const total = Number(end.portfolio_value || 0);
+      const allocation: Record<string, number> = {};
+      for (const position of positions.rows) { const key = String(position.asset_class || "OTHER"); allocation[key] = (allocation[key] || 0) + (total > 0 ? Number(position.value || 0) / total : 0); }
+      const freeCash = Number(end.free_cash || 0);
+      if (total > 0 && freeCash > 0) allocation.CASH = (allocation.CASH || 0) + freeCash / total;
+      const flows = await databasePool.query(`SELECT lt.activity_type, le.amount::text FROM spaartrack.ledger_transaction lt JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id WHERE lt.portfolio_id = $1 AND lt.state = 'POSTED' AND lt.is_external_flow = true AND lt.effective_date > $2::date AND lt.effective_date <= $3::date AND lt.activity_type IN ('DEPOSIT', 'WITHDRAWAL')`, [portfolioId, periodStart, periodEnd]);
+      const netCashFlow = flows.rows.reduce((sum, flow) => sum + (String(flow.activity_type) === "WITHDRAWAL" ? -1 : 1) * Number(flow.amount || 0), 0);
+      const risk = await databasePool.query(`SELECT volatility::text, max_drawdown::text, sharpe::text FROM spaartrack.risk_metric_snapshot WHERE portfolio_id = $1 AND period_start = $2::date AND period_end = $3::date ORDER BY created_at DESC LIMIT 1`, [portfolioId, periodStart, periodEnd]);
+      const riskRow = risk.rows[0] || {};
+      portfolios.push({ id: portfolioId, name: String(row.name), currency: String(row.reporting_currency_code).trim(), startValue: Number(start.portfolio_value || 0), endValue: total, netCashFlow, allocation, risk: { volatilityPct: riskRow.volatility == null ? null : Number(riskRow.volatility), maxDrawdownPct: riskRow.max_drawdown == null ? null : Number(riskRow.max_drawdown), sharpe: riskRow.sharpe == null ? null : Number(riskRow.sharpe) } });
+    }
+    const result = comparePortfolios({ periodStart, periodEnd, portfolios });
+    await auditEvent(req, res, userId, "CALCULATE", "PORTFOLIO_COMPARISON", portfolioIds[0], { portfolio_ids: portfolioIds, period_start: periodStart, period_end: periodEnd, calculation_version: result.calculationVersion });
+    json(res, 200, { ...result, portfolio_ids: portfolioIds, source: "portfolio_snapshot + position_snapshot + risk_metric_snapshot", read_only: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "PORTFOLIO_COMPARISON_FAILED";
+    if (["INVALID_COMPARISON_PERIOD", "COMPARISON_PORTFOLIOS_REQUIRED", "COMPARISON_CURRENCY_MISMATCH", "INVALID_COMPARISON_PORTFOLIO", "INVALID_COMPARISON_ALLOCATION"].includes(message)) { json(res, 400, { error: message }); return true; }
+    console.error(redactedLog({ level: "error", operation: "portfolio_comparison_failed", error: message }));
+    if (!res.writableEnded) json(res, 400, { error: "PORTFOLIO_COMPARISON_FAILED" });
+  }
+  return true;
+}
+
+async function backtestScenarioRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/backtest-scenarios")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "POST" || req.url !== "/api/v1/backtest-scenarios") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+  try {
+    const body = await readJson(req);
+    const portfolioId = typeof body.portfolio_id === "string" ? body.portfolio_id.trim() : "";
+    const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : "What-if scenario";
+    if (portfolioId && !/^[0-9a-f-]{36}$/i.test(portfolioId)) { json(res, 400, { error: "INVALID_BACKTEST_PORTFOLIO" }); return true; }
+    if (portfolioId) {
+      const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`, [portfolioId, userId]);
+      if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ACCESS_FORBIDDEN" }); return true; }
+    }
+    const calculation = runWhatIfBacktest({
+      periodStart: String(body.period_start || ""), periodEnd: String(body.period_end || ""),
+      allocations: (body.allocations && typeof body.allocations === "object" ? body.allocations : {}) as Record<string, number>,
+      initialCapital: Number(body.initial_capital), priceSeries: Array.isArray(body.price_series) ? body.price_series as never[] : [],
+      cashflows: Array.isArray(body.cashflows) ? body.cashflows as never[] : [], costs: body.costs as never, assumptions: body.assumptions as Record<string, unknown> | undefined,
+    });
+    const persisted = await databasePool.query(`INSERT INTO spaartrack.backtest_scenario (user_id, portfolio_id, name, period_start, period_end, assumptions, allocations, results, status) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, 'SUCCEEDED') RETURNING id, created_at`, [userId, portfolioId || null, name, calculation.period.start, calculation.period.end, JSON.stringify({ ...calculation.assumptions, costs: calculation.costs, input_prices: calculation.input_prices, cashflows: calculation.cashflows, calculation_version: calculation.calculation_version }), JSON.stringify(calculation.allocations), JSON.stringify(calculation.result)]);
+    const scenarioId = String(persisted.rows[0].id);
+    await auditEvent(req, res, userId, "CALCULATE", "BACKTEST_SCENARIO", scenarioId, { portfolio_id: portfolioId || null, scenario_id: scenarioId, calculation_version: calculation.calculation_version, observations: calculation.observations.length });
+    json(res, 201, { scenario_id: scenarioId, name, status: "SUCCEEDED", ...calculation, created_at: persisted.rows[0].created_at, source: "portfolio_snapshot + instrument_price + ledger_cashflow", read_only: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "BACKTEST_SCENARIO_FAILED";
+    if (["INVALID_BACKTEST_PERIOD", "INVALID_INITIAL_CAPITAL", "ALLOCATIONS_MUST_EQUAL_100", "BACKTEST_BOUNDARY_PRICES_REQUIRED", "INVALID_BACKTEST_PRICE_DATE", "INVALID_BACKTEST_PRICE", "INVALID_BACKTEST_COSTS", "INVALID_BACKTEST_CASHFLOW"].includes(message)) { json(res, 400, { error: message }); return true; }
+    console.error(redactedLog({ level: "error", operation: "backtest_scenario_failed", error: message }));
+    if (!res.writableEnded) json(res, 400, { error: "BACKTEST_SCENARIO_FAILED" });
+  }
+  return true;
+}
+
+async function bondPricingRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/bond-metrics")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "GET") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+  try {
+    const parsed = new URL(req.url, "http://localhost");
+    const instrumentId = parsed.searchParams.get("instrument_id")?.trim() || "";
+    if (!/^[0-9a-f-]{36}$/i.test(instrumentId)) { json(res, 400, { error: "INVALID_BOND_METRICS_QUERY" }); return true; }
+    const profileResult = await databasePool.query(
+      `SELECT bp.instrument_id::text, bp.issuer_type, bp.issuer_name, bp.coupon_rate::text, bp.coupon_frequency,
+              bp.issue_date::text, bp.maturity_date::text, bp.face_value::text, bp.day_count_convention,
+              i.currency_code, i.name AS instrument_name
+         FROM spaartrack.bond_profile bp
+         JOIN spaartrack.instrument i ON i.id = bp.instrument_id
+        WHERE bp.instrument_id = $1`,
+      [instrumentId]
+    );
+    if (!profileResult.rowCount) { json(res, 404, { error: "BOND_PROFILE_NOT_FOUND" }); return true; }
+    const row = profileResult.rows[0];
+    const profile: BondProfileInput = {
+      issuerType: String(row.issuer_type), issuerName: String(row.issuer_name), couponRate: Number(row.coupon_rate),
+      couponFrequency: String(row.coupon_frequency), issueDate: String(row.issue_date), maturityDate: String(row.maturity_date),
+      faceValue: Number(row.face_value), currencyCode: String(row.currency_code), dayCountConvention: String(row.day_count_convention || "ACT_365")
+    };
+    const yieldParam = parsed.searchParams.get("yield_rate");
+    const priceParam = parsed.searchParams.get("dirty_price");
+    const metrics = calculateBondMetrics({
+      profile,
+      settlementDate: parsed.searchParams.get("settlement_date")?.trim() || "",
+      yieldRate: yieldParam === null || yieldParam === "" ? undefined : yieldParam,
+      dirtyPrice: priceParam === null || priceParam === "" ? undefined : priceParam
+    });
+    await auditEvent(req, res, userId, "CALCULATE", "BOND_PRICING", instrumentId, {
+      instrument_id: instrumentId, calculation_version: metrics.calculation_version,
+      yield_source: metrics.yield_source, yield_rate: metrics.yield_rate, settlement_date: metrics.settlement_date
+    });
+    json(res, 200, { instrument_id: instrumentId, instrument_name: String(row.instrument_name), ...metrics });
+    return true;
+  } catch (error) {
+    const message = (error as Error).message;
+    if (["INVALID_BOND_PRICING_INPUT", "INVALID_BOND_YIELD", "INVALID_BOND_PRICE", "SETTLEMENT_OUT_OF_RANGE", "INVALID_BOND_PROFILE", "YTM_NOT_FOUND"].includes(message)) { json(res, 400, { error: message }); return true; }
+    console.error(redactedLog({ level: "error", operation: "bond_pricing_failed", error: message }));
+    if (!res.writableEnded) json(res, 400, { error: "BOND_PRICING_FAILED" });
+    return true;
+  }
+}
+
+async function bondCurveScenarioRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/bond-curve-scenarios")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "POST") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+  try {
+    const body = await readJson(req);
+    const scenario = buildBondCurveScenario({
+      curve: Array.isArray(body.curve) ? body.curve.map((item) => ({ tenorDays: ((item as Record<string, unknown>).tenor_days ?? (item as Record<string, unknown>).tenorDays) as number | string, zeroRate: ((item as Record<string, unknown>).zero_rate ?? (item as Record<string, unknown>).zeroRate) as number | string })) : [],
+      parallelShift: (body.parallel_shift ?? body.parallelShift) as number | string | undefined,
+      asOfDate: body.as_of_date as string | undefined,
+      currencyCode: body.currency_code as string | undefined
+    });
+    const scenarioId = randomUUID();
+    await auditEvent(req, res, userId, "CALCULATE", "BOND_CURVE_SCENARIO", scenarioId, {
+      scenario_id: scenarioId,
+      calculation_version: scenario.calculation_version,
+      observation_count: scenario.observations.length,
+      parallel_shift: scenario.parallel_shift
+    });
+    json(res, 200, { scenario_id: scenarioId, ...scenario });
+  } catch (error) {
+    const message = (error as Error).message;
+    if (["INVALID_BOND_CURVE", "INVALID_BOND_CURVE_SHIFT", "INVALID_BOND_CURVE_DATE", "INVALID_BOND_CURVE_CURRENCY"].includes(message)) { json(res, 400, { error: message }); return true; }
+    console.error(redactedLog({ level: "error", operation: "bond_curve_scenario_failed", error: message }));
+    if (!res.writableEnded) json(res, 400, { error: "BOND_CURVE_SCENARIO_FAILED" });
+  }
+  return true;
+}
+
+function bondCashflowRow(row: Record<string, string>): BondCashflowEntry {
+  return { payment_date: String(row.payment_date), cashflow_type: String(row.cashflow_type) as "COUPON" | "PRINCIPAL", amount: fixedAmount(Number(row.amount)), currency_code: String(row.currency_code) };
+}
+
+async function bondProfileRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/bond-profiles")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+
+  const profileMatch = req.url?.match(/\/api\/v1\/bond-profiles\/([0-9a-f-]{36})(\/cashflows)?$/i);
+  if (profileMatch) {
+    const instrumentId = profileMatch[1];
+    const wantsCashflows = Boolean(profileMatch[2]);
+    const profileResult = await databasePool.query(
+      `SELECT bp.instrument_id::text, bp.issuer_type, bp.issuer_name, bp.coupon_rate::text, bp.coupon_frequency,
+              bp.issue_date::text, bp.maturity_date::text, bp.face_value::text, bp.day_count_convention,
+              bp.benchmark_spread::text, bp.credit_rating,
+              i.name AS instrument_name, i.currency_code
+         FROM spaartrack.bond_profile bp
+         JOIN spaartrack.instrument i ON i.id = bp.instrument_id
+        WHERE bp.instrument_id = $1`,
+      [instrumentId]
+    );
+    if (wantsCashflows && req.method === "POST") {
+      if (!profileResult.rowCount) { json(res, 404, { error: "BOND_PROFILE_NOT_FOUND" }); return true; }
+      try {
+        const row = profileResult.rows[0];
+        const profile: BondProfileInput = {
+          issuerType: String(row.issuer_type), issuerName: String(row.issuer_name), couponRate: Number(row.coupon_rate),
+          couponFrequency: String(row.coupon_frequency), issueDate: String(row.issue_date), maturityDate: String(row.maturity_date),
+          faceValue: Number(row.face_value), currencyCode: String(row.currency_code), dayCountConvention: String(row.day_count_convention || "ACT_365")
+        };
+        const calculation = generateBondCashflows(profile);
+        const client = await databasePool.connect();
+        try {
+          await client.query("BEGIN");
+          await client.query(`DELETE FROM spaartrack.bond_cashflow WHERE instrument_id = $1`, [instrumentId]);
+          for (const flow of calculation.cashflows) {
+            await client.query(
+              `INSERT INTO spaartrack.bond_cashflow (instrument_id, payment_date, amount, currency_code, cashflow_type)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [instrumentId, flow.payment_date, flow.amount, flow.currency_code, flow.cashflow_type]
+            );
+          }
+          await client.query("COMMIT");
+        } catch (error) {
+          await client.query("ROLLBACK").catch(() => undefined);
+          throw error;
+        } finally {
+          client.release();
+        }
+        await auditEvent(req, res, userId, "CALCULATE", "BOND_CASHFLOW", instrumentId, { instrument_id: instrumentId, calculation_version: calculation.calculation_version, cashflow_count: calculation.cashflows.length });
+        json(res, 201, { instrument_id: instrumentId, instrument_name: String(row.instrument_name), ...calculation });
+        return true;
+      } catch (error) {
+        console.error(redactedLog({ level: "error", operation: "bond_cashflow_failed", error: (error as Error).message }));
+        if (!res.writableEnded) json(res, 400, { error: "BOND_CASHFLOW_FAILED" });
+        return true;
+      }
+    }
+    if (wantsCashflows && req.method === "GET") {
+      if (!profileResult.rowCount) { json(res, 404, { error: "BOND_PROFILE_NOT_FOUND" }); return true; }
+      const cashflowRows = await databasePool.query(
+        `SELECT payment_date::text, cashflow_type, amount::text, currency_code
+           FROM spaartrack.bond_cashflow
+          WHERE instrument_id = $1
+          ORDER BY payment_date, CASE WHEN cashflow_type = 'COUPON' THEN 0 ELSE 1 END`,
+        [instrumentId]
+      );
+      const cashflows = (cashflowRows.rows as Array<Record<string, string>>).map(bondCashflowRow);
+      const couponTotal = cashflows.filter((flow) => flow.cashflow_type === "COUPON").reduce((sum, flow) => sum + Number(flow.amount), 0);
+      const principalTotal = cashflows.filter((flow) => flow.cashflow_type === "PRINCIPAL").reduce((sum, flow) => sum + Number(flow.amount), 0);
+      json(res, 200, {
+        instrument_id: instrumentId,
+        cashflows,
+        cashflow_count: cashflows.length,
+        totals: { coupon_total: fixedAmount(couponTotal), principal_total: fixedAmount(principalTotal), grand_total: fixedAmount(couponTotal + principalTotal) },
+        calculation_version: "bond-cashflow-v1",
+        source: "bond_profile",
+        read_only: true
+      });
+      return true;
+    }
+    if (!wantsCashflows && req.method === "GET") {
+      if (!profileResult.rowCount) { json(res, 404, { error: "BOND_PROFILE_NOT_FOUND" }); return true; }
+      const row = profileResult.rows[0];
+      json(res, 200, {
+        instrument_id: String(row.instrument_id),
+        instrument_name: String(row.instrument_name),
+        currency_code: String(row.currency_code),
+        issuer_type: String(row.issuer_type),
+        issuer_name: String(row.issuer_name),
+        coupon_rate: fixedAmount(Number(row.coupon_rate)),
+        coupon_frequency: String(row.coupon_frequency),
+        maturity_date: String(row.maturity_date),
+        day_count_convention: String(row.day_count_convention || "ACT_365"),
+        benchmark_spread: row.benchmark_spread === null ? null : fixedAmount(Number(row.benchmark_spread)),
+        credit_rating: row.credit_rating,
+        calculation_version: "bond-profile-v1",
+        read_only: true
+      });
+      return true;
+    }
+    json(res, 405, { error: "METHOD_NOT_ALLOWED" });
+    return true;
+  }
+
+  if (req.method === "POST" && req.url === "/api/v1/bond-profiles") {
+    try {
+      const body = await readJson(req);
+      const portfolioId = typeof body.portfolio_id === "string" ? body.portfolio_id.trim() : "";
+      const instrumentId = typeof body.instrument_id === "string" ? body.instrument_id.trim() : "";
+      if (!/^[0-9a-f-]{36}$/i.test(portfolioId) || !/^[0-9a-f-]{36}$/i.test(instrumentId)) { json(res, 400, { error: "INVALID_BOND_PROFILE_INPUT" }); return true; }
+      const profile: BondProfileInput = {
+        issuerType: typeof body.issuer_type === "string" ? body.issuer_type : String(body.issuer_type || ""),
+        issuerName: typeof body.issuer_name === "string" ? body.issuer_name : String(body.issuer_name || ""),
+        couponRate: (body.coupon_rate ?? NaN) as string | number,
+        couponFrequency: typeof body.coupon_frequency === "string" ? body.coupon_frequency : String(body.coupon_frequency || ""),
+        issueDate: typeof body.issue_date === "string" ? body.issue_date : "0000-00-00",
+        maturityDate: typeof body.maturity_date === "string" ? body.maturity_date : "0000-00-00",
+        faceValue: (body.face_value ?? NaN) as string | number,
+        currencyCode: typeof body.currency_code === "string" ? body.currency_code : String(body.currency_code || ""),
+        dayCountConvention: typeof body.day_count_convention === "string" ? body.day_count_convention : undefined
+      };
+      const validated = validateBondProfile(profile);
+      const membership = await databasePool.query(`SELECT role FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`, [portfolioId, userId]);
+      if (!membership.rowCount || !["OWNER", "EDITOR"].includes(String(membership.rows[0].role))) { json(res, 403, { error: "BOND_PROFILE_FORBIDDEN" }); return true; }
+      const instrument = await databasePool.query(`SELECT id::text, instrument_type FROM spaartrack.instrument WHERE id = $1`, [instrumentId]);
+      if (!instrument.rowCount) { json(res, 404, { error: "INSTRUMENT_NOT_FOUND" }); return true; }
+      if (String(instrument.rows[0].instrument_type) !== "BOND") { json(res, 400, { error: "INSTRUMENT_TYPE_NOT_BOND" }); return true; }
+      const inserted = await databasePool.query(
+        `INSERT INTO spaartrack.bond_profile (instrument_id, issuer_type, issuer_name, coupon_rate, coupon_frequency, issue_date, maturity_date, face_value, day_count_convention)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (instrument_id) DO NOTHING
+         RETURNING instrument_id`,
+        [instrumentId, validated.issuer_type, validated.issuer_name, validated.coupon_rate, validated.coupon_frequency, validated.issue_date, validated.maturity_date, validated.face_value, validated.day_count_convention]
+      );
+      if (!inserted.rowCount) { json(res, 409, { error: "BOND_PROFILE_ALREADY_EXISTS" }); return true; }
+      await auditEvent(req, res, userId, "REGISTER", "BOND_PROFILE", instrumentId, { portfolio_id: portfolioId, instrument_id: instrumentId, calculation_version: validated.calculation_version, issuer_type: validated.issuer_type, coupon_frequency: validated.coupon_frequency, maturity_date: validated.maturity_date });
+      json(res, 201, { portfolio_id: portfolioId, instrument_id: instrumentId, ...validated, benchmark_spread: null, credit_rating: null, read_only: true });
+      return true;
+    } catch (error) {
+      const message = (error as Error).message;
+      if (message === "INVALID_BOND_PROFILE") { json(res, 400, { error: "INVALID_BOND_PROFILE" }); return true; }
+      if (message === "invalid_json") { json(res, 400, { error: "INVALID_BOND_PROFILE_REQUEST" }); return true; }
+      console.error(redactedLog({ level: "error", operation: "bond_profile_failed", error: message }));
+      if (!res.writableEnded) json(res, 400, { error: "BOND_PROFILE_REQUEST_FAILED" });
+      return true;
+    }
+  }
+
+  if (req.method === "GET" && req.url === "/api/v1/bond-profiles") {
+    const result = await databasePool.query(
+      `SELECT bp.instrument_id::text AS instrument_id, bp.issuer_type, bp.issuer_name, bp.coupon_rate::text, bp.coupon_frequency,
+              bp.maturity_date::text, bp.day_count_convention, i.name AS instrument_name, i.currency_code
+         FROM spaartrack.bond_profile bp
+         JOIN spaartrack.instrument i ON i.id = bp.instrument_id
+        ORDER BY i.name, bp.instrument_id`
+    );
+    const profiles = (result.rows as Array<Record<string, string>>).map((row) => ({
+      instrument_id: String(row.instrument_id),
+      instrument_name: String(row.instrument_name),
+      currency_code: String(row.currency_code),
+      issuer_type: String(row.issuer_type),
+      issuer_name: String(row.issuer_name),
+      coupon_rate: fixedAmount(Number(row.coupon_rate)),
+      coupon_frequency: String(row.coupon_frequency),
+      maturity_date: String(row.maturity_date),
+      day_count_convention: String(row.day_count_convention || "ACT_365")
+    }));
+    json(res, 200, { profiles, count: profiles.length, calculation_version: "bond-profile-v1", read_only: true });
+    return true;
+  }
+
+  json(res, 405, { error: "METHOD_NOT_ALLOWED" });
+  return true;
+}
+
+function optionContractRow(row: Record<string, unknown>) {
+  const stored = (value: unknown): string | null => (value === null || value === undefined ? null : fixedAmount(Number(value)));
+  return {
+    instrument_id: String(row.instrument_id),
+    instrument_name: String(row.instrument_name),
+    currency_code: String(row.currency_code),
+    underlying_instrument_id: String(row.underlying_instrument_id),
+    underlying_instrument_name: String(row.underlying_instrument_name),
+    option_type: String(row.option_type),
+    strike_price: fixedAmount(Number(row.strike_price)),
+    expiry_at: new Date(row.expiry_at as string).toISOString(),
+    contract_multiplier: fixedAmount(Number(row.contract_multiplier)),
+    implied_volatility: stored(row.implied_volatility),
+    greeks: {
+      delta: stored(row.delta),
+      gamma: stored(row.gamma),
+      theta: stored(row.theta),
+      vega: stored(row.vega),
+      rho: stored(row.rho)
+    }
+  };
+}
+
+async function optionLifecycleEvents(instrumentId: string): Promise<OptionLifecycleEventInput[]> {
+  const result = await databasePool.query(
+    `SELECT event_type, occurred_at FROM spaartrack.option_lifecycle_event WHERE option_instrument_id = $1 ORDER BY occurred_at`,
+    [instrumentId]
+  );
+  return (result.rows as Array<Record<string, unknown>>).map((row) => ({
+    event_type: String(row.event_type),
+    occurred_at: new Date(row.occurred_at as string).toISOString()
+  }));
+}
+
+async function optionLifecycleEventsByInstrument(instrumentIds: string[]): Promise<Map<string, OptionLifecycleEventInput[]>> {
+  const events = new Map<string, OptionLifecycleEventInput[]>();
+  if (instrumentIds.length === 0) return events;
+  const result = await databasePool.query(
+    `SELECT option_instrument_id::text AS option_instrument_id, event_type, occurred_at FROM spaartrack.option_lifecycle_event WHERE option_instrument_id = ANY($1::uuid[]) ORDER BY occurred_at`,
+    [instrumentIds]
+  );
+  for (const row of result.rows as Array<Record<string, unknown>>) {
+    const key = String(row.option_instrument_id);
+    const list = events.get(key) ?? [];
+    list.push({ event_type: String(row.event_type), occurred_at: new Date(row.occurred_at as string).toISOString() });
+    events.set(key, list);
+  }
+  return events;
+}
+
+async function optionContractRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/option-contracts")) return false;
+
+  const userId = await authenticatedUserId(req);
+  if (!userId) {
+    json(res, 401, { error: "UNAUTHENTICATED" });
+    return true;
+  }
+
+  const detailMatch = req.url.match(/^\/api\/v1\/option-contracts\/([0-9a-f-]{36})$/i);
+  if (detailMatch && req.method === "GET") {
+    const instrumentId = detailMatch[1];
+    const result = await databasePool.query(
+      `SELECT oc.instrument_id::text AS instrument_id, i.name AS instrument_name, i.currency_code,
+              oc.underlying_instrument_id::text AS underlying_instrument_id, u.name AS underlying_instrument_name,
+              oc.option_type, oc.strike_price::text, oc.expiry_at, oc.contract_multiplier::text, oc.implied_volatility::text,
+              oc.delta::text, oc.gamma::text, oc.theta::text, oc.vega::text, oc.rho::text
+         FROM spaartrack.option_contract oc
+         JOIN spaartrack.instrument i ON i.id = oc.instrument_id
+         JOIN spaartrack.instrument u ON u.id = oc.underlying_instrument_id
+        WHERE oc.instrument_id = $1`,
+      [instrumentId]
+    );
+    if (!result.rowCount) {
+      json(res, 404, { error: "OPTION_CONTRACT_NOT_FOUND" });
+      return true;
+    }
+    const contract = optionContractRow(result.rows[0] as Record<string, unknown>);
+    const events = await optionLifecycleEvents(instrumentId);
+    const parsed = new URL(req.url, "http://localhost");
+    const asOf = parsed.searchParams.get("as_of")?.trim() || new Date().toISOString();
+    const lifecycle = deriveOptionLifecycleStatus({ expiryAt: contract.expiry_at, asOf, lifecycleEvents: events });
+    json(res, 200, {
+      ...contract,
+      lifecycle_status: lifecycle.status,
+      lifecycle_source: lifecycle.source,
+      as_of: lifecycle.as_of,
+      lifecycle_events: events,
+      calculation_version: "option-contract-v1",
+      read_only: true
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && req.url === "/api/v1/option-contracts") {
+    try {
+      const body = await readJson(req);
+      const uuid = /^[0-9a-f-]{36}$/i;
+      const portfolioId = typeof body.portfolio_id === "string" ? body.portfolio_id.trim() : "";
+      const instrumentId = typeof body.instrument_id === "string" ? body.instrument_id.trim() : "";
+      const underlyingInstrumentId = typeof body.underlying_instrument_id === "string" ? body.underlying_instrument_id.trim() : "";
+      if (!uuid.test(portfolioId) || !uuid.test(instrumentId) || !uuid.test(underlyingInstrumentId)) {
+        json(res, 400, { error: "INVALID_OPTION_CONTRACT_INPUT" });
+        return true;
+      }
+      if (instrumentId === underlyingInstrumentId) {
+        json(res, 400, { error: "INVALID_OPTION_CONTRACT_INPUT" });
+        return true;
+      }
+      const validated = validateOptionContract({
+        optionType: body.option_type as string | undefined,
+        strikePrice: (body.strike_price ?? NaN) as string | number,
+        expiryAt: typeof body.expiry_at === "string" ? body.expiry_at : "",
+        contractMultiplier: (body.contract_multiplier ?? 100) as string | number,
+        impliedVolatility: body.implied_volatility === null || body.implied_volatility === undefined ? undefined : (body.implied_volatility as string | number),
+        asOf: new Date().toISOString()
+      });
+
+      const membership = await databasePool.query(
+        `SELECT role FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+        [portfolioId, userId]
+      );
+      const role = membership.rowCount ? String((membership.rows[0] as Record<string, unknown>).role) : "";
+      if (!["OWNER", "EDITOR"].includes(role)) {
+        json(res, 403, { error: "OPTION_CONTRACT_FORBIDDEN" });
+        return true;
+      }
+
+      const instrument = await databasePool.query(`SELECT instrument_type FROM spaartrack.instrument WHERE id = $1`, [instrumentId]);
+      if (!instrument.rowCount) {
+        json(res, 404, { error: "INSTRUMENT_NOT_FOUND" });
+        return true;
+      }
+      if (String((instrument.rows[0] as Record<string, unknown>).instrument_type) !== "OPTION") {
+        json(res, 400, { error: "INSTRUMENT_TYPE_NOT_OPTION" });
+        return true;
+      }
+      const underlying = await databasePool.query(`SELECT id FROM spaartrack.instrument WHERE id = $1`, [underlyingInstrumentId]);
+      if (!underlying.rowCount) {
+        json(res, 404, { error: "UNDERLYING_INSTRUMENT_NOT_FOUND" });
+        return true;
+      }
+
+      const inserted = await databasePool.query(
+        `INSERT INTO spaartrack.option_contract (instrument_id, underlying_instrument_id, option_type, strike_price, expiry_at, contract_multiplier, implied_volatility)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (instrument_id) DO NOTHING
+         RETURNING instrument_id`,
+        [instrumentId, underlyingInstrumentId, validated.option_type, validated.strike_price, validated.expiry_at, validated.contract_multiplier, validated.implied_volatility]
+      );
+      if (!inserted.rowCount) {
+        json(res, 409, { error: "OPTION_CONTRACT_ALREADY_EXISTS" });
+        return true;
+      }
+
+      await auditEvent(req, res, userId, "REGISTER", "OPTION_CONTRACT", instrumentId, {
+        portfolio_id: portfolioId,
+        instrument_id: instrumentId,
+        underlying_instrument_id: underlyingInstrumentId,
+        option_type: validated.option_type,
+        expiry_at: validated.expiry_at,
+        implied_volatility: validated.implied_volatility,
+        calculation_version: validated.calculation_version
+      });
+      json(res, 201, { portfolio_id: portfolioId, instrument_id: instrumentId, underlying_instrument_id: underlyingInstrumentId, ...validated });
+      return true;
+    } catch (error) {
+      const message = (error as Error).message;
+      if (message === "INVALID_OPTION_CONTRACT") {
+        json(res, 400, { error: "INVALID_OPTION_CONTRACT" });
+        return true;
+      }
+      if (message === "invalid_json") {
+        json(res, 400, { error: "INVALID_OPTION_CONTRACT_REQUEST" });
+        return true;
+      }
+      console.error(redactedLog({ level: "error", operation: "option_contract_failed", error: message }));
+      if (!res.writableEnded) json(res, 400, { error: "OPTION_CONTRACT_REQUEST_FAILED" });
+      return true;
+    }
+  }
+
+  if (req.method === "GET" && req.url === "/api/v1/option-contracts") {
+    const result = await databasePool.query(
+      `SELECT oc.instrument_id::text AS instrument_id, i.name AS instrument_name, i.currency_code,
+              oc.underlying_instrument_id::text AS underlying_instrument_id, u.name AS underlying_instrument_name,
+              oc.option_type, oc.strike_price::text, oc.expiry_at, oc.contract_multiplier::text, oc.implied_volatility::text,
+              oc.delta::text, oc.gamma::text, oc.theta::text, oc.vega::text, oc.rho::text
+         FROM spaartrack.option_contract oc
+         JOIN spaartrack.instrument i ON i.id = oc.instrument_id
+         JOIN spaartrack.instrument u ON u.id = oc.underlying_instrument_id
+        ORDER BY i.name, oc.instrument_id`
+    );
+    const contracts = (result.rows as Array<Record<string, unknown>>).map(optionContractRow);
+    const eventsByInstrument = await optionLifecycleEventsByInstrument(contracts.map((contract) => contract.instrument_id));
+    const asOf = new Date().toISOString();
+    const enriched = contracts.map((contract) => {
+      const lifecycle = deriveOptionLifecycleStatus({
+        expiryAt: contract.expiry_at,
+        asOf,
+        lifecycleEvents: eventsByInstrument.get(contract.instrument_id) ?? []
+      });
+      return { ...contract, lifecycle_status: lifecycle.status, lifecycle_source: lifecycle.source, as_of: lifecycle.as_of };
+    });
+    json(res, 200, { contracts: enriched, count: enriched.length, calculation_version: "option-contract-v1", read_only: true });
+    return true;
+  }
+
+  json(res, 405, { error: "METHOD_NOT_ALLOWED" });
+  return true;
+}
+
+async function optionGreeksRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/option-greeks")) return false;
+
+  const userId = await authenticatedUserId(req);
+  if (!userId) {
+    json(res, 401, { error: "UNAUTHENTICATED" });
+    return true;
+  }
+  if (req.method !== "GET") {
+    json(res, 405, { error: "METHOD_NOT_ALLOWED" });
+    return true;
+  }
+
+  try {
+    const parsed = new URL(req.url, "http://localhost");
+    const instrumentId = parsed.searchParams.get("instrument_id")?.trim() || "";
+    if (!/^[0-9a-f-]{36}$/i.test(instrumentId)) {
+      json(res, 400, { error: "INVALID_OPTION_GREEKS_QUERY" });
+      return true;
+    }
+    const contractResult = await databasePool.query(
+      `SELECT oc.instrument_id::text AS instrument_id, oc.option_type, oc.strike_price::text, oc.expiry_at, oc.contract_multiplier::text, oc.implied_volatility::text,
+              i.name AS instrument_name, i.currency_code
+         FROM spaartrack.option_contract oc
+         JOIN spaartrack.instrument i ON i.id = oc.instrument_id
+        WHERE oc.instrument_id = $1`,
+      [instrumentId]
+    );
+    if (!contractResult.rowCount) {
+      json(res, 404, { error: "OPTION_CONTRACT_NOT_FOUND" });
+      return true;
+    }
+    const row = contractResult.rows[0] as Record<string, unknown>;
+    const expiryAt = new Date(row.expiry_at as string).toISOString();
+    const asOf = parsed.searchParams.get("as_of")?.trim() || new Date().toISOString();
+    const overrideType = parsed.searchParams.get("option_type")?.trim().toUpperCase() || "";
+    const volatilityParam = parsed.searchParams.get("volatility")?.trim() || "";
+    const storedIv = row.implied_volatility === null || row.implied_volatility === undefined ? null : String(row.implied_volatility).trim();
+    const spotParam = parsed.searchParams.get("spot_price")?.trim() || "";
+    const rateParam = parsed.searchParams.get("risk_free_rate")?.trim() || "";
+    const yieldParam = parsed.searchParams.get("dividend_yield")?.trim() || "";
+
+    const greeks = calculateOptionGreeks({
+      optionType: overrideType || String(row.option_type),
+      strikePrice: String(row.strike_price),
+      spotPrice: spotParam === "" ? NaN : spotParam,
+      volatility: volatilityParam !== "" ? volatilityParam : storedIv ?? NaN,
+      riskFreeRate: rateParam === "" ? NaN : rateParam,
+      dividendYield: yieldParam === "" ? 0 : yieldParam,
+      asOf,
+      expiryAt,
+      contractMultiplier: String(row.contract_multiplier)
+    });
+
+    const events = await optionLifecycleEvents(instrumentId);
+    const lifecycle = deriveOptionLifecycleStatus({ expiryAt, asOf, lifecycleEvents: events });
+    const scenarioOverride = overrideType !== "" && overrideType !== String(row.option_type);
+    if (!scenarioOverride) {
+      await databasePool.query(
+        `UPDATE spaartrack.option_contract
+            SET delta = $2, gamma = $3, theta = $4, vega = $5, rho = $6, implied_volatility = COALESCE(implied_volatility, $7)
+          WHERE instrument_id = $1`,
+        [instrumentId, greeks.delta, greeks.gamma, greeks.theta, greeks.vega, greeks.rho, greeks.implied_volatility]
+      );
+    }
+    await auditEvent(req, res, userId, "CALCULATE", "OPTION_GREEKS", instrumentId, {
+      instrument_id: instrumentId,
+      option_type: greeks.option_type,
+      time_to_expiry_years: greeks.time_to_expiry_years,
+      implied_volatility: greeks.implied_volatility,
+      scenario_override: scenarioOverride,
+      calculation_version: greeks.calculation_version
+    });
+    json(res, 200, {
+      instrument_id: instrumentId,
+      instrument_name: String(row.instrument_name),
+      currency_code: String(row.currency_code),
+      scenario_override: scenarioOverride,
+      ...greeks,
+      lifecycle_status: lifecycle.status,
+      lifecycle_source: lifecycle.source
+    });
+    return true;
+  } catch (error) {
+    const message = (error as Error).message;
+    if (["INVALID_OPTION_GREEKS_INPUT", "OPTION_EXPIRED", "INVALID_OPTION_CONTRACT"].includes(message)) {
+      json(res, 400, { error: message });
+      return true;
+    }
+    console.error(redactedLog({ level: "error", operation: "option_greeks_failed", error: message }));
+    if (!res.writableEnded) json(res, 400, { error: "OPTION_GREEKS_REQUEST_FAILED" });
+    return true;
+  }
+}
+
+async function optionOpenLots(portfolioId: string, optionInstrumentId: string) {
+  const result = await databasePool.query(
+    `SELECT lt.id::text AS transaction_id, lt.effective_date::text AS effective_date,
+            le.direction, le.quantity::text, le.amount::text, le.fee_amount::text, le.tax_amount::text
+       FROM spaartrack.ledger_transaction lt
+       JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+      WHERE lt.portfolio_id = $1 AND lt.state = 'POSTED' AND le.entry_kind = 'POSITION'
+        AND le.instrument_id = $2
+      ORDER BY lt.effective_date, lt.occurred_at, lt.created_at, lt.id, le.id`,
+    [portfolioId, optionInstrumentId]
+  );
+  const lots: Array<{ transaction_id: string; quantity: number; unit_cost: number; effective_date: string }> = [];
+  for (const row of result.rows as Array<Record<string, unknown>>) {
+    const quantity = Number(row.quantity);
+    if (!(quantity > 0)) continue;
+    if (String(row.direction) === "DEBIT") {
+      const basis = Number(row.amount) + Number(row.fee_amount || 0) + Number(row.tax_amount || 0);
+      lots.push({ transaction_id: String(row.transaction_id), quantity, unit_cost: basis / quantity, effective_date: String(row.effective_date) });
+      continue;
+    }
+    let remaining = quantity;
+    while (remaining > 1e-9 && lots.length > 0) {
+      const take = Math.min(remaining, lots[0].quantity);
+      lots[0].quantity -= take;
+      remaining -= take;
+      if (lots[0].quantity <= 1e-9) lots.shift();
+    }
+  }
+  return lots;
+}
+
+async function optionLifecycleTransactions(transactionIds: string[]) {
+  if (transactionIds.length === 0) return [];
+  const transactions = await databasePool.query(
+    `SELECT id::text, portfolio_id, financial_account_id, activity_type, activity_subtype, state,
+            occurred_at, settlement_at, effective_date, source_type, description, external_id,
+            external_hash, paired_transaction_id, is_external_flow, metadata, voided_at, created_at, updated_at
+       FROM spaartrack.ledger_transaction WHERE id = ANY($1::uuid[])`,
+    [transactionIds]
+  );
+  const entries = await databasePool.query(
+    `SELECT id, ledger_transaction_id::text, financial_account_id, instrument_id, entry_kind, direction,
+            quantity, unit_price, amount, currency_code, fee_amount, tax_amount, notes
+       FROM spaartrack.ledger_entry WHERE ledger_transaction_id = ANY($1::uuid[]) ORDER BY id`,
+    [transactionIds]
+  );
+  const byId = new Map((transactions.rows as Array<Record<string, unknown>>).map((row) => [String(row.id), row]));
+  return transactionIds
+    .map((transactionId) => byId.get(transactionId))
+    .filter((row): row is Record<string, unknown> => Boolean(row))
+    .map((row) => transactionResponse(row, (entries.rows as Array<Record<string, unknown>>).filter((entry) => String(entry.ledger_transaction_id) === String(row.id))));
+}
+
+function optionLifecycleEventResponse(row: Record<string, unknown>, ledgerTransactions: Array<Record<string, unknown>>) {
+  const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+  return {
+    id: String(row.id),
+    portfolio_id: metadata.portfolio_id ?? null,
+    option_instrument_id: String(row.option_instrument_id),
+    underlying_instrument_id: metadata.underlying_instrument_id ?? null,
+    event_type: String(row.event_type),
+    requested_event_type: metadata.requested_event_type ?? row.event_type,
+    option_type: metadata.option_type ?? null,
+    quantity: fixedAmount(Number(row.quantity)),
+    premium_per_contract: metadata.premium_per_contract ?? null,
+    gross_premium_amount: metadata.gross_premium_amount ?? null,
+    consumed_basis: metadata.consumed_basis ?? null,
+    realized_pnl: metadata.realized_pnl ?? null,
+    remaining_quantity: metadata.remaining_quantity ?? null,
+    remaining_basis: metadata.remaining_basis ?? null,
+    destination: metadata.destination ?? null,
+    roll_group_id: metadata.roll_group_id ?? null,
+    underlying_settlement: metadata.underlying_settlement ?? null,
+    occurred_at: new Date(row.occurred_at as string).toISOString(),
+    effective_date: metadata.effective_date ?? null,
+    currency_code: metadata.currency_code ?? null,
+    primary_transaction_id: row.ledger_transaction_id,
+    ledger_transactions: ledgerTransactions,
+    calculation_version: "option-lifecycle-v1",
+    ledger_boundary: "canonical-ledger-application-command",
+    read_only: false
+  };
+}
+
+async function optionLifecycleEventById(eventId: string) {
+  const result = await databasePool.query(
+    `SELECT ole.id::text, ole.option_instrument_id::text, ole.ledger_transaction_id::text,
+            ole.event_type, ole.occurred_at, ole.quantity::text, ole.metadata,
+            oc.underlying_instrument_id::text AS contract_underlying_instrument_id
+       FROM spaartrack.option_lifecycle_event ole
+       JOIN spaartrack.option_contract oc ON oc.instrument_id = ole.option_instrument_id
+      WHERE ole.id = $1`,
+    [eventId]
+  );
+  if (!result.rowCount) return null;
+  const row = result.rows[0] as Record<string, unknown>;
+  const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+  const transactionIds = Array.isArray(metadata.ledger_transaction_ids) ? metadata.ledger_transaction_ids.map(String) : [row.ledger_transaction_id].filter(Boolean).map(String);
+  return optionLifecycleEventResponse(row, await optionLifecycleTransactions(transactionIds));
+}
+
+async function optionLifecycleEventByTransaction(transactionId: string) {
+  const result = await databasePool.query(`SELECT id::text FROM spaartrack.option_lifecycle_event WHERE ledger_transaction_id = $1`, [transactionId]);
+  if (!result.rowCount) return null;
+  return optionLifecycleEventById(String((result.rows[0] as Record<string, unknown>).id));
+}
+
+async function optionLifecycleEventRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/option-lifecycle-events")) return false;
+
+  const userId = await authenticatedUserId(req);
+  if (!userId) {
+    json(res, 401, { error: "UNAUTHENTICATED" });
+    return true;
+  }
+
+  const parsed = new URL(req.url, "http://localhost");
+  if (req.method === "GET" && parsed.pathname === "/api/v1/option-lifecycle-events") {
+    const portfolioId = parsed.searchParams.get("portfolio_id")?.trim() || "";
+    const optionInstrumentId = parsed.searchParams.get("option_instrument_id")?.trim() || null;
+    if (!portfolioId) {
+      json(res, 400, { error: "INVALID_OPTION_LIFECYCLE_REQUEST" });
+      return true;
+    }
+    const access = await databasePool.query(
+      `SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+      [portfolioId, userId]
+    );
+    if (!access.rowCount) {
+      json(res, 403, { error: "OPTION_LIFECYCLE_FORBIDDEN" });
+      return true;
+    }
+    const result = await databasePool.query(
+      `SELECT ole.id::text, ole.option_instrument_id::text, ole.ledger_transaction_id::text,
+              ole.event_type, ole.occurred_at, ole.quantity::text, ole.metadata,
+              oc.underlying_instrument_id::text AS contract_underlying_instrument_id
+         FROM spaartrack.option_lifecycle_event ole
+         JOIN spaartrack.option_contract oc ON oc.instrument_id = ole.option_instrument_id
+         JOIN spaartrack.ledger_transaction lt ON lt.id = ole.ledger_transaction_id
+        WHERE lt.portfolio_id = $1 AND ($2::uuid IS NULL OR ole.option_instrument_id = $2::uuid)
+        ORDER BY ole.occurred_at, ole.id`,
+      [portfolioId, optionInstrumentId]
+    );
+    const events = (result.rows as Array<Record<string, unknown>>).map((row) => optionLifecycleEventResponse(row, []));
+    json(res, 200, { events, count: events.length, calculation_version: "option-lifecycle-v1", read_only: true });
+    return true;
+  }
+
+  if (req.method === "POST" && parsed.pathname === "/api/v1/option-lifecycle-events") {
+    const uuid = /^[0-9a-f-]{36}$/i;
+    try {
+      const body = await readJson(req);
+      const portfolioId = typeof body.portfolio_id === "string" ? body.portfolio_id.trim() : "";
+      const accountId = typeof body.financial_account_id === "string" ? body.financial_account_id.trim() : "";
+      const optionInstrumentId = typeof body.option_instrument_id === "string" ? body.option_instrument_id.trim() : "";
+      if (!uuid.test(portfolioId) || !uuid.test(accountId) || !uuid.test(optionInstrumentId)) {
+        json(res, 400, { error: "INVALID_OPTION_LIFECYCLE_REQUEST" });
+        return true;
+      }
+      const contract = await databasePool.query(
+        `SELECT option_type, contract_multiplier::text, strike_price::text, underlying_instrument_id::text FROM spaartrack.option_contract WHERE instrument_id = $1`,
+        [optionInstrumentId]
+      );
+      if (!contract.rowCount) {
+        json(res, 404, { error: "OPTION_CONTRACT_NOT_FOUND" });
+        return true;
+      }
+      const contractRow = contract.rows[0] as Record<string, unknown>;
+
+      const membership = await databasePool.query(
+        `SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL AND role IN ('OWNER', 'EDITOR')`,
+        [portfolioId, userId]
+      );
+      if (!membership.rowCount) {
+        json(res, 403, { error: "OPTION_LIFECYCLE_FORBIDDEN" });
+        return true;
+      }
+      const account = await databasePool.query(
+        `SELECT 1 FROM spaartrack.financial_account WHERE id = $1 AND portfolio_id = $2`,
+        [accountId, portfolioId]
+      );
+      if (!account.rowCount) {
+        json(res, 403, { error: "OPTION_LIFECYCLE_FORBIDDEN" });
+        return true;
+      }
+
+      const openLots = await optionOpenLots(portfolioId, optionInstrumentId);
+      let plan;
+      try {
+        plan = planOptionLifecycleEvent({
+          event_type: body.event_type as string | undefined,
+          quantity: body.quantity as string | number | undefined,
+          premium: body.premium as string | number | null | undefined,
+          strike_price: (body.strike_price ?? contractRow.strike_price) as string | number | null | undefined,
+          contract_multiplier: String(contractRow.contract_multiplier),
+          option_type: String(contractRow.option_type),
+          occurred_at: body.occurred_at as string | undefined,
+          effective_date: body.effective_date as string | undefined,
+          currency_code: body.currency_code as string | undefined,
+          fee_amount: body.fee_amount as string | number | undefined,
+          tax_amount: body.tax_amount as string | number | undefined,
+          open_lots: openLots,
+          destination_option_instrument_id: body.destination_option_instrument_id as string | null | undefined,
+          destination_premium: body.destination_premium as string | number | null | undefined,
+          roll_group_id: body.roll_group_id as string | null | undefined
+        });
+      } catch (error) {
+        const message = (error as Error).message;
+        if (message === "OPTION_QUANTITY_NOT_AVAILABLE") {
+          json(res, 409, { error: message });
+          return true;
+        }
+        if (["INVALID_OPTION_LIFECYCLE_INPUT", "ROLL_DESTINATION_REQUIRED"].includes(message)) {
+          json(res, 400, { error: message });
+          return true;
+        }
+        throw error;
+      }
+
+      let underlyingInstrumentId: string | null = String(contractRow.underlying_instrument_id);
+      if (plan.destination) {
+        const destination = await databasePool.query(
+          `SELECT underlying_instrument_id::text, option_type FROM spaartrack.option_contract WHERE instrument_id = $1`,
+          [String(plan.destination.option_instrument_id)]
+        );
+        if (!destination.rowCount) {
+          json(res, 404, { error: "OPTION_CONTRACT_NOT_FOUND" });
+          return true;
+        }
+      }
+
+      const externalId = typeof body.external_id === "string" && body.external_id.trim() ? body.external_id.trim() : null;
+      const externalHash = createHash("sha256").update(JSON.stringify({
+        kind: "option-lifecycle",
+        portfolio_id: portfolioId,
+        financial_account_id: accountId,
+        option_instrument_id: optionInstrumentId,
+        event_type: plan.event_type,
+        quantity: plan.quantity,
+        premium_per_contract: plan.premium_per_contract,
+        destination: plan.destination,
+        occurred_at: plan.occurred_at,
+        effective_date: plan.effective_date,
+        currency_code: plan.currency_code
+      })).digest("hex");
+
+      const client = await databasePool.connect();
+      let eventId: string;
+      let responseBody: Record<string, unknown> | null = null;
+      try {
+        await client.query("BEGIN");
+        if (externalId) {
+          const duplicate = await client.query(
+            `SELECT id::text, external_id, external_hash FROM spaartrack.ledger_transaction
+              WHERE financial_account_id = $1 AND external_id = $2 ORDER BY created_at LIMIT 1 FOR UPDATE`,
+            [accountId, externalId]
+          );
+          if (duplicate.rowCount) {
+            const existing = duplicate.rows[0] as Record<string, unknown>;
+            if (existing.external_hash !== externalHash) {
+              await client.query("ROLLBACK");
+              json(res, 409, { error: "IDEMPOTENCY_KEY_CONFLICT" });
+              return true;
+            }
+            const existingEvent = await optionLifecycleEventByTransaction(String(existing.id));
+            await client.query("COMMIT");
+            if (existingEvent) {
+              json(res, 200, { ...existingEvent, idempotent: true });
+              return true;
+            }
+            json(res, 200, { idempotent: true, primary_transaction_id: String(existing.id) });
+            return true;
+          }
+        }
+
+        const transactionIds: string[] = [];
+        for (const leg of plan.ledger_plan) {
+          const legExternalId = externalId === null
+            ? null
+            : plan.ledger_plan.length === 1
+              ? externalId
+              : `${externalId}:${leg.leg}`;
+          const legExternalHash = plan.ledger_plan.length === 1
+            ? externalHash
+            : createHash("sha256").update(`${externalHash}:${leg.leg}`).digest("hex");
+          const instrumentId = leg.leg === "UNDERLYING"
+            ? underlyingInstrumentId
+            : leg.leg === "DESTINATION_OPTION"
+              ? String(plan.destination?.option_instrument_id)
+              : optionInstrumentId;
+          const transaction = await client.query(
+            `INSERT INTO spaartrack.ledger_transaction
+               (portfolio_id, financial_account_id, activity_type, state, occurred_at, effective_date,
+                description, external_id, external_hash, source_type, is_external_flow, metadata, created_by)
+             VALUES ($1, $2, $3, 'POSTED', $4, $5, $6, $7, $8, 'SYSTEM', false, $9, $10)
+             RETURNING id::text`,
+            [
+              portfolioId, accountId, leg.activity_type, plan.occurred_at, plan.effective_date,
+              `Option ${plan.event_type} ${optionInstrumentId}`,
+              legExternalId, legExternalHash,
+              JSON.stringify({ ...leg.metadata, option_lifecycle: true, calculation_version: plan.calculation_version, leg: leg.leg }),
+              userId
+            ]
+          );
+          const transactionId = String((transaction.rows[0] as Record<string, unknown>).id);
+          transactionIds.push(transactionId);
+          await client.query(
+            `INSERT INTO spaartrack.ledger_entry
+               (ledger_transaction_id, financial_account_id, instrument_id, entry_kind, direction,
+                quantity, unit_price, amount, currency_code, fee_amount, tax_amount)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            [
+              transactionId, accountId, leg.leg === "DESTINATION_OPTION" ? String(plan.destination?.option_instrument_id) : instrumentId,
+              leg.entry_kind, leg.direction, leg.quantity, leg.unit_price, leg.amount,
+              leg.currency_code, leg.fee_amount, leg.tax_amount
+            ]
+          );
+        }
+
+        const metadata = {
+          requested_event_type: plan.requested_event_type,
+          option_type: plan.option_type,
+          premium_per_contract: plan.premium_per_contract,
+          gross_premium_amount: plan.gross_premium_amount,
+          consumed_basis: plan.consumed_basis,
+          realized_pnl: plan.realized_pnl,
+          remaining_quantity: plan.remaining_quantity,
+          remaining_basis: plan.remaining_basis,
+          destination: plan.destination,
+          roll_group_id: plan.roll_group_id,
+          underlying_settlement: plan.underlying_settlement,
+          effective_date: plan.effective_date,
+          currency_code: plan.currency_code,
+          portfolio_id: portfolioId,
+          underlying_instrument_id: underlyingInstrumentId,
+          external_id: externalId,
+          external_hash: externalHash,
+          calculation_version: plan.calculation_version,
+          ledger_transaction_ids: transactionIds
+        };
+        const inserted = await client.query(
+          `INSERT INTO spaartrack.option_lifecycle_event (option_instrument_id, ledger_transaction_id, event_type, occurred_at, quantity, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id::text`,
+          [optionInstrumentId, transactionIds[0], plan.event_type, plan.occurred_at, plan.quantity, JSON.stringify(metadata)]
+        );
+        eventId = String((inserted.rows[0] as Record<string, unknown>).id);
+        await client.query("COMMIT");
+        const stored = await optionLifecycleEventById(eventId);
+        responseBody = stored;
+        await auditEvent(req, res, userId, plan.event_type, "OPTION_LIFECYCLE_EVENT", eventId, {
+          portfolio_id: portfolioId,
+          option_instrument_id: optionInstrumentId,
+          underlying_instrument_id: underlyingInstrumentId,
+          realized_pnl: plan.realized_pnl,
+          roll_group_id: plan.roll_group_id,
+          ledger_transaction_ids: transactionIds,
+          calculation_version: plan.calculation_version
+        });
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+      json(res, 201, responseBody);
+      return true;
+    } catch (error) {
+      const message = (error as Error).message;
+      if (message === "invalid_json" || message === "request_too_large") {
+        json(res, 400, { error: "INVALID_OPTION_LIFECYCLE_REQUEST" });
+        return true;
+      }
+      console.error(redactedLog({ level: "error", operation: "option_lifecycle_failed", error: message }));
+      if (!res.writableEnded) json(res, 400, { error: "OPTION_LIFECYCLE_REQUEST_FAILED" });
+      return true;
+    }
+  }
+
+  json(res, 405, { error: "METHOD_NOT_ALLOWED" });
+  return true;
+}
+
+async function optionPositionRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/option-positions")) return false;
+
+  const userId = await authenticatedUserId(req);
+  if (!userId) {
+    json(res, 401, { error: "UNAUTHENTICATED" });
+    return true;
+  }
+
+  const parsed = new URL(req.url, "http://localhost");
+  if (req.method !== "GET") {
+    json(res, 405, { error: "METHOD_NOT_ALLOWED" });
+    return true;
+  }
+  const portfolioId = parsed.searchParams.get("portfolio_id")?.trim() || "";
+  if (!/^[0-9a-f-]{36}$/i.test(portfolioId)) {
+    json(res, 400, { error: "INVALID_OPTION_POSITION_REQUEST" });
+    return true;
+  }
+  const access = await databasePool.query(
+    `SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+    [portfolioId, userId]
+  );
+  if (!access.rowCount) {
+    json(res, 403, { error: "OPTION_POSITION_FORBIDDEN" });
+    return true;
+  }
+  const instruments = await databasePool.query(
+    `SELECT DISTINCT le.instrument_id::text AS instrument_id, oc.underlying_instrument_id::text AS underlying_instrument_id
+       FROM spaartrack.ledger_transaction lt
+       JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+       JOIN spaartrack.instrument i ON i.id = le.instrument_id AND i.instrument_type = 'OPTION'
+       LEFT JOIN spaartrack.option_contract oc ON oc.instrument_id = le.instrument_id
+      WHERE lt.portfolio_id = $1 AND lt.state = 'POSTED' AND le.entry_kind = 'POSITION' AND le.instrument_id IS NOT NULL`,
+    [portfolioId]
+  );
+  const positions = [];
+  for (const row of instruments.rows as Array<Record<string, unknown>>) {
+    const lots = await optionOpenLots(portfolioId, String(row.instrument_id));
+    const summary = summarizeOptionPosition({ open_lots: lots });
+    if (Number(summary.remaining_quantity) <= 0) continue;
+    positions.push({
+      option_instrument_id: String(row.instrument_id),
+      underlying_instrument_id: row.underlying_instrument_id ? String(row.underlying_instrument_id) : null,
+      ...summary
+    });
+  }
+  json(res, 200, { positions, count: positions.length, calculation_version: "option-position-v1", read_only: true });
+  return true;
+}
+
+async function wheelCycleRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/wheel-cycles")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "POST" || new URL(req.url, "http://localhost").pathname !== "/api/v1/wheel-cycles") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+  try {
+    const body = await readJson(req);
+    const cycle = planWheelCycle({ events: Array.isArray(body.events) ? body.events : [] });
+    await auditEvent(req, res, userId, "CALCULATE", "WHEEL_CYCLE", randomUUID(), { calculation_version: cycle.calculation_version, linked: cycle.linked, stages: cycle.stages.length });
+    json(res, 201, { ...cycle, trace_id: traceId(req), correlation_id: correlationId(req) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "WHEEL_CYCLE_FAILED";
+    if (message === "INVALID_WHEEL_EVENT") { json(res, 400, { error: message }); return true; }
+    console.error(redactedLog({ level: "error", operation: "wheel_cycle_failed", error: message }));
+    if (!res.writableEnded) json(res, 400, { error: "WHEEL_CYCLE_FAILED" });
+  }
+  return true;
+}
+
+async function alternativeAssetValuationRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/alternative-asset-valuations")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "POST" || new URL(req.url, "http://localhost").pathname !== "/api/v1/alternative-asset-valuations") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+  try {
+    const body = await readJson(req);
+    const valuation = describeAlternativeAssetValuation({
+      instrument_type: body.instrument_type as string | undefined, asset_class: body.asset_class as string | undefined, currency_code: body.currency_code as string | undefined,
+      valuation_source: body.valuation_source as string | undefined, manual_price: (body.manual_price as number | string | null | undefined) ?? null, provider_price: (body.provider_price as number | string | null | undefined) ?? null
+    });
+    await auditEvent(req, res, userId, "CALCULATE", "ALTERNATIVE_ASSET_VALUATION", randomUUID(), { calculation_version: valuation.calculation_version, instrument_type: valuation.instrument_type, valuation_source: valuation.valuation_source });
+    json(res, 201, { ...valuation, trace_id: traceId(req), correlation_id: correlationId(req) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "ALTERNATIVE_ASSET_FAILED";
+    if (message === "INVALID_ALTERNATIVE_ASSET") { json(res, 400, { error: message }); return true; }
+    console.error(redactedLog({ level: "error", operation: "alternative_asset_failed", error: message }));
+    if (!res.writableEnded) json(res, 400, { error: "ALTERNATIVE_ASSET_FAILED" });
+  }
+  return true;
+}
+
+async function fireScenarioRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  if (!req.url?.startsWith("/api/v1/fire-scenarios")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "POST" || new URL(req.url, "http://localhost").pathname !== "/api/v1/fire-scenarios") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+  try {
+    const body = await readJson(req);
+    const scenario = planFireScenario({
+      horizon_years: body.horizon_years as number | string | undefined,
+      annual_contribution: body.annual_contribution as number | string | undefined,
+      expected_return: body.expected_return as number | string | undefined,
+      inflation_rate: body.inflation_rate as number | string | undefined,
+      tax_rate: body.tax_rate as number | string | undefined,
+      initial_capital: body.initial_capital as number | string | undefined,
+      monte_carlo: (body.monte_carlo && typeof body.monte_carlo === "object" ? body.monte_carlo : {}) as { iterations?: number | string; seed?: number | string | null; volatility?: number | string; distribution?: string }
+    });
+    const persisted = await databasePool.query(
+      `INSERT INTO spaartrack.retirement_scenario (user_id, assumptions, tax_assumptions, inflation_assumptions, result, status)
+       VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5::jsonb, 'SUCCEEDED') RETURNING id`,
+      [userId, JSON.stringify({ ...scenario.assumptions, calculation_version: scenario.calculation_version }), JSON.stringify({ tax_rate: scenario.assumptions.tax_rate }), JSON.stringify({ inflation_rate: scenario.assumptions.inflation_rate }), JSON.stringify({ ...scenario.result, sensitivity: scenario.sensitivity, sequence_of_returns: scenario.sequence_of_returns })]
+    );
+    const scenarioId = String(persisted.rows[0].id);
+    await databasePool.query(
+      `INSERT INTO spaartrack.monte_carlo_run (retirement_scenario_id, iterations, seed, result) VALUES ($1, $2, $3, $4::jsonb)`,
+      [scenarioId, scenario.monte_carlo.iterations, scenario.monte_carlo.seed === null ? null : Number(scenario.monte_carlo.seed), JSON.stringify(scenario.monte_carlo.result)]
+    );
+    await auditEvent(req, res, userId, "CALCULATE", "FIRE_SCENARIO", scenarioId, { calculation_version: scenario.calculation_version, iterations: scenario.monte_carlo.iterations });
+    json(res, 201, { scenario_id: scenarioId, ...scenario, trace_id: traceId(req), correlation_id: correlationId(req) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "FIRE_SCENARIO_FAILED";
+    if (message === "INVALID_FIRE_SCENARIO") { json(res, 400, { error: message }); return true; }
+    console.error(redactedLog({ level: "error", operation: "fire_scenario_failed", error: message }));
+    if (!res.writableEnded) json(res, 400, { error: "FIRE_SCENARIO_FAILED" });
+  }
+  return true;
+}
+
 async function benchmarkRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   if (environment !== "local") return false;
   if (!req.url?.startsWith("/api/v1/benchmarks") && !req.url?.startsWith("/api/v1/benchmark-observations")) return false;
@@ -3320,6 +5777,169 @@ async function syncIncidentsRoute(req: IncomingMessage, res: ServerResponse): Pr
   }
   return true;
 }
+
+async function incidentRoutingRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/incidents")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  try {
+    const parsed = new URL(req.url, "http://localhost");
+    const evidenceMatch = parsed.pathname.match(/^\/api\/v1\/incidents\/([0-9a-f-]{36})\/evidence$/i);
+    // incidentFixVerificationRoute is the incident-fix-verification-v1 branch of incidentRoutingRoute.
+    const fixMatch = parsed.pathname.match(/^\/api\/v1\/incidents\/([0-9a-f-]{36})\/fix-verification$/i);
+    if (req.method === "POST" && fixMatch) {
+      const body = await readJson(req);
+      const traced = res as TracedResponse;
+      let verification;
+      try {
+        verification = buildFixVerification({
+          ...(body as unknown as Record<string, unknown>),
+          incident_id: fixMatch[1],
+          correlation_id: traced.correlation_id || String((body as Record<string, unknown>).correlation_id || ""),
+          trace_id: traced.trace_id || String((body as Record<string, unknown>).trace_id || "")
+        } as never);
+      } catch (error) {
+        json(res, 400, { error: String((error as Error).message || "INVALID_FIX_VERIFICATION") });
+        return true;
+      }
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const incident = await client.query(`SELECT i.id FROM spaartrack.incident i WHERE i.id = $1::uuid AND EXISTS (SELECT 1 FROM spaartrack.incident_event ie WHERE ie.incident_id = i.id AND ie.actor_id = $2) FOR UPDATE`, [verification.incident_id, userId]);
+        if (!incident.rowCount) { await client.query("ROLLBACK"); json(res, 404, { error: "INCIDENT_NOT_FOUND" }); return true; }
+        await client.query(`UPDATE spaartrack.incident SET evidence = evidence || $1::jsonb, last_seen_at = now() WHERE id = $2::uuid`, [JSON.stringify({ fix_verification: verification }), verification.incident_id]);
+        await client.query(`INSERT INTO spaartrack.incident_event (incident_id, event_type, actor_type, actor_id, payload) VALUES ($1, 'VERIFICATION', 'AGENT', $2, $3)`, [verification.incident_id, userId, JSON.stringify({ calculation_version: verification.calculation_version, reproducibility_key: verification.reproducibility_key, old_result: verification.old_result, new_result: verification.new_result, correlation_id: verification.correlation_id, trace_id: verification.trace_id })]);
+        await client.query("COMMIT");
+      } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; }
+      finally { client.release(); }
+      await auditEvent(req, res, userId, "CALCULATE", "FIX_VERIFICATION", verification.incident_id, { calculation_version: verification.calculation_version, reproducibility_key: verification.reproducibility_key, old_result: verification.old_result, new_result: verification.new_result, ledger_untouched: true });
+      json(res, 201, { ...verification, ledger_untouched: true });
+      return true;
+    }
+    // incidentDiagnosisRoute is the incident-diagnosis-v1 branch of incidentRoutingRoute.
+    const hypothesisMatch = parsed.pathname.match(/^\/api\/v1\/incidents\/([0-9a-f-]{36})\/hypotheses$/i);
+    if (req.method === "POST" && hypothesisMatch) {
+      const body = await readJson(req);
+      const traced = res as TracedResponse;
+      const hypothesis = buildIncidentHypothesis({
+        ...(body as unknown as Omit<IncidentHypothesisInput, "incident_id" | "correlation_id" | "trace_id">),
+        incident_id: hypothesisMatch[1],
+        correlation_id: traced.correlation_id || String(body.correlation_id || ""),
+        trace_id: traced.trace_id || String(body.trace_id || "")
+      });
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const incident = await client.query(`SELECT i.id FROM spaartrack.incident i WHERE i.id = $1::uuid AND EXISTS (SELECT 1 FROM spaartrack.incident_event ie WHERE ie.incident_id = i.id AND ie.actor_id = $2) FOR UPDATE`, [hypothesis.incident_id, userId]);
+        if (!incident.rowCount) { await client.query("ROLLBACK"); json(res, 404, { error: "INCIDENT_NOT_FOUND" }); return true; }
+        await client.query(`UPDATE spaartrack.incident SET evidence = evidence || $1::jsonb, last_seen_at = now() WHERE id = $2::uuid`, [JSON.stringify({ diagnosis_hypothesis: hypothesis }), hypothesis.incident_id]);
+        await client.query(`INSERT INTO spaartrack.incident_event (incident_id, event_type, actor_type, actor_id, payload) VALUES ($1, 'VERIFICATION', 'AGENT', $2, $3)`, [hypothesis.incident_id, userId, JSON.stringify({ calculation_version: hypothesis.calculation_version, reproducibility_key: hypothesis.reproducibility_key, correlation_id: hypothesis.correlation_id, trace_id: hypothesis.trace_id })]);
+        await client.query("COMMIT");
+      } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; }
+      finally { client.release(); }
+      await auditEvent(req, res, userId, "CALCULATE", "INCIDENT_HYPOTHESIS", hypothesis.incident_id, { calculation_version: hypothesis.calculation_version, reproducibility_key: hypothesis.reproducibility_key, ledger_untouched: true });
+      json(res, 201, { ...hypothesis, ledger_untouched: true });
+      return true;
+    }
+    if (req.method === "POST" && evidenceMatch) {
+      const body = await readJson(req);
+      const traced = res as TracedResponse;
+      const evidence = buildIncidentEvidenceBundle({
+        ...(body as unknown as Omit<IncidentEvidenceInput, "incident_id" | "correlation_id" | "trace_id">),
+        incident_id: evidenceMatch[1],
+        correlation_id: traced.correlation_id || String(body.correlation_id || ""),
+        trace_id: traced.trace_id || String(body.trace_id || "")
+      });
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const incident = await client.query(
+          `SELECT i.id
+             FROM spaartrack.incident i
+            WHERE i.id = $1::uuid
+              AND EXISTS (
+                SELECT 1 FROM spaartrack.incident_event ie
+                 WHERE ie.incident_id = i.id AND ie.actor_id = $2
+              )
+            FOR UPDATE`,
+          [evidence.incident_id, userId]
+        );
+        if (!incident.rowCount) {
+          await client.query("ROLLBACK");
+          json(res, 404, { error: "INCIDENT_NOT_FOUND" });
+          return true;
+        }
+        await client.query(
+          `UPDATE spaartrack.incident
+              SET evidence = evidence || $1::jsonb,
+                  last_seen_at = now()
+            WHERE id = $2::uuid`,
+          [JSON.stringify({ evidence_bundle: evidence }), evidence.incident_id]
+        );
+        await client.query(
+          `INSERT INTO spaartrack.incident_event
+            (incident_id, event_type, actor_type, actor_id, payload)
+           VALUES ($1, 'VERIFICATION', 'AGENT', $2, $3)`,
+          [evidence.incident_id, userId, JSON.stringify({ calculation_version: evidence.calculation_version, correlation_id: evidence.correlation_id, trace_id: evidence.trace_id, pii_redacted: true })]
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+      await auditEvent(req, res, userId, "CREATE", "INCIDENT_EVIDENCE", evidence.incident_id, { calculation_version: evidence.calculation_version, pii_redacted: true, redacted_exemplars: true, ledger_untouched: true });
+      json(res, 201, evidence);
+      return true;
+    }
+    if (req.method === "GET" && parsed.pathname === "/api/v1/incidents") {
+      const result = await databasePool.query(`SELECT id, fingerprint, severity, status, title, service, environment, first_seen_at, last_seen_at, affected_release_id, evidence FROM spaartrack.incident WHERE status NOT IN ('RESOLVED', 'CLOSED') ORDER BY last_seen_at DESC, id DESC LIMIT 100`);
+      const incidents = [];
+      for (const incident of result.rows) {
+        const events = await databasePool.query(`SELECT id, event_type, actor_type, actor_id, payload, created_at FROM spaartrack.incident_event WHERE incident_id = $1 ORDER BY created_at ASC`, [incident.id]);
+        incidents.push({ ...incident, events: events.rows });
+      }
+      json(res, 200, { incidents, calculation_version: "incident-router-v1", read_only: true });
+      return true;
+    }
+    if (req.method !== "POST" || parsed.pathname !== "/api/v1/incidents/alerts") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+    const body = await readJson(req);
+    const traced = res as TracedResponse;
+    const alert = buildIncidentAlert({
+      title: String(body.title || ""), service: String(body.service || ""), environment: String(body.environment || environment),
+      release: String(body.release || release), severity: String(body.severity || "") as never, message: String(body.message || ""),
+      occurred_at: typeof body.occurred_at === "string" ? body.occurred_at : undefined,
+      correlation_id: traced.correlation_id || String(body.correlation_id || ""), trace_id: traced.trace_id || String(body.trace_id || "")
+    });
+    const client = await databasePool.connect();
+    try {
+      await client.query("BEGIN");
+      const existing = await client.query(`SELECT id, severity, status FROM spaartrack.incident WHERE fingerprint = $1 AND status NOT IN ('RESOLVED', 'CLOSED') ORDER BY last_seen_at DESC LIMIT 1 FOR UPDATE`, [alert.fingerprint]);
+      const nextSeverity = existing.rowCount && severityRank(String(existing.rows[0].severity)) > severityRank(alert.severity) ? String(existing.rows[0].severity) : alert.severity;
+      const incident = existing.rowCount
+        ? await client.query(`UPDATE spaartrack.incident SET severity = $1, last_seen_at = now(), evidence = evidence || $2::jsonb, impact_summary = $3 WHERE id = $4 RETURNING id, fingerprint, severity, status`, [nextSeverity, JSON.stringify({ ...alert, grouping_window_minutes: alert.grouping_window_minutes }), alert.message, existing.rows[0].id])
+        : await client.query(`INSERT INTO spaartrack.incident (fingerprint, severity, status, title, service, environment, first_seen_at, last_seen_at, impact_summary, evidence) VALUES ($1, $2, 'OPEN', $3, $4, $5, now(), now(), $6, $7) RETURNING id, fingerprint, severity, status`, [alert.fingerprint, alert.severity, alert.title, alert.service, alert.environment, alert.message, JSON.stringify({ ...alert, release: alert.release })]);
+      const incidentId = String(incident.rows[0].id);
+      await client.query(`INSERT INTO spaartrack.incident_event (incident_id, event_type, actor_type, actor_id, payload) VALUES ($1, 'ALERT', 'SYSTEM', $2, $3)`, [incidentId, userId, JSON.stringify({ ...alert, incident_id: incidentId })]);
+      await client.query("COMMIT");
+      const grouped = Boolean(existing.rowCount);
+      await auditEvent(req, res, userId, "CREATE", "INCIDENT_ALERT", incidentId, { fingerprint: alert.fingerprint, grouped, severity: incident.rows[0].severity, service: alert.service, environment: alert.environment });
+      json(res, grouped ? 200 : 201, { incident_id: incidentId, fingerprint: alert.fingerprint, severity: incident.rows[0].severity, status: incident.rows[0].status, grouped, grouping_window_minutes: alert.grouping_window_minutes, calculation_version: "incident-router-v1", read_only: true });
+    } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; }
+    finally { client.release(); }
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "INCIDENT_ROUTING_FAILED";
+    if (message.startsWith("INVALID_INCIDENT_")) { json(res, 400, { error: message }); return true; }
+    console.error(redactedLog({ level: "error", operation: "incident_routing_failed", error: message }));
+    if (!res.writableEnded) json(res, 400, { error: "INCIDENT_ROUTING_FAILED" });
+  }
+  return true;
+}
+
+// incidentEvidenceRoute is the incident-evidence-v1 branch of incidentRoutingRoute;
+// it links redacted_exemplars, image_digest and migration_result without ledger writes.
 
 async function syncResultsRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   if (environment !== "local") return false;
@@ -4212,10 +6832,187 @@ function goalResponse(row: Record<string, unknown>, readOnly = false): Record<st
   };
 }
 
+async function goalFundingResponse(goalId: string, userId: string): Promise<Record<string, unknown> | undefined> {
+  const goalResult = await databasePool.query(
+    `SELECT g.id, g.user_id, g.portfolio_id, g.target_currency_code, g.target_amount::text,
+            g.target_date, pm.role
+     FROM spaartrack.goal g
+     JOIN spaartrack.portfolio_member pm ON pm.portfolio_id = g.portfolio_id
+     WHERE g.id = $1 AND g.user_id = $2 AND pm.user_id = $2 AND pm.revoked_at IS NULL`,
+    [goalId, userId]
+  );
+  if (!goalResult.rowCount) return undefined;
+  const goal = goalResult.rows[0] as Record<string, unknown>;
+  const allocationsResult = await databasePool.query(
+    `SELECT gfa.goal_id, gfa.financial_account_id, gfa.funding_percentage::text,
+            fa.name AS account_name, fa.account_type, fa.status, fa.base_currency_code,
+            COALESCE(balance.account_balance, 0)::text AS account_balance
+     FROM spaartrack.goal_funding_allocation gfa
+     JOIN spaartrack.financial_account fa ON fa.id = gfa.financial_account_id
+     LEFT JOIN LATERAL (
+       SELECT SUM(ps.reporting_value) AS account_balance
+       FROM spaartrack.position_snapshot ps
+       JOIN spaartrack.portfolio_snapshot snap ON snap.id = ps.portfolio_snapshot_id
+       WHERE snap.portfolio_id = $2
+         AND snap.reporting_currency_code = $3
+         AND ps.financial_account_id = fa.id
+         AND snap.id = (
+           SELECT latest.id FROM spaartrack.portfolio_snapshot latest
+           WHERE latest.portfolio_id = $2 AND latest.reporting_currency_code = $3
+           ORDER BY latest.snapshot_at DESC, latest.id DESC LIMIT 1
+         )
+     ) balance ON true
+     WHERE gfa.goal_id = $1 ORDER BY fa.name, fa.id`,
+    [goalId, goal.portfolio_id, goal.target_currency_code]
+  );
+  const latest = await databasePool.query(
+    `SELECT snapshot_at, calculation_version
+     FROM spaartrack.portfolio_snapshot
+     WHERE portfolio_id = $1 AND reporting_currency_code = $2
+     ORDER BY snapshot_at DESC, id DESC LIMIT 1`,
+    [goal.portfolio_id, goal.target_currency_code]
+  );
+  const allocations = allocationsResult.rows.map((row) => ({
+    goal_id: row.goal_id,
+    financial_account_id: row.financial_account_id,
+    account_name: row.account_name,
+    account_type: row.account_type,
+    status: row.status,
+    base_currency_code: row.base_currency_code,
+    funding_percentage: Number(row.funding_percentage).toFixed(4),
+    account_balance: Number(row.account_balance).toFixed(2)
+  }));
+  const balances = new Map(allocations.map((row) => [String(row.financial_account_id), Number(row.account_balance)]));
+  const balance = calculateShareWeightedBalance(allocations, balances);
+  return {
+    goal_id: goal.id,
+    portfolio_id: goal.portfolio_id,
+    target_amount: Number(goal.target_amount || 0).toFixed(2),
+    target_currency_code: goal.target_currency_code,
+    target_date: goal.target_date instanceof Date ? goal.target_date.toISOString().slice(0, 10) : goal.target_date,
+    allocations,
+    total_percentage: Number(allocations.reduce((total, row) => total + Number(row.funding_percentage), 0).toFixed(4)),
+    share_weighted_balance: balance.toFixed(2),
+    source: "portfolio_snapshot.position_snapshot",
+    source_as_of: latest.rowCount ? latest.rows[0].snapshot_at : null,
+    source_version: latest.rowCount ? latest.rows[0].calculation_version : null,
+    calculation_version: "goal-funding-v1",
+    privacy_scope: { user_id: goal.user_id, portfolio_id: goal.portfolio_id },
+    traceable: true,
+    read_only: true
+  };
+}
+
+async function cashflowForecastRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local" || !req.url?.startsWith("/api/v1/cashflow-forecasts")) return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  if (req.method !== "POST" || req.url !== "/api/v1/cashflow-forecasts") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+  try {
+    const body = await readJson(req);
+    const portfolioId = typeof body.portfolio_id === "string" ? body.portfolio_id.trim() : "";
+    const mode = typeof body.mode === "string" ? body.mode : "";
+    const startDate = typeof body.start_date === "string" ? body.start_date.trim() : "";
+    const horizonMonths = typeof body.horizon_months === "number" ? body.horizon_months : Number(body.horizon_months);
+    const currencyCode = typeof body.currency_code === "string" ? body.currency_code.trim().toUpperCase() : "";
+    if (!/^[0-9a-f-]{36}$/i.test(portfolioId)) { json(res, 400, { error: "INVALID_PORTFOLIO_ID" }); return true; }
+    const access = await databasePool.query(
+      `SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+      [portfolioId, userId]
+    );
+    if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" }); return true; }
+    const scheduledResult = await databasePool.query(
+      `SELECT st.id, st.name, st.amount::text, st.currency_code, st.frequency, st.next_due_on::text,
+              st.starts_on::text, st.ends_on::text, st.is_active
+         FROM spaartrack.scheduled_transaction st
+         LEFT JOIN spaartrack.financial_account fa ON fa.id = st.financial_account_id
+        WHERE st.user_id = $1 AND (fa.portfolio_id = $2 OR st.financial_account_id IS NULL)`,
+      [userId, portfolioId]
+    );
+    const budgetResult = await databasePool.query(
+      `SELECT bl.category_id, c.name AS category_name, bl.planned_amount::text, bl.rollover_amount::text, bl.currency_code
+         FROM spaartrack.budget_line bl
+         JOIN spaartrack.budget_plan bp ON bp.id = bl.budget_plan_id
+         LEFT JOIN spaartrack.category c ON c.id = bl.category_id
+        WHERE bp.user_id = $1 AND bp.portfolio_id = $2 AND bp.period_start <= $3::date
+          AND bp.period_end >= $3::date`,
+      [userId, portfolioId, startDate]
+    );
+    const scheduledTransactions = Array.isArray(body.scheduled_transactions) ? body.scheduled_transactions : scheduledResult.rows;
+    const budgetLines = Array.isArray(body.budget_lines) ? body.budget_lines : budgetResult.rows;
+    const forecast = buildCashflowForecast({ mode: mode as "SCHEDULED_ONLY" | "BUDGET_ONLY" | "COMBINED", startDate, horizonMonths, currencyCode, scheduledTransactions, budgetLines });
+    const saved = await databasePool.query(
+      `INSERT INTO spaartrack.cashflow_forecast (user_id, portfolio_id, mode, horizon_months, assumptions, result)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`,
+      [userId, portfolioId, mode, horizonMonths, JSON.stringify(forecast.assumptions), JSON.stringify(forecast)]
+    );
+    await auditEvent(req, res, userId, "CREATE", "CASHFLOW_FORECAST", String(saved.rows[0].id), { portfolio_id: portfolioId, mode, horizon_months: horizonMonths });
+    json(res, 201, { id: saved.rows[0].id, created_at: saved.rows[0].created_at, ...forecast, input_source: Array.isArray(body.scheduled_transactions) || Array.isArray(body.budget_lines) ? "synthetic_read_model_fixture" : "canonical_ledger_read_models", privacy_scope: "portfolio_member", traceable: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown";
+    const status = ["INVALID_MODE", "INVALID_START_DATE", "INVALID_HORIZON", "INVALID_CURRENCY", "INVALID_AMOUNT", "CURRENCY_MISMATCH"].includes(message) ? 400 : 500;
+    console.error(redactedLog({ level: "error", operation: "cashflow_forecast_failed", error: message }));
+    json(res, status, { error: status === 400 ? message : "CASHFLOW_FORECAST_REQUEST_FAILED" });
+  }
+  return true;
+}
+
 async function goalRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   if (environment !== "local" || !req.url?.startsWith("/api/v1/goals")) return false;
   const userId = await authenticatedUserId(req);
   if (!userId) { json(res, 401, { error: "UNAUTHENTICATED" }); return true; }
+  const fundingMatch = req.url.match(/^\/api\/v1\/goals\/([0-9a-f-]{36})\/funding$/i);
+  if (fundingMatch) {
+    if (req.method === "GET") {
+      const funding = await goalFundingResponse(fundingMatch[1], userId);
+      if (!funding) { json(res, 404, { error: "GOAL_NOT_FOUND" }); return true; }
+      json(res, 200, funding); return true;
+    }
+    if (req.method !== "POST") { json(res, 405, { error: "METHOD_NOT_ALLOWED" }); return true; }
+    try {
+      const goalResult = await databasePool.query(
+        `SELECT g.id, g.user_id, g.portfolio_id, g.target_currency_code
+         FROM spaartrack.goal g JOIN spaartrack.portfolio_member pm ON pm.portfolio_id = g.portfolio_id
+         WHERE g.id = $1 AND g.user_id = $2 AND pm.user_id = $2 AND pm.revoked_at IS NULL`,
+        [fundingMatch[1], userId]
+      );
+      if (!goalResult.rowCount) { json(res, 404, { error: "GOAL_NOT_FOUND" }); return true; }
+      const body = await readJson(req);
+      const input = body.allocations;
+      if (!Array.isArray(input)) { json(res, 400, { error: "INVALID_GOAL_FUNDING_INPUT" }); return true; }
+      const accountIds = input.map((item) => item && typeof item === "object" && typeof (item as Record<string, unknown>).financial_account_id === "string" ? String((item as Record<string, unknown>).financial_account_id) : "");
+      if (accountIds.some((id) => !/^[0-9a-f-]{36}$/i.test(id))) { json(res, 400, { error: "INVALID_GOAL_FUNDING_INPUT" }); return true; }
+      const accounts = await databasePool.query(
+        `SELECT id, portfolio_id, status, base_currency_code
+         FROM spaartrack.financial_account WHERE id = ANY($1::uuid[])`, [accountIds]
+      );
+      const validated = validateGoalFundingAllocations(input, accounts.rows as Array<{ id: string; portfolio_id: string; status: string; base_currency_code: string }>, String(goalResult.rows[0].portfolio_id), String(goalResult.rows[0].target_currency_code));
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("DELETE FROM spaartrack.goal_funding_allocation WHERE goal_id = $1", [fundingMatch[1]]);
+        for (const allocation of validated.allocations) {
+          await client.query(
+            `INSERT INTO spaartrack.goal_funding_allocation (goal_id, financial_account_id, funding_percentage)
+             VALUES ($1, $2, $3)`, [fundingMatch[1], allocation.financial_account_id, allocation.funding_percentage]
+          );
+        }
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+      await auditEvent(req, res, userId, "UPDATE", "GOAL_FUNDING", fundingMatch[1], { total_percentage: validated.total_percentage, allocation_count: validated.allocations.length, calculation_version: "goal-funding-v1" });
+      const funding = await goalFundingResponse(fundingMatch[1], userId);
+      json(res, 200, { ...funding, read_only: false }); return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const known = ["INVALID_GOAL_FUNDING_INPUT", "DUPLICATE_GOAL_FUNDING_ACCOUNT", "GOAL_FUNDING_ACCOUNT_NOT_FOUND", "GOAL_FUNDING_ACCOUNT_UNAVAILABLE", "GOAL_FUNDING_CURRENCY_MISMATCH", "GOAL_FUNDING_OVERALLOCATED"];
+      json(res, known.includes(message) ? 400 : 500, { error: known.includes(message) ? message : "GOAL_FUNDING_FAILED" }); return true;
+    }
+  }
   const idMatch = req.url.match(/^\/api\/v1\/goals\/([0-9a-f-]{36})$/i);
   if (req.method === "GET" && idMatch) {
     const result = await databasePool.query(
@@ -5354,6 +8151,17 @@ const server = createServer((req, res) => {
     path: req.url?.startsWith("/api/v1/oidc/callback") ? "/api/v1/oidc/callback" : req.url
   }));
 
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
+      "access-control-allow-headers": "authorization,content-type,x-trace-id,x-correlation-id",
+      "access-control-max-age": "600"
+    });
+    res.end();
+    return;
+  }
+
   if (req.url?.startsWith("/api/v1/users")) {
     void identityRoute(req, res).then((handled) => {
       if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
@@ -5386,11 +8194,98 @@ const server = createServer((req, res) => {
     });
     return;
   }
+  if (req.url?.startsWith("/api/v1/model-sessions")) {
+    void modelSessionRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "MODEL_SESSION_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/agent-scopes")) {
+    void agentScopesRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "AGENT_SCOPES_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/addons")) {
+    if (req.url !== "/api/v1/addons") {
+      void addonSdkRoute(req, res).then((handled) => {
+        if (!handled) void addonSandboxRoute(req, res);
+      }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "ADDON_SDK_REQUEST_FAILED" }); });
+      return;
+    }
+    void addonSandboxRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "ADDON_SANDBOX_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/assistant-proposals")) {
+    void assistantProposalRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "ASSISTANT_PROPOSAL_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/assistant-answers")) {
+    void assistantAnswerRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "ASSISTANT_ANSWER_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/push-consents")) {
+    void pushConsentRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "PUSH_CONSENT_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/community/")) {
+    void communityFeedRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch((error) => {
+      console.error(redactedLog({ level: "error", operation: "community_feed_failed", error: error instanceof Error ? error.message : "unknown" }));
+      if (!res.writableEnded) json(res, 500, { error: "COMMUNITY_FEED_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.match(/^\/api\/v1\/portfolios\/[0-9a-f-]{36}\/share-links$/i) || req.url?.match(/^\/api\/v1\/share-links\/[0-9a-f-]{36}\/revoke$/i) || req.url?.match(/^\/api\/v1\/shared\/[A-Za-z0-9_-]{12,}$/)) {
+    void portfolioShareLinkRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "SHARE_LINK_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.match(/^\/api\/v1\/portfolios\/[0-9a-f-]{36}\/accountant-shares$/i)) {
+    void accountantShareRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "ACCOUNTANT_SHARE_REQUEST_FAILED" });
+    });
+    return;
+  }
   if (req.url?.startsWith("/api/v1/portfolios")) {
     void portfolioRoute(req, res).then((handled) => {
       if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
     }).catch(() => {
       if (!res.writableEnded) json(res, 500, { error: "PORTFOLIO_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/accountant-shares/")) {
+    void accountantShareRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "ACCOUNTANT_SHARE_REQUEST_FAILED" });
     });
     return;
   }
@@ -5415,6 +8310,14 @@ const server = createServer((req, res) => {
       if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
     }).catch(() => {
       if (!res.writableEnded) json(res, 500, { error: "GOAL_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/cashflow-forecasts")) {
+    void cashflowForecastRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "CASHFLOW_FORECAST_REQUEST_FAILED" });
     });
     return;
   }
@@ -5570,6 +8473,124 @@ const server = createServer((req, res) => {
     });
     return;
   }
+  if (req.url?.startsWith("/api/v1/portfolio-comparisons")) {
+    void portfolioComparisonRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "PORTFOLIO_COMPARISON_FAILED" }); });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/backtest-scenarios")) {
+    void backtestScenarioRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "BACKTEST_SCENARIO_FAILED" }); });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/bond-profiles")) {
+    void bondProfileRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "BOND_PROFILE_REQUEST_FAILED" }); });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/bond-metrics")) {
+    void bondPricingRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "BOND_PRICING_FAILED" }); });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/bond-curve-scenarios")) {
+    void bondCurveScenarioRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "BOND_CURVE_SCENARIO_FAILED" }); });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/option-contracts")) {
+    void optionContractRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "OPTION_CONTRACT_REQUEST_FAILED" }); });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/option-greeks")) {
+    void optionGreeksRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "OPTION_GREEKS_REQUEST_FAILED" }); });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/option-lifecycle-events")) {
+    void optionLifecycleEventRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "OPTION_LIFECYCLE_REQUEST_FAILED" }); });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/option-positions")) {
+    void optionPositionRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "OPTION_POSITION_REQUEST_FAILED" }); });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/wheel-cycles")) {
+    void wheelCycleRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "WHEEL_CYCLE_FAILED" }); });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/alternative-asset-valuations")) {
+    void alternativeAssetValuationRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "ALTERNATIVE_ASSET_FAILED" }); });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/fire-scenarios")) {
+    void fireScenarioRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "FIRE_SCENARIO_FAILED" }); });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/risk-metrics")) {
+    void riskMetricsRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "RISK_METRICS_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/risk-contributions")) {
+    void riskContributionRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "RISK_CONTRIBUTION_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/etf-exposure") || req.url?.startsWith("/api/v1/instrument-lookthrough")) {
+    void etfExposureRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "ETF_EXPOSURE_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/allocation-targets")) {
+    void allocationTargetsRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "ALLOCATION_TARGETS_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/screener-watchlists")) {
+    void screenerWatchlistRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "SCREENER_WATCHLIST_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/rebalance-suggestions")) {
+    void rebalanceSuggestionsRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => { if (!res.writableEnded) json(res, 500, { error: "REBALANCE_REQUEST_FAILED" }); });
+    return;
+  }
   if (req.url?.startsWith("/api/v1/benchmarks") || req.url?.startsWith("/api/v1/benchmark-observations")) {
     void benchmarkRoute(req, res).then((handled) => {
       if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
@@ -5672,6 +8693,14 @@ const server = createServer((req, res) => {
     }).catch((error) => { if (!res.writableEnded) json(res, 500, { error: "INTERNAL_ERROR" }); console.error(error); });
     return;
   }
+  if (req.url?.startsWith("/api/v1/incidents")) {
+    void incidentRoutingRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 500, { error: "INCIDENT_ROUTING_REQUEST_FAILED" });
+    });
+    return;
+  }
   if (req.url?.startsWith("/api/v1/sync-results")) {
     void syncResultsRoute(req, res).then((handled) => {
       if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
@@ -5701,6 +8730,62 @@ const server = createServer((req, res) => {
       if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
     }).catch(() => {
       if (!res.writableEnded) json(res, 500, { error: "COST_BASIS_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/tax-lots")) {
+    void taxLotsRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 400, { error: "TAX_LOTS_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/tax-lot-methods")) {
+    void taxLotMethodsRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 400, { error: "TAX_LOT_METHODS_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/realized-gains")) {
+    void realizedGainsRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 400, { error: "REALIZED_GAINS_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/fiscal-year-reports")) {
+    void fiscalYearReportRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 400, { error: "FISCAL_YEAR_REPORT_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/tax-loss-harvesting")) {
+    void taxLossHarvestingRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 400, { error: "TAX_LOSS_HARVESTING_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/wash-sale-risks")) {
+    void washSaleRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 400, { error: "WASH_SALE_REQUEST_FAILED" });
+    });
+    return;
+  }
+  if (req.url?.startsWith("/api/v1/tax-worksheets")) {
+    void taxWorksheetRoute(req, res).then((handled) => {
+      if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
+    }).catch(() => {
+      if (!res.writableEnded) json(res, 400, { error: "TAX_WORKSHEET_REQUEST_FAILED" });
     });
     return;
   }

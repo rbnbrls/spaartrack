@@ -5,5 +5,6 @@ LABEL org.opencontainers.image.revision="$VCS_REF" \
       org.opencontainers.image.version="$APP_VERSION" \
       org.opencontainers.image.title="spaartrack-web"
 COPY apps/web/index.html /usr/share/nginx/html/index.html
+COPY apps/web/manifest.webmanifest /usr/share/nginx/html/manifest.webmanifest
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
