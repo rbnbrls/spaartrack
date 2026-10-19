@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     ports:
-      - "3000:80"
+      - "${WEB_PORT:-3000}:80"
     depends_on:
       api:
         condition: service_healthy
@@ -22,6 +22,7 @@ services:
       dockerfile: apps/api/Dockerfile
     environment:
       APP_ENV: ${APP_ENV:-local}
+      APP_AUTH_MODE: ${APP_AUTH_MODE:-synthetic}
       APP_RELEASE: ${APP_RELEASE:-local}
       APP_COMMIT_SHA: ${APP_COMMIT_SHA:-local}
       APP_IMAGE_DIGEST: ${APP_IMAGE_DIGEST:-local}

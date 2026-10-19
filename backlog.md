@@ -2,6 +2,13 @@
 
 This is the shared work queue for the Hermes Spaartrack team. The roadmap remains the product and dependency source of truth; this file is the operational queue.
 
+## Completion policy
+
+- Full project completion means every one of the 133 roadmap parent stories and all linked atomic tests/subtasks have current implementation and verification evidence; the local/development/production release gates applicable to the target deployment are green; the final full regression passes; and the board has no open, review, blocked, failed, or unresolved incident work.
+- Never interpret `79/133` or `168/168` as project completion: those numbers describe the historical local baseline and its then-current regression run, not the remaining roadmap scope or current machine state.
+- Never promise zero incidents. Detect, record, triage, and resolve issues; stop unsafe promotions and clearly expose external access or human approval requirements.
+- Keep all roadmap items visible as parent cards or as an auditable linked 133-story tracker with bounded implementation child tasks. Reconcile it after every wave and never silently drop or reclassify a feature.
+
 ## Operating rules
 
 - Work in dependency order and by wave; do not jump over a red gate.
