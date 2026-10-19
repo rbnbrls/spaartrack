@@ -712,7 +712,7 @@ Onderstaande stories zijn de uitvoerbare decompositie van de dependency-ordered 
 
 | ID | User story | Acceptatiecriteria |
 |---|---|---|
-| US-0001 | Als product owner wil ik bounded contexts vastleggen zodat teams dezelfde domeingrenzen gebruiken. | ADR bevat Ledger, Integrations, Market Data, Income/Performance, Money Flow, Tax/Reporting, AI en Operations. |
+| US-0001 | Als product owner wil ik bounded contexts vastleggen zodat teams dezelfde domeingrenzen gebruiken. | **Done lokaal 19 oktober 2026** — ADR-0001 bevat Ledger, Integrations, Market Data, Income, Performance, Money Flow, Tax, Reporting, AI en Operations met boundary-tabel en non-goals. Rode basis `tests/unit/us0001-bounded-contexts.test.mjs` (pass). Evidence: regressie **461/461 groen**; web 200 (89 panelmarkers); `/health/ready ready`; logscan 15m schoon. Alle data synthetisch. |
 | US-0002 | Als architect wil ik financiële invariants definiëren zodat berekeningen controleerbaar zijn. | Invariants voor cash, quantity, cost basis, transfers, FX en idempotency staan als testbare regels beschreven. |
 | US-0003 | Als privacy owner wil ik dataclassificatie vastleggen zodat PII en financiële data correct worden behandeld. | Elk datadomein heeft classificatie, retention, masking en toegangsregel. |
 | US-0004 | Als development team wil ik coding-, branch- en releaseconventies zodat agents consistent werken. | `AGENTS.md`, PR-template, commitregel, Definition of Ready en Definition of Done zijn versioned. |
