@@ -1,5 +1,17 @@
 # Spaartrack — roadmap en totale feature-inventarisatie
 
+Analytics / Bondprofielen & cashflows UX-audit aanvullend bewijs (2026-10-19): eerst is `tests/unit/analytics-bondprofiles-ux.test.mjs` rood toegevoegd voor page hierarchy, KPI-overview, cashflow-tabel, empty/loading/error states, touch targets en traceability. Daarna zijn `apps/web/index.html` en `apps/api/src/index.ts` aangepast: Analytics opent nu op een eigen bond-overview met tabelalternatief, tekstuele coupon/principal-status, reset, modulevolgorde en trace/correlation-evidence; bond profile/pricing/curve-fouten loggen trace- en correlation-ID’s. Gerichte regressie: **3/3 groen**; volledige lokale gate: **526 tests / 395 pass / 0 fail / 131 skipped**; `tsc --noEmit` groen; Codex-browserflow controleerde Analytics, overview/reset, synthetic fixture, cashflow generation, bond pricing, parallel shift en module-selector; fresh browser-tab console **0 errors/warnings**; `docker compose up -d --build api web` groen. Alle data synthetisch en read-only voor de canonical ledger.
+
+Actions UX-audit aanvullend bewijs (2026-10-19): eerst is `tests/unit/actions-option-contracts-ux.test.mjs` rood toegevoegd voor page-level heading/overview, contracttabel, filter/reset, loading/empty/error states, traceability en touch targets. Daarna is `apps/web/index.html` aangepast: Actions / Option contracts & Greeks heeft nu een duidelijke informatiehiërarchie, tabelalternatief, statuslabels, filter/reset, expliciete states, trace/correlation-evidence en keyboard/focus/touch-target styling. Gerichte regressie: **3/3 groen**; UX-richtlijnregressie: **5/5 groen**; volledige regressie: **518 tests / 387 pass / 0 fail / 131 skipped**; `tsc --noEmit` groen; Codex-browser: filter PUT, lege state, reset, synthetic fixture, Greeks-berekening, auditdrawer, profieldrawer en module-selector gecontroleerd; browserconsole **0 errors/warnings**; compose-logscan schoon op error/fatal/exception/failed/panic/unhealthy/oom. Alle data synthetisch en read-only voor de ledger.
+
+Calendar UX-audit aanvullend bewijs (2026-10-19): eerst is `tests/unit/calendar-overview-ux.test.mjs` rood toegevoegd voor een echte Calendar / Overview-route, maand/weekweergave, periode-navigatie, eventtypefilter/reset, today-markering, expliciete lege dagen, tabelalternatief en trace/correlation-evidence. Daarna is `apps/web/index.html` aangepast: de eerder lege Calendar-route heeft nu een read-only synthetic market-events overview met EX_DIVIDEND, DIVIDEND_PAYMENT, AGM, EARNINGS en ECONOMIC, gegroepeerde kalenderdagen, week- en maandweergave, statuslabels die niet alleen kleur gebruiken, toegankelijke grid/table-structuur en `calendar-overview-v1`/`calendar-events-v1` evidence. Gerichte regressie: **2/2 groen**; volledige regressie: **515 tests / 384 pass / 0 fail / 131 skipped**; `tsc --noEmit` groen; Codex-browserflow voor Calendar, maand/week, vorige/volgende/vandaag, AGM-filter, reset, lege state, profieldrawer en auditdrawer gecontroleerd; browserconsole **0 warnings/errors**. `docker compose ps` toont healthy api, db, redis, web, object-storage; recente compose-logscan bevat geen error/fatal/exception/failed/panic/unhealthy/oom. Alle data bleef synthetisch.
+
+Dividends UX-audit aanvullend bewijs (2026-10-19): eerst is `tests/unit/dividends-overview-ux.test.mjs` rood toegevoegd voor een eigen Dividends / Overview-route met KPI’s, periodekeuze, chart-tabelalternatief, statusfilter/reset, sortering en trace/correlation-evidence. Daarna is `apps/web/index.html` aangepast: de Dividends-route heeft nu een complete read-only overview met expliciete PAID/projected-statussen, lege state, toegankelijke controls en synthetische traceability. Gerichte unit-regressie: **181/181 groen**; `tsc --noEmit` groen; Codex-browserflow voor route, alle periodeknoppen, statusfilter, reset, beide sorteeracties, modulekeuze, profiel en audit drawer gecontroleerd; browserconsole **0 errors/warnings**; recente compose-logscan schoon op error/fatal/exception/failed/panic/unhealthy/oom. Volledige smoke-health/observability: **6 pass / 0 fail / 1 skipped**. Alle data synthetisch.
+
+Performance UX-audit aanvullend bewijs (2026-10-19): eerst is `tests/unit/performance-page-ux.test.mjs` rood toegevoegd voor route-scoped filters, contextuele module-navigatie en trace/correlation-evidence. Daarna zijn `apps/web/index.html` en `apps/api/src/index.ts` aangepast: de Performance / Risk & benchmark pagina heeft een eigen `Performance` heading/region, Portfolio-filters zijn uitsluitend Portfolio-scoped, module-labels volgen de actieve pagina, response trace/correlation-ID’s blijven zichtbaar en risk-fouten loggen dezelfde IDs. Gerichte regressie: **12/12 groen**; volledige lokale suite: **511 tests / 380 pass / 0 fail / 131 skipped**; `tsc --noEmit` groen; Codex-browserflow voor risk fixture/calculate, Compare portfolios, What-if scenario, profiel en audit drawer gecontroleerd; browserconsole **0 errors/warnings**; recente API/web-logscan schoon op error/fatal/exception/failed/panic/unhealthy/oom. Alle data synthetisch.
+
+Portfolio UX-audit aanvullend bewijs (2026-10-19): `tests/unit/portfolio-overview-ux.test.mjs` is eerst rood toegevoegd voor toegankelijke navigatienamen, profielactie, filters, grafiek-tabelalternatief en zichtbare positions. Daarna zijn in `apps/web/index.html` filters met reset en directe grafiek/tabel-update, de performance-data table alternative, sticky eerste tabelkolom, expliciete empty state, toegankelijke icon-actions en mobiele menu-toggle hersteld. Compose-regressie: lint/typecheck groen, **509 tests / 378 pass / 0 fail / 131 skipped**. Codex-browser: profiel, drawers, timetravel, filter/reset, route-navigatie en 390px mobiele toggle gecontroleerd; console **0 errors/warnings**. Container-logscan schoon op error/fatal/exception/failed/panic/unhealthy/oom; fixtures synthetisch.
+
 Onderzoeksnotitie voor het bouwen van een eigen, private variant op een Coolify-server.
 
 - Onderzochte demo: [Jong Beleggen](https://app.portfoliodividendtracker.com/p/jongbeleggen)
@@ -746,226 +758,226 @@ Onderstaande stories zijn de uitvoerbare decompositie van de dependency-ordered 
 
 #### Slice 0 — productcontract en architectuur
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-0001 | Als product owner wil ik bounded contexts vastleggen zodat teams dezelfde domeingrenzen gebruiken. | **Done lokaal 19 oktober 2026** — ADR-0001 bevat Ledger, Integrations, Market Data, Income, Performance, Money Flow, Tax, Reporting, AI en Operations met boundary-tabel en non-goals. Rode basis `tests/unit/us0001-bounded-contexts.test.mjs` (pass). Evidence: regressie **461/461 groen**; web 200 (89 panelmarkers); `/health/ready ready`; logscan 15m schoon. Alle data synthetisch. |
-| US-0002 | Als architect wil ik financiële invariants definiëren zodat berekeningen controleerbaar zijn. | **Done lokaal 19 oktober 2026** — ADR-0002 bevat testbare invariants voor cash, quantity, cost basis, transfers, FX en idempotency met TC-US-0002/A/B/C-traceability. Rode basis `tests/unit/us0002-financial-invariants.test.mjs` (fail → pass). Evidence: regressie **462/462 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build` healthy (9/9); web 200; `/health/ready ready` (db+redis `tcp_connection_ok`); 15m-logscan schoon (alleen Grafana-interne warns). Alle data synthetisch. |
-| US-0003 | Als privacy owner wil ik dataclassificatie vastleggen zodat PII en financiële data correct worden behandeld. | **Done lokaal 19 oktober 2026** — `docs/security/data-classification.md` dekt user/account/transaction/raw-payload/log met classificatie, retention, masking en toegangsregel + TC-US-0003/A/B-traceability. Rode basis `tests/unit/us0003-data-classification.test.mjs` (fail → pass). Evidence: regressie **463/463 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build` healthy; web 200; `/health/ready ready`; 15m-logscan schoon (alleen Grafana-interne warns). Alle data synthetisch. |
-| US-0004 | Als development team wil ik coding-, branch- en releaseconventies zodat agents consistent werken. | **Done lokaal 19 oktober 2026** — `AGENTS.md` bevat branch-/commitregels, DoR en DoD; PR-template eist `TC-US-*`. Rode basis `tests/unit/us0004-conventions.test.mjs` (fail → pass); traceability-matrix bijgewerkt + `us000-wave0-traceability.test.mjs` voor TC-US-0001–0004. Evidence: regressie **465/465 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build` healthy; web 200; `/health/ready ready`; 15m-logscan schoon (alleen Grafana-interne warns). Alle data synthetisch. |
-| US-0005 | Als security owner wil ik een threat model zodat risico’s vóór implementatie zichtbaar zijn. | **Done lokaal 19 oktober 2026** — `docs/security/threat-model.md` dekt assets, trust boundaries, abuse cases (auth/integrations/AI/deployment) en mitigaties met TC-US-0005/A/B-traceability. Rode basis `tests/unit/us0005-threat-model.test.mjs` (fail → pass). Evidence: regressie **466/466 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build` healthy (9/9); web 200; `/health/live ok`, `/health/ready ready` (db+redis `tcp_connection_ok`); 20m-logscan schoon (9 `error`-regels zijn verwachte negatieve testpaden `ADDON_SCOPE_DENIED`/`INVALID_*`). Alle data synthetisch. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-0001 | Als product owner wil ik bounded contexts vastleggen zodat teams dezelfde domeingrenzen gebruiken. | `Settings / Governance & security` | **Done lokaal 19 oktober 2026** — ADR-0001 bevat Ledger, Integrations, Market Data, Income, Performance, Money Flow, Tax, Reporting, AI en Operations met boundary-tabel en non-goals. Rode basis `tests/unit/us0001-bounded-contexts.test.mjs` (pass). Evidence: regressie **461/461 groen**; web 200 (89 panelmarkers); `/health/ready ready`; logscan 15m schoon. Alle data synthetisch. |
+| US-0002 | Als architect wil ik financiële invariants definiëren zodat berekeningen controleerbaar zijn. | `Settings / Governance & security` | **Done lokaal 19 oktober 2026** — ADR-0002 bevat testbare invariants voor cash, quantity, cost basis, transfers, FX en idempotency met TC-US-0002/A/B/C-traceability. Rode basis `tests/unit/us0002-financial-invariants.test.mjs` (fail → pass). Evidence: regressie **462/462 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build` healthy (9/9); web 200; `/health/ready ready` (db+redis `tcp_connection_ok`); 15m-logscan schoon (alleen Grafana-interne warns). Alle data synthetisch. |
+| US-0003 | Als privacy owner wil ik dataclassificatie vastleggen zodat PII en financiële data correct worden behandeld. | `Settings / Governance & security` | **Done lokaal 19 oktober 2026** — `docs/security/data-classification.md` dekt user/account/transaction/raw-payload/log met classificatie, retention, masking en toegangsregel + TC-US-0003/A/B-traceability. Rode basis `tests/unit/us0003-data-classification.test.mjs` (fail → pass). Evidence: regressie **463/463 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build` healthy; web 200; `/health/ready ready`; 15m-logscan schoon (alleen Grafana-interne warns). Alle data synthetisch. |
+| US-0004 | Als development team wil ik coding-, branch- en releaseconventies zodat agents consistent werken. | `Settings / Governance & security` | **Done lokaal 19 oktober 2026** — `AGENTS.md` bevat branch-/commitregels, DoR en DoD; PR-template eist `TC-US-*`. Rode basis `tests/unit/us0004-conventions.test.mjs` (fail → pass); traceability-matrix bijgewerkt + `us000-wave0-traceability.test.mjs` voor TC-US-0001–0004. Evidence: regressie **465/465 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build` healthy; web 200; `/health/ready ready`; 15m-logscan schoon (alleen Grafana-interne warns). Alle data synthetisch. |
+| US-0005 | Als security owner wil ik een threat model zodat risico’s vóór implementatie zichtbaar zijn. | `Settings / Governance & security` | **Done lokaal 19 oktober 2026** — `docs/security/threat-model.md` dekt assets, trust boundaries, abuse cases (auth/integrations/AI/deployment) en mitigaties met TC-US-0005/A/B-traceability. Rode basis `tests/unit/us0005-threat-model.test.mjs` (fail → pass). Evidence: regressie **466/466 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build` healthy (9/9); web 200; `/health/live ok`, `/health/ready ready` (db+redis `tcp_connection_ok`); 20m-logscan schoon (9 `error`-regels zijn verwachte negatieve testpaden `ADDON_SCOPE_DENIED`/`INVALID_*`). Alle data synthetisch. |
 
 #### Slice 1 — delivery- en runtimefundament
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-0101 | Als developer wil ik lokaal dezelfde Compose-stack kunnen starten als staging. | Eén documented command start web, API, worker, PostgreSQL, Redis en object storage met health checks. |
-| US-0102 | Als operator wil ik een Proxmox/Coolify developmentomgeving zodat releases reproduceerbaar worden uitgerold. | Een commit SHA kan naar Coolify development worden gedeployed en is via een releasepagina identificeerbaar. |
-| US-0103 | Als developer wil ik CI op iedere PR zodat fouten vóór merge worden gevonden. | Lint, typecheck, unit tests en artifact upload draaien automatisch en blokkeren de PR bij failure. |
-| US-0104 | Als release agent wil ik immutable images bouwen zodat Coolify development en productie exact hetzelfde artifact gebruiken. | Image bevat commit SHA, versie, SBOM en digest; promotion gebruikt dezelfde digest. |
-| US-0105 | Als operator wil ik readiness en liveness kunnen controleren zodat ongezonde containers niet worden gerouteerd. | Web, API, worker en dependencies hebben afzonderlijke checks met duidelijke failure reason. |
-| US-0106 | Als SRE wil ik metrics, logs en traces correleren zodat incidenten diagnoseerbaar zijn. | Elk request en elke job bevat `release`, `service`, `trace_id` en `correlation_id`; PII wordt geredigeerd. |
-| US-0107 | Als eigenaar wil ik backups en restore testen zodat dataherstel geen aanname is. | PostgreSQL backup, object-storage backup en een restore smoke test leveren bewijs op. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-0101 | Als developer wil ik lokaal dezelfde Compose-stack kunnen starten als staging. | `Settings / Operations / Runtime` | Eén documented command start web, API, worker, PostgreSQL, Redis en object storage met health checks. |
+| US-0102 | Als operator wil ik een Proxmox/Coolify developmentomgeving zodat releases reproduceerbaar worden uitgerold. | `Settings / Operations / Runtime` | Een commit SHA kan naar Coolify development worden gedeployed en is via een releasepagina identificeerbaar. |
+| US-0103 | Als developer wil ik CI op iedere PR zodat fouten vóór merge worden gevonden. | `Settings / Operations / Runtime` | Lint, typecheck, unit tests en artifact upload draaien automatisch en blokkeren de PR bij failure. |
+| US-0104 | Als release agent wil ik immutable images bouwen zodat Coolify development en productie exact hetzelfde artifact gebruiken. | `Settings / Operations / Runtime` | Image bevat commit SHA, versie, SBOM en digest; promotion gebruikt dezelfde digest. |
+| US-0105 | Als operator wil ik readiness en liveness kunnen controleren zodat ongezonde containers niet worden gerouteerd. | `Settings / Operations / Runtime` | Web, API, worker en dependencies hebben afzonderlijke checks met duidelijke failure reason. |
+| US-0106 | Als SRE wil ik metrics, logs en traces correleren zodat incidenten diagnoseerbaar zijn. | `Settings / Operations / Runtime` | Elk request en elke job bevat `release`, `service`, `trace_id` en `correlation_id`; PII wordt geredigeerd. |
+| US-0107 | Als eigenaar wil ik backups en restore testen zodat dataherstel geen aanname is. | `Settings / Operations / Runtime` | PostgreSQL backup, object-storage backup en een restore smoke test leveren bewijs op. |
 
 #### Slice 2 — identity en veilige toegang
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-0201 | Als gebruiker wil ik een account kunnen aanmaken zodat mijn portfolio privé blijft. | User lifecycle ondersteunt active, invited, suspended en deleted; email uniqueness wordt afgedwongen. |
-| US-0202 | Als gebruiker wil ik veilig kunnen inloggen en uitloggen. | Sessions zijn gehasht opgeslagen, verlopen automatisch en kunnen worden ingetrokken. |
-| US-0203 | Als gebruiker wil ik 2FA of OIDC kunnen gebruiken zodat alleen ik toegang krijg. | **Done lokaal 19 oktober 2026** — afgedekt door atomic children `US-0203-A` (lokale TOTP-factor) en `US-0203-B` (synthetic OIDC); zie Slice 0–2 atomic-tabel. Rode basis `tests/unit/us0203-parent-status.test.mjs` (fail → pass). Evidence: volledige regressie **500/500 groen, 0 failures**; `up -d --build` healthy; web 200; `/health/ready ready`; 20m-logscan schoon. Alle data synthetisch. |
-| US-0204 | Als eigenaar wil ik portfolio-rollen instellen zodat anderen alleen geautoriseerde data zien. | Owner, editor, viewer, accountant en advisor worden server-side afgedwongen. |
-| US-0205 | Als security owner wil ik securityacties kunnen auditen. | Login, permission change, secret access, share, export en revoke maken audit events. |
-| US-0206 | Als privacy owner wil ik data kunnen verwijderen of exporteren. | User deletion/export behandelt portfolio, raw payloads, reports, sessions en grants consistent. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-0201 | Als gebruiker wil ik een account kunnen aanmaken zodat mijn portfolio privé blijft. | `Settings / Access & privacy` | User lifecycle ondersteunt active, invited, suspended en deleted; email uniqueness wordt afgedwongen. |
+| US-0202 | Als gebruiker wil ik veilig kunnen inloggen en uitloggen. | `Settings / Access & privacy` | Sessions zijn gehasht opgeslagen, verlopen automatisch en kunnen worden ingetrokken. |
+| US-0203 | Als gebruiker wil ik 2FA of OIDC kunnen gebruiken zodat alleen ik toegang krijg. | `Settings / Access & privacy` | **Done lokaal 19 oktober 2026** — afgedekt door atomic children `US-0203-A` (lokale TOTP-factor) en `US-0203-B` (synthetic OIDC); zie Slice 0–2 atomic-tabel. Rode basis `tests/unit/us0203-parent-status.test.mjs` (fail → pass). Evidence: volledige regressie **500/500 groen, 0 failures**; `up -d --build` healthy; web 200; `/health/ready ready`; 20m-logscan schoon. Alle data synthetisch. |
+| US-0204 | Als eigenaar wil ik portfolio-rollen instellen zodat anderen alleen geautoriseerde data zien. | `Settings / Access & privacy` | Owner, editor, viewer, accountant en advisor worden server-side afgedwongen. |
+| US-0205 | Als security owner wil ik securityacties kunnen auditen. | `Settings / Access & privacy` | Login, permission change, secret access, share, export en revoke maken audit events. |
+| US-0206 | Als privacy owner wil ik data kunnen verwijderen of exporteren. | `Settings / Access & privacy` | User deletion/export behandelt portfolio, raw payloads, reports, sessions en grants consistent. |
 
 #### Slice 3 — canonical ledger
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-0301 | Als gebruiker wil ik een portfolio kunnen aanmaken met reporting currency. | Portfolio heeft eigenaar, status, privacy scope en reporting currency. |
-| US-0302 | Als gebruiker wil ik financiële accounts kunnen registreren. | Brokerage, bank, cash, creditcard, loan en custom accounts hebben tracking mode en status. |
-| US-0303 | Als gebruiker wil ik securities en identifiers kunnen vastleggen. | Instrument ondersteunt ticker, ISIN/CUSIP, exchange, asset class, currency en custom assets. |
-| US-0304 | Als gebruiker wil ik buy/sell/deposit/withdrawal/dividend/fee/tax actions boeken. | Elke action heeft datum, account, amount, currency, source en expliciete state. |
-| US-0305 | Als gebruiker wil ik pending en draft actions kunnen corrigeren zonder historie te verliezen. | POSTED, PENDING, DRAFT en VOID beïnvloeden berekeningen volgens één contract; fysieke delete is niet nodig. |
-| US-0306 | Als systeem wil ik duplicate actions afwijzen zodat cash en positions niet dubbel tellen. | External id of deterministische fallback-hash is idempotent binnen connection/account. |
-| US-0307 | Als gebruiker wil ik interne transfers herkennen zodat net contribution klopt. | Paired transfer houdt bron/doel bij en is niet als externe inleg of spending geboekt. |
-| US-0308 | Als accountant wil ik ledger entries kunnen reproduceren. | Replay van dezelfde ledger en source payloads levert dezelfde balances en totals op. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-0301 | Als gebruiker wil ik een portfolio kunnen aanmaken met reporting currency. | `Actions / Ledger` | Portfolio heeft eigenaar, status, privacy scope en reporting currency. |
+| US-0302 | Als gebruiker wil ik financiële accounts kunnen registreren. | `Actions / Ledger` | Brokerage, bank, cash, creditcard, loan en custom accounts hebben tracking mode en status. |
+| US-0303 | Als gebruiker wil ik securities en identifiers kunnen vastleggen. | `Actions / Ledger` | Instrument ondersteunt ticker, ISIN/CUSIP, exchange, asset class, currency en custom assets. |
+| US-0304 | Als gebruiker wil ik buy/sell/deposit/withdrawal/dividend/fee/tax actions boeken. | `Actions / Ledger` | Elke action heeft datum, account, amount, currency, source en expliciete state. |
+| US-0305 | Als gebruiker wil ik pending en draft actions kunnen corrigeren zonder historie te verliezen. | `Actions / Ledger` | POSTED, PENDING, DRAFT en VOID beïnvloeden berekeningen volgens één contract; fysieke delete is niet nodig. |
+| US-0306 | Als systeem wil ik duplicate actions afwijzen zodat cash en positions niet dubbel tellen. | `Actions / Ledger` | External id of deterministische fallback-hash is idempotent binnen connection/account. |
+| US-0307 | Als gebruiker wil ik interne transfers herkennen zodat net contribution klopt. | `Actions / Ledger` | Paired transfer houdt bron/doel bij en is niet als externe inleg of spending geboekt. |
+| US-0308 | Als accountant wil ik ledger entries kunnen reproduceren. | `Actions / Ledger` | Replay van dezelfde ledger en source payloads levert dezelfde balances en totals op. |
 
 #### Slice 4 — calculation- en market-data-kernel
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-0401 | Als gebruiker wil ik currencies en FX-rates beheren. | Rates hebben pair, timestamp, source en versie; inverse/ontbrekende rate is expliciet behandeld. |
-| US-0402 | Als gebruiker wil ik actuele en historische prices opslaan. | Price observation heeft instrument, timestamp, currency, source en captured-at. |
-| US-0403 | Als gebruiker wil ik security identity kunnen mappen tussen providers. | Provider symbol, ISIN/CUSIP en unresolved mapping workflow zijn beschikbaar. |
-| US-0404 | Als gebruiker wil ik cost basis zien na aankopen en gedeeltelijke verkopen. | Golden cases voor FIFO/WAC-baseline, fees, taxes en partial sells slagen. |
-| US-0405 | Als gebruiker wil ik realized en unrealized P&L kunnen verklaren. | Price-, FX-, fee- en taxcomponenten zijn afzonderlijk terug te voeren. |
-| US-0406 | Als gebruiker wil ik stock splits en corporate actions kunnen verwerken. | Quantity/cost-basis-effect is idempotent en vóór/na snapshots is controleerbaar. |
-| US-0407 | Als systeem wil ik portfolio snapshots maken. | Snapshot bevat value, cash, flows, P&L, data-as-of en calculation version. |
-| US-0408 | Als QA-agent wil ik financiële golden fixtures draaien. | Multi-currency, dividendtax, fees, transfer, split en restore/replay cases zijn groen. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-0401 | Als gebruiker wil ik currencies en FX-rates beheren. | `Portfolio / Calculations` | Rates hebben pair, timestamp, source en versie; inverse/ontbrekende rate is expliciet behandeld. |
+| US-0402 | Als gebruiker wil ik actuele en historische prices opslaan. | `Portfolio / Calculations` | Price observation heeft instrument, timestamp, currency, source en captured-at. |
+| US-0403 | Als gebruiker wil ik security identity kunnen mappen tussen providers. | `Portfolio / Calculations` | Provider symbol, ISIN/CUSIP en unresolved mapping workflow zijn beschikbaar. |
+| US-0404 | Als gebruiker wil ik cost basis zien na aankopen en gedeeltelijke verkopen. | `Portfolio / Calculations` | Golden cases voor FIFO/WAC-baseline, fees, taxes en partial sells slagen. |
+| US-0405 | Als gebruiker wil ik realized en unrealized P&L kunnen verklaren. | `Portfolio / Calculations` | Price-, FX-, fee- en taxcomponenten zijn afzonderlijk terug te voeren. |
+| US-0406 | Als gebruiker wil ik stock splits en corporate actions kunnen verwerken. | `Portfolio / Calculations` | Quantity/cost-basis-effect is idempotent en vóór/na snapshots is controleerbaar. |
+| US-0407 | Als systeem wil ik portfolio snapshots maken. | `Portfolio / Calculations` | Snapshot bevat value, cash, flows, P&L, data-as-of en calculation version. |
+| US-0408 | Als QA-agent wil ik financiële golden fixtures draaien. | `Portfolio / Calculations` | Multi-currency, dividendtax, fees, transfer, split en restore/replay cases zijn groen. |
 
 #### Slice 5 — manual portfolio MVP
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-0501 | Als gebruiker wil ik mijn eerste portfolio kunnen instellen. | Empty state leidt naar portfolio, account, currency en eerste action. |
-| US-0502 | Als gebruiker wil ik actions handmatig toevoegen en wijzigen. | Validatie toont ontbrekende account, instrument, currency, date en amount vóór commit. |
-| US-0503 | Als gebruiker wil ik mijn portfolio value, invested capital en cash zien. | KPI’s komen uit ledger/calculation read model, niet uit handmatige UI-state. |
-| US-0504 | Als gebruiker wil ik positions kunnen sorteren en filteren. | Tabel ondersteunt configureerbare kolommen, open/closed positions en cash als positie. |
-| US-0505 | Als gebruiker wil ik allocatie per asset class, sector, regio, currency en broker zien. | Percentages totaliseren naar 100% volgens expliciete roundingregel. |
-| US-0506 | Als gebruiker wil ik positie-details openen zonder context te verliezen. | Detail toont identity, cost basis, performance, dividends, calendar en actions. |
-| US-0507 | Als gebruiker wil ik historical Timetravel gebruiken. | Een datumselectie toont dezelfde berekende portfolio state inclusief data-as-of. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-0501 | Als gebruiker wil ik mijn eerste portfolio kunnen instellen. | `Portfolio / Overview` | Empty state leidt naar portfolio, account, currency en eerste action. |
+| US-0502 | Als gebruiker wil ik actions handmatig toevoegen en wijzigen. | `Portfolio / Overview` | Validatie toont ontbrekende account, instrument, currency, date en amount vóór commit. |
+| US-0503 | Als gebruiker wil ik mijn portfolio value, invested capital en cash zien. | `Portfolio / Overview` | KPI’s komen uit ledger/calculation read model, niet uit handmatige UI-state. |
+| US-0504 | Als gebruiker wil ik positions kunnen sorteren en filteren. | `Portfolio / Overview` | Tabel ondersteunt configureerbare kolommen, open/closed positions en cash als positie. |
+| US-0505 | Als gebruiker wil ik allocatie per asset class, sector, regio, currency en broker zien. | `Portfolio / Overview` | Percentages totaliseren naar 100% volgens expliciete roundingregel. |
+| US-0506 | Als gebruiker wil ik positie-details openen zonder context te verliezen. | `Portfolio / Overview` | Detail toont identity, cost basis, performance, dividends, calendar en actions. |
+| US-0507 | Als gebruiker wil ik historical Timetravel gebruiken. | `Portfolio / Overview` | Een datumselectie toont dezelfde berekende portfolio state inclusief data-as-of. |
 
 #### Slice 6 — import safety platform
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-0601 | Als gebruiker wil ik CSV/Sheets-bestanden uploaden. | File type, size, checksum, storage en eigenaar worden gevalideerd. |
-| US-0602 | Als gebruiker wil ik kolommen kunnen mappen op canonical fields. | Mapping template kan worden opgeslagen, hergebruikt en versieerbaar aangepast. |
-| US-0603 | Als gebruiker wil ik vóór commit een import preview zien. | Valid, warning, error en unsupported rows zijn afzonderlijk zichtbaar. |
-| US-0604 | Als gebruiker wil ik inline importfouten corrigeren. | Row review bewaart raw row, normalized row, correction, actor en timestamp. |
-| US-0605 | Als systeem wil ik duplicates detecteren. | Match op provider id/hash toont reden en boekt niet dubbel. |
-| US-0606 | Als gebruiker wil ik een batch atomair committen. | Geen gedeeltelijke ledgercommit bij blocking errors; commit result bevat counts. |
-| US-0607 | Als gebruiker wil ik een importbatch kunnen undo’en. | Alle door de batch geboekte activities kunnen veilig worden gevoid; audit blijft bestaan. |
-| US-0608 | Als gebruiker wil ik reconciliation issues oplossen. | Unknown instrument, balance mismatch en ambiguous transfer leiden naar review queue. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-0601 | Als gebruiker wil ik CSV/Sheets-bestanden uploaden. | `Actions / Import & review` | File type, size, checksum, storage en eigenaar worden gevalideerd. |
+| US-0602 | Als gebruiker wil ik kolommen kunnen mappen op canonical fields. | `Actions / Import & review` | Mapping template kan worden opgeslagen, hergebruikt en versieerbaar aangepast. |
+| US-0603 | Als gebruiker wil ik vóór commit een import preview zien. | `Actions / Import & review` | Valid, warning, error en unsupported rows zijn afzonderlijk zichtbaar. |
+| US-0604 | Als gebruiker wil ik inline importfouten corrigeren. | `Actions / Import & review` | Row review bewaart raw row, normalized row, correction, actor en timestamp. |
+| US-0605 | Als systeem wil ik duplicates detecteren. | `Actions / Import & review` | Match op provider id/hash toont reden en boekt niet dubbel. |
+| US-0606 | Als gebruiker wil ik een batch atomair committen. | `Actions / Import & review` | Geen gedeeltelijke ledgercommit bij blocking errors; commit result bevat counts. |
+| US-0607 | Als gebruiker wil ik een importbatch kunnen undo’en. | `Actions / Import & review` | Alle door de batch geboekte activities kunnen veilig worden gevoid; audit blijft bestaan. |
+| US-0608 | Als gebruiker wil ik reconciliation issues oplossen. | `Actions / Import & review` | Unknown instrument, balance mismatch en ambiguous transfer leiden naar review queue. |
 
 #### Slice 7 — income, performance en dividendkern
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-0701 | Als gebruiker wil ik ontvangen en verwachte dividends apart zien. | Status onderscheidt announced, projected, ex-date en paid. |
-| US-0702 | Als gebruiker wil ik gross, tax, net, yield en yield-on-cost zien. | Bedragen en formules zijn per instrument en portfolio traceerbaar. |
-| US-0703 | Als gebruiker wil ik TTM en PADI bekijken. | TTM gebruikt gerealiseerde payments; PADI gebruikt expliciete forecastregels. |
-| US-0704 | Als gebruiker wil ik dividendgroei per periode zien. | YoY en CAGR over configureerbare perioden zijn reproduceerbaar. |
-| US-0705 | Als gebruiker wil ik een dividend- en events calendar zien. | Ex-dividend, payment, AGM, earnings en economic events zijn filterbaar. |
-| US-0706 | Als gebruiker wil ik TWR, MWRR/IRR en Modified Dietz vergelijken. | Elke methode toont periode, cashflows, formula version en limitations. |
-| US-0707 | Als gebruiker wil ik performance tegen benchmarks vergelijken. | Benchmark observations en cashflow-matched variant zijn niet door elkaar gehaald. |
-| US-0708 | Als gebruiker wil ik alerts voor dividends en portfolio events ontvangen. | Alert rule ondersteunt conditions, channels, pause, test en delivery history. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-0701 | Als gebruiker wil ik ontvangen en verwachte dividends apart zien. | `Dividends` | Status onderscheidt announced, projected, ex-date en paid. |
+| US-0702 | Als gebruiker wil ik gross, tax, net, yield en yield-on-cost zien. | `Dividends` | Bedragen en formules zijn per instrument en portfolio traceerbaar. |
+| US-0703 | Als gebruiker wil ik TTM en PADI bekijken. | `Dividends` | TTM gebruikt gerealiseerde payments; PADI gebruikt expliciete forecastregels. |
+| US-0704 | Als gebruiker wil ik dividendgroei per periode zien. | `Dividends` | YoY en CAGR over configureerbare perioden zijn reproduceerbaar. |
+| US-0705 | Als gebruiker wil ik een dividend- en events calendar zien. | `Calendar` | Ex-dividend, payment, AGM, earnings en economic events zijn filterbaar. |
+| US-0706 | Als gebruiker wil ik TWR, MWRR/IRR en Modified Dietz vergelijken. | `Performance` | Elke methode toont periode, cashflows, formula version en limitations. |
+| US-0707 | Als gebruiker wil ik performance tegen benchmarks vergelijken. | `Performance` | Benchmark observations en cashflow-matched variant zijn niet door elkaar gehaald. |
+| US-0708 | Als gebruiker wil ik alerts voor dividends en portfolio events ontvangen. | `Settings / Notifications` | Alert rule ondersteunt conditions, channels, pause, test en delivery history. |
 
 #### Slice 8 — brokerintegraties
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-0801 | Als developer wil ik een provider registry beheren. | Provider capabilities, auth mode, API version en status zijn configureerbaar. |
-| US-0802 | Als gebruiker wil ik Trading 212 read-only verbinden. | API key/secret blijft in vault; Invest/Stocks ISA mapping en revoke zijn getest. |
-| US-0803 | Als gebruiker wil ik Trading 212 data incremental synchroniseren. | Positions, activities, dividends, rate limits, retries en sync summary werken met fixtures. |
-| US-0804 | Als gebruiker wil ik DEGIRO CSV statements importeren. | Layout mapping, ISIN, fees, tax, FX, cash en statement balance worden gereconcilieerd. |
-| US-0805 | Als gebruiker wil ik syncresultaten kunnen beoordelen. | New, updated, duplicate, rejected en attention items zijn zichtbaar vóór/na posting. |
-| US-0806 | Als operator wil ik provider failures kunnen monitoren. | 401/403/429/schema failure creëert status, retry policy en incident evidence. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-0801 | Als developer wil ik een provider registry beheren. | `Settings / Connections / Brokers` | Provider capabilities, auth mode, API version en status zijn configureerbaar. |
+| US-0802 | Als gebruiker wil ik Trading 212 read-only verbinden. | `Settings / Connections / Brokers` | API key/secret blijft in vault; Invest/Stocks ISA mapping en revoke zijn getest. |
+| US-0803 | Als gebruiker wil ik Trading 212 data incremental synchroniseren. | `Settings / Connections / Brokers` | Positions, activities, dividends, rate limits, retries en sync summary werken met fixtures. |
+| US-0804 | Als gebruiker wil ik DEGIRO CSV statements importeren. | `Actions / Import & review` | Layout mapping, ISIN, fees, tax, FX, cash en statement balance worden gereconcilieerd. |
+| US-0805 | Als gebruiker wil ik syncresultaten kunnen beoordelen. | `Actions / Sync review` | New, updated, duplicate, rejected en attention items zijn zichtbaar vóór/na posting. |
+| US-0806 | Als operator wil ik provider failures kunnen monitoren. | `Settings / Operations / Incidents` | 401/403/429/schema failure creëert status, retry policy en incident evidence. |
 
 #### Slice 9 — Money Flow foundation
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-0901 | Als gebruiker wil ik bank-, cash- en creditcardaccounts selecteren voor Money Flow. | Account scope is opt-in en per portfolio/user bewaakt. |
-| US-0902 | Als gebruiker wil ik transacties als income, spending, saving of transfer zien. | Elke activity heeft category type en final-amount accounting. |
-| US-0903 | Als gebruiker wil ik interne transfers niet dubbel laten tellen. | Paired transfers en creditcard payments zijn zichtbaar maar contribution/spending-neutral. |
-| US-0904 | Als gebruiker wil ik categorieën en subcategorieën beheren. | Parent-child hierarchy, inactive status en bulk reassignment werken. |
-| US-0905 | Als gebruiker wil ik payees en tags beheren. | Normalized payees, tags en bulk edit zijn beschikbaar. |
-| US-0906 | Als gebruiker wil ik categorisatieregels instellen. | Contains, starts-with, exact, regex, priority en account scope worden toegepast in vaste volgorde. |
-| US-0907 | Als gebruiker wil ik twijfelgevallen reviewen. | Rule/import/AI confidence, override en review audit worden opgeslagen. |
-| US-0908 | Als gebruiker wil ik budgets en actuals zien. | Maandelijkse budgetten, groepen, rollovers en actual-versus-budget werken. |
-| US-0909 | Als gebruiker wil ik Money Flow interactief analyseren. | Income → saving → spending drill-down opent de onderliggende transacties. |
-| US-0910 | Als gebruiker wil ik multi-currency cashflow rapporteren. | Base currency en native currency zijn beide beschikbaar met period-end FX. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-0901 | Als gebruiker wil ik bank-, cash- en creditcardaccounts selecteren voor Money Flow. | `Money Flow / Accounts` | Account scope is opt-in en per portfolio/user bewaakt. |
+| US-0902 | Als gebruiker wil ik transacties als income, spending, saving of transfer zien. | `Money Flow / Categories` | Elke activity heeft category type en final-amount accounting. |
+| US-0903 | Als gebruiker wil ik interne transfers niet dubbel laten tellen. | `Money Flow / Transfers` | Paired transfers en creditcard payments zijn zichtbaar maar contribution/spending-neutral. |
+| US-0904 | Als gebruiker wil ik categorieën en subcategorieën beheren. | `Money Flow / Categories` | Parent-child hierarchy, inactive status en bulk reassignment werken. |
+| US-0905 | Als gebruiker wil ik payees en tags beheren. | `Money Flow / Categories` | Normalized payees, tags en bulk edit zijn beschikbaar. |
+| US-0906 | Als gebruiker wil ik categorisatieregels instellen. | `Money Flow / Rules` | Contains, starts-with, exact, regex, priority en account scope worden toegepast in vaste volgorde. |
+| US-0907 | Als gebruiker wil ik twijfelgevallen reviewen. | `Money Flow / Review queue` | Rule/import/AI confidence, override en review audit worden opgeslagen. |
+| US-0908 | Als gebruiker wil ik budgets en actuals zien. | `Money Flow / Budgets` | Maandelijkse budgetten, groepen, rollovers en actual-versus-budget werken. |
+| US-0909 | Als gebruiker wil ik Money Flow interactief analyseren. | `Money Flow / Analysis` | Income → saving → spending drill-down opent de onderliggende transacties. |
+| US-0910 | Als gebruiker wil ik multi-currency cashflow rapporteren. | `Money Flow / FX` | Base currency en native currency zijn beide beschikbaar met period-end FX. |
 
 #### Slice 10 — bank connectivity
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-1001 | Als gebruiker wil ik een GoCardless-instelling kiezen. | Institution selection geeft duidelijke regio-, capability- en availabilitystatus. |
-| US-1002 | Als gebruiker wil ik bankconsent autoriseren via requisition redirect. | State/PKCE/CSRF, callback, consent status en failure path zijn getest. |
-| US-1003 | Als gebruiker wil ik bankaccounts kiezen na consent. | Account selection slaat alleen gekozen accounts op en toont rekeningtype/currency. |
-| US-1004 | Als gebruiker wil ik balances en transactions synchroniseren. | Incremental window, dedupe, freshness en provider errors zijn zichtbaar. |
-| US-1005 | Als gebruiker wil ik een bankconnectie intrekken. | Requisition/OAuth revoke, local secret cleanup en disconnected status zijn aantoonbaar. |
-| US-1006 | Als product owner wil ik directe bunq OAuth alleen activeren na compliance-check. | Deployment gate controleert scopes, redirect URI, legal decision en read-only permissions. |
-| US-1007 | Als gebruiker wil ik na verlopen consent kunnen reconnecten. | Expired status behoudt historische data en vraagt een nieuwe authorization zonder dubbeltelling. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-1001 | Als gebruiker wil ik een GoCardless-instelling kiezen. | `Settings / Connections / Banks` | Institution selection geeft duidelijke regio-, capability- en availabilitystatus. |
+| US-1002 | Als gebruiker wil ik bankconsent autoriseren via requisition redirect. | `Settings / Connections / Banks` | State/PKCE/CSRF, callback, consent status en failure path zijn getest. |
+| US-1003 | Als gebruiker wil ik bankaccounts kiezen na consent. | `Settings / Connections / Banks` | Account selection slaat alleen gekozen accounts op en toont rekeningtype/currency. |
+| US-1004 | Als gebruiker wil ik balances en transactions synchroniseren. | `Settings / Connections / Banks` | Incremental window, dedupe, freshness en provider errors zijn zichtbaar. |
+| US-1005 | Als gebruiker wil ik een bankconnectie intrekken. | `Settings / Connections / Banks` | Requisition/OAuth revoke, local secret cleanup en disconnected status zijn aantoonbaar. |
+| US-1006 | Als product owner wil ik directe bunq OAuth alleen activeren na compliance-check. | `Settings / Connections / Banks` | Deployment gate controleert scopes, redirect URI, legal decision en read-only permissions. |
+| US-1007 | Als gebruiker wil ik na verlopen consent kunnen reconnecten. | `Settings / Connections / Banks` | Expired status behoudt historische data en vraagt een nieuwe authorization zonder dubbeltelling. |
 
 #### Slice 11 — reporting, goals en planning
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-1101 | Als gebruiker wil ik portfolio-, dividend-, cash- en net-worth reports genereren. | Report run is as-of, versioned, statusbaar en source-traceable. |
-| US-1102 | Als gebruiker wil ik CSV/XLSX/PDF exports downloaden. | Export respecteert filters, privacy scope en geldige locale/currency formatting. |
-| US-1103 | Als gebruiker wil ik taxable income, trades en sold securities rapporteren. | Report gebruikt ledger/source data en markeert schattingen. |
-| US-1104 | Als gebruiker wil ik een net-worth goal maken. | Target amount/date, expected return, contribution en status zijn configureerbaar. |
-| US-1105 | Als gebruiker wil ik goals uit echte accounts laten financieren. | Funding percentages totaliseren maximaal 100% en balance is share-weighted. |
-| US-1106 | Als gebruiker wil ik budgets en scheduled transactions meenemen in forecast. | Scheduled-only, budget-only en combined forecast geven assumptions en result. |
-| US-1107 | Als gebruiker wil ik tijdelijke accountant/advisor access delen. | Scope, expiry, revoke en audit zijn verplicht. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-1101 | Als gebruiker wil ik portfolio-, dividend-, cash- en net-worth reports genereren. | `Reports` | Report run is as-of, versioned, statusbaar en source-traceable. |
+| US-1102 | Als gebruiker wil ik CSV/XLSX/PDF exports downloaden. | `Reports / Exports` | Export respecteert filters, privacy scope en geldige locale/currency formatting. |
+| US-1103 | Als gebruiker wil ik taxable income, trades en sold securities rapporteren. | `Reports / Tax` | Report gebruikt ledger/source data en markeert schattingen. |
+| US-1104 | Als gebruiker wil ik een net-worth goal maken. | `Goals` | Target amount/date, expected return, contribution en status zijn configureerbaar. |
+| US-1105 | Als gebruiker wil ik goals uit echte accounts laten financieren. | `Goals / Funding` | Funding percentages totaliseren maximaal 100% en balance is share-weighted. |
+| US-1106 | Als gebruiker wil ik budgets en scheduled transactions meenemen in forecast. | `Goals / Forecast` | Scheduled-only, budget-only en combined forecast geven assumptions en result. |
+| US-1107 | Als gebruiker wil ik tijdelijke accountant/advisor access delen. | `Settings / Sharing & access` | Scope, expiry, revoke en audit zijn verplicht. |
 
 #### Slice 12 — advanced analytics en decisions
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-1201 | Als gebruiker wil ik volatility, beta, drawdown, Sharpe en Sortino zien. | Metrics tonen periode, benchmark/risk-free assumptions en calculation version. |
-| US-1202 | Als gebruiker wil ik risk contribution per holding zien. | Bijdrage per holding/category totaliseert volgens vastgelegde portfolio-methodiek. |
-| US-1203 | Als gebruiker wil ik ETF exposure en overlap analyseren. | Look-through source, as-of date en unresolved holdings zijn zichtbaar. |
-| US-1204 | Als gebruiker wil ik allocation targets instellen. | Targets per asset class, sector, region, currency en holding kunnen worden opgeslagen. |
-| US-1205 | Als gebruiker wil ik drift en rebalance-suggesties krijgen. | Suggestie toont current, target, drift, benodigde cash en trade assumptions. |
-| US-1206 | Als gebruiker wil ik portfolios side-by-side vergelijken. | Allocation, performance, risk en periodeselectie zijn consistent berekend. |
-| US-1207 | Als gebruiker wil ik what-if en backtests uitvoeren. | Scenario assumptions, input prices, costs en output worden versioned opgeslagen. |
-| US-1208 | Als gebruiker wil ik screeners en watchlists gebruiken. | Filters op fundamentals, performance, target en alerts kunnen worden opgeslagen. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-1201 | Als gebruiker wil ik volatility, beta, drawdown, Sharpe en Sortino zien. | `Analytics / Risk` | Metrics tonen periode, benchmark/risk-free assumptions en calculation version. |
+| US-1202 | Als gebruiker wil ik risk contribution per holding zien. | `Analytics / Risk` | Bijdrage per holding/category totaliseert volgens vastgelegde portfolio-methodiek. |
+| US-1203 | Als gebruiker wil ik ETF exposure en overlap analyseren. | `Analytics / Exposure` | Look-through source, as-of date en unresolved holdings zijn zichtbaar. |
+| US-1204 | Als gebruiker wil ik allocation targets instellen. | `Analytics / Targets` | Targets per asset class, sector, region, currency en holding kunnen worden opgeslagen. |
+| US-1205 | Als gebruiker wil ik drift en rebalance-suggesties krijgen. | `Analytics / Rebalance` | Suggestie toont current, target, drift, benodigde cash en trade assumptions. |
+| US-1206 | Als gebruiker wil ik portfolios side-by-side vergelijken. | `Analytics / Compare` | Allocation, performance, risk en periodeselectie zijn consistent berekend. |
+| US-1207 | Als gebruiker wil ik what-if en backtests uitvoeren. | `Analytics / What-if & backtest` | Scenario assumptions, input prices, costs en output worden versioned opgeslagen. |
+| US-1208 | Als gebruiker wil ik screeners en watchlists gebruiken. | `Analytics / Screeners` | Filters op fundamentals, performance, target en alerts kunnen worden opgeslagen. |
 
 #### Slice 13 — tax intelligence
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-1301 | Als gebruiker wil ik tax lots per aankoop kunnen zien. | Lot bevat acquisition date, quantity, cost basis, fees, currency en holding period. |
-| US-1302 | Als gebruiker wil ik FIFO, LIFO, WAC, HIFO en specific ID vergelijken. | Zelfde fixture levert methode-specifieke, reproduceerbare disposals op. |
-| US-1303 | Als gebruiker wil ik realized gains fee- en FX-aware berekenen. | Proceeds, cost basis, fees, FX-resultaat en taxable result zijn apart zichtbaar. |
-| US-1304 | Als gebruiker wil ik taxable income en fiscal-year reports genereren. | Tax year/jurisdiction configuration bepaalt de periode en output. |
-| US-1305 | Als gebruiker wil ik tax-loss harvesting candidates zien. | Loss, estimated saving, long-term status en rationale zijn zichtbaar. |
-| US-1306 | Als gebruiker wil ik wash-sale-risico’s signaleren. | Relevant window, related instrument en confidence/status worden getoond. |
-| US-1307 | Als gebruiker wil ik jurisdictiespecifieke worksheets gebruiken. | Ruleset, version, disclaimer en owner scope zijn vastgelegd; geen algemeen fiscaal advies. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-1301 | Als gebruiker wil ik tax lots per aankoop kunnen zien. | `Reports / Tax / Lots` | Lot bevat acquisition date, quantity, cost basis, fees, currency en holding period. |
+| US-1302 | Als gebruiker wil ik FIFO, LIFO, WAC, HIFO en specific ID vergelijken. | `Reports / Tax / Lot methods` | Zelfde fixture levert methode-specifieke, reproduceerbare disposals op. |
+| US-1303 | Als gebruiker wil ik realized gains fee- en FX-aware berekenen. | `Reports / Tax / Realized gains` | Proceeds, cost basis, fees, FX-resultaat en taxable result zijn apart zichtbaar. |
+| US-1304 | Als gebruiker wil ik taxable income en fiscal-year reports genereren. | `Reports / Tax / Fiscal year` | Tax year/jurisdiction configuration bepaalt de periode en output. |
+| US-1305 | Als gebruiker wil ik tax-loss harvesting candidates zien. | `Reports / Tax / Harvesting` | Loss, estimated saving, long-term status en rationale zijn zichtbaar. |
+| US-1306 | Als gebruiker wil ik wash-sale-risico’s signaleren. | `Reports / Tax / Wash sale` | Relevant window, related instrument en confidence/status worden getoond. |
+| US-1307 | Als gebruiker wil ik jurisdictiespecifieke worksheets gebruiken. | `Reports / Tax / Worksheets` | Ruleset, version, disclaimer en owner scope zijn vastgelegd; geen algemeen fiscaal advies. |
 
 #### Slice 14 — specialistische instrumenten
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-1401 | Als gebruiker wil ik bondprofielen met coupons en maturity vastleggen. | Issuer, coupon, frequency, maturity, currency en cashflows zijn beschikbaar. |
-| US-1402 | Als gebruiker wil ik bond pricing en yield metrics zien. | YTM, dirty price, accrued interest, duration, convexity en DV01 gebruiken versioned assumptions. |
-| US-1403 | Als gebruiker wil ik yield curves en rate scenarios testen. | Curve observations en parallel shifts produceren reproduceerbare scenario-output. |
-| US-1404 | Als gebruiker wil ik option contracts en Greeks beheren. | Underlying, strike, expiry, multiplier, IV en Greeks hebben lifecycle/status. |
-| US-1405 | Als gebruiker wil ik options openen, rollen, sluiten, exercisen en assignen. | Elke lifecycle event werkt door naar positions, cash, cost basis en audit. |
-| US-1406 | Als gebruiker wil ik wheel-strategieën volgen. | Put, assigned shares, covered call, roll en called-away events zijn gekoppeld. |
-| US-1407 | Als gebruiker wil ik crypto, metals, futures en custom assets tracken. | Instrumenttype, valuation source, currency en manual/provider valuation zijn expliciet. |
-| US-1408 | Als gebruiker wil ik FIRE/Risk Lab scenarios uitvoeren. | Taxes, inflation, Monte Carlo, sensitivity en sequence-of-returns assumptions zijn versioned. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-1401 | Als gebruiker wil ik bondprofielen met coupons en maturity vastleggen. | `Portfolio / Instruments / Bonds` | Issuer, coupon, frequency, maturity, currency en cashflows zijn beschikbaar. |
+| US-1402 | Als gebruiker wil ik bond pricing en yield metrics zien. | `Portfolio / Instruments / Bonds` | YTM, dirty price, accrued interest, duration, convexity en DV01 gebruiken versioned assumptions. |
+| US-1403 | Als gebruiker wil ik yield curves en rate scenarios testen. | `Portfolio / Instruments / Yield curves` | Curve observations en parallel shifts produceren reproduceerbare scenario-output. |
+| US-1404 | Als gebruiker wil ik option contracts en Greeks beheren. | `Portfolio / Instruments / Options` | Underlying, strike, expiry, multiplier, IV en Greeks hebben lifecycle/status. |
+| US-1405 | Als gebruiker wil ik options openen, rollen, sluiten, exercisen en assignen. | `Portfolio / Instruments / Options` | Elke lifecycle event werkt door naar positions, cash, cost basis en audit. |
+| US-1406 | Als gebruiker wil ik wheel-strategieën volgen. | `Portfolio / Instruments / Options` | Put, assigned shares, covered call, roll en called-away events zijn gekoppeld. |
+| US-1407 | Als gebruiker wil ik crypto, metals, futures en custom assets tracken. | `Portfolio / Instruments / Alternative assets` | Instrumenttype, valuation source, currency en manual/provider valuation zijn expliciet. |
+| US-1408 | Als gebruiker wil ik FIRE/Risk Lab scenarios uitvoeren. | `Analytics / FIRE & Risk Lab` | Taxes, inflation, Monte Carlo, sensitivity en sequence-of-returns assumptions zijn versioned. |
 
 #### Slice 15 — sharing en clients
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-1501 | Als eigenaar wil ik een read-only portfolio-link maken. | Access id, scope, exposure policy, expiry en revoke werken server-side. |
-| US-1502 | Als eigenaar wil ik geldbedragen kunnen verbergen. | Restricted View geeft percentages/relative data zonder monetary values. |
-| US-1503 | Als advisor wil ik tijdelijke portfolio access krijgen. | Scope, expiry, audit en immediate revoke zijn getest. |
-| US-1504 — PWA responsive | **Done lokaal** | Mobiele viewport met toggle-navigatie, scrollbare tabellen, position-detail en import-review zonder horizontale overflow; manifest geserveerd. |
-| US-1505 — offline-friendly lezen | **Done lokaal** | AES-256-GCM `offline-cache-v1` envelope met PORTFOLIO_READ-scope, freshness-timestamps en FRESH/STALE/EXPIRED-statussen; GUI `offline-cache-panel` markeert stale data en blokkeert onveilige writes. |
-| US-1506 — push notifications en widgets | **Done lokaal** | `push_consent`-registry met channel preference (PUSH/IN_APP/EMAIL), delivery history met failure-reason en idempotente revoke; GUI `push-consent-panel` met traceable grant/delivery/revoke. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-1501 | Als eigenaar wil ik een read-only portfolio-link maken. | `Settings / Sharing & PWA` | Access id, scope, exposure policy, expiry en revoke werken server-side. |
+| US-1502 | Als eigenaar wil ik geldbedragen kunnen verbergen. | `Settings / Sharing & PWA` | Restricted View geeft percentages/relative data zonder monetary values. |
+| US-1503 | Als advisor wil ik tijdelijke portfolio access krijgen. | `Settings / Sharing & PWA` | Scope, expiry, audit en immediate revoke zijn getest. |
+| US-1504 — PWA responsive | **Done lokaal** | `Settings / Sharing & PWA` | Mobiele viewport met toggle-navigatie, scrollbare tabellen, position-detail en import-review zonder horizontale overflow; manifest geserveerd. |
+| US-1505 — offline-friendly lezen | **Done lokaal** | `Settings / Sharing & PWA` | AES-256-GCM `offline-cache-v1` envelope met PORTFOLIO_READ-scope, freshness-timestamps en FRESH/STALE/EXPIRED-statussen; GUI `offline-cache-panel` markeert stale data en blokkeert onveilige writes. |
+| US-1506 — push notifications en widgets | **Done lokaal** | `Settings / Sharing & PWA` | `push_consent`-registry met channel preference (PUSH/IN_APP/EMAIL), delivery history met failure-reason en idempotente revoke; GUI `push-consent-panel` met traceable grant/delivery/revoke. |
 
 #### Slice 16 — AI, MCP en addons
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-1601 | Als gebruiker wil ik portfolio- en Money Flow-vragen stellen aan een assistant. | Assistant antwoordt met source period, confidence en gebruikte read scopes. |
-| US-1602 | Als gebruiker wil ik BYOK of een lokaal model gebruiken. | Provider key blijft in vault; model/provider wordt per session zichtbaar en revokeable. |
-| US-1603 | Als gebruiker wil ik categorisatie/import via chat voorstellen. | Assistant maakt preview; ledger wordt niet gewijzigd zonder Confirm. |
-| US-1604 | Als gebruiker wil ik een voorgestelde mutatie bevestigen of annuleren. | Proposal toont diff, scope, impact en undo token; Confirm/Cancel is auditbaar. |
-| US-1605 | Als gebruiker wil ik MCP scopes beheren. | Restricted View, View, Propose en Manage geven alleen hun bedoelde capabilities. |
-| US-1606 | Als developer wil ik addons kunnen installeren in een sandbox. | Manifest, permissions, secrets, events en assets zijn geïsoleerd en revokeable. |
-| US-1607 | Als developer wil ik typed addon UI en event hooks bouwen. | SDK contracttest voorkomt toegang buiten granted scopes. |
-| US-1608 | Als gebruiker wil ik community/feed features kunnen gebruiken zonder private data te lekken. | Public/private boundary, moderation en deletion/export zijn server-side afgedwongen. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-1601 | Als gebruiker wil ik portfolio- en Money Flow-vragen stellen aan een assistant. | `Settings / AI & addons / Assistant` | Assistant antwoordt met source period, confidence en gebruikte read scopes. |
+| US-1602 | Als gebruiker wil ik BYOK of een lokaal model gebruiken. | `Settings / AI & addons / Model session` | Provider key blijft in vault; model/provider wordt per session zichtbaar en revokeable. |
+| US-1603 | Als gebruiker wil ik categorisatie/import via chat voorstellen. | `Settings / AI & addons / Proposal preview` | Assistant maakt preview; ledger wordt niet gewijzigd zonder Confirm. |
+| US-1604 | Als gebruiker wil ik een voorgestelde mutatie bevestigen of annuleren. | `Settings / AI & addons / Proposal preview` | Proposal toont diff, scope, impact en undo token; Confirm/Cancel is auditbaar. |
+| US-1605 | Als gebruiker wil ik MCP scopes beheren. | `Settings / AI & addons / Scopes` | Restricted View, View, Propose en Manage geven alleen hun bedoelde capabilities. |
+| US-1606 | Als developer wil ik addons kunnen installeren in een sandbox. | `Settings / AI & addons / Addon sandbox` | Manifest, permissions, secrets, events en assets zijn geïsoleerd en revokeable. |
+| US-1607 | Als developer wil ik typed addon UI en event hooks bouwen. | `Settings / AI & addons / Addon SDK` | SDK contracttest voorkomt toegang buiten granted scopes. |
+| US-1608 | Als gebruiker wil ik community/feed features kunnen gebruiken zonder private data te lekken. | `Community` | Public/private boundary, moderation en deletion/export zijn server-side afgedwongen. |
 
 #### Slice 17 — autonomous operations
 
-| ID | User story | Acceptatiecriteria |
-|---|---|---|
-| US-1701 | Als operator wil ik alerts automatisch naar één incident routeren. | Fingerprint, severity, release, service en correlation data worden gegroepeerd. |
-| US-1702 | Als incident agent wil ik een evidence bundle krijgen. | Logs, traces, metrics, deploys, migrations, runbooks en PII-redaction zijn gekoppeld. |
-| US-1703 | Als diagnosis agent wil ik een reproduceerbare hypothese maken. | Hypothesis bevat confidence, affected path, invariant en voorgestelde regression test. |
-| US-1704 | Als fix agent wil ik eerst een falende regression test toevoegen. | Test faalt op de oude commit en slaagt na de kleinste fix. |
-| US-1705 | Als verifier agent wil ik een onafhankelijke security- en regression review uitvoeren. | **Done lokaal 19 oktober 2026** — pure `apps/api/src/incident-verifier.ts`-kernel `buildVerifierReview` met coverage-verdict (PASS alleen bij 0 missing + alle PASS), security-verdict (BLOCKED bij blocking finding), `promotion_allowed`, SHA-256 `reproducibility_key`, output `incident-verifier-v1`, `ledger_untouched`/`read_only`; authenticated `POST /api/v1/incidents/:id/verifier-review`-boundary slaat review als operationele incident evidence op met `VERIFIER_REVIEW` audit en muteert de ledger niet; GUI `incident-verifier-panel` onder Settings met `Prepare synthetic review` → `Run verifier review`. Rode basis `tests/unit/incident-verifier.test.mjs` + `tests/smoke/incident-verifier-contract.test.mjs` (TC-US-1705/A/B). Evidence: volledige regressie **471/471 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build` healthy (9/9); web 200 met `incident-verifier-panel`; `/health/ready ready`; 20m-logscan schoon (alleen verwachte negatieve testpaden). Alle data synthetisch. |
-| US-1706 | Als release agent wil ik alleen het geverifieerde image promoten. | **Done lokaal 19 oktober 2026** — pure `apps/api/src/incident-promotion.ts`-kernel `buildPromotionGate` met exacte artifact-identity (commit SHA, image digest, SBOM digest, migration version, staging result; mismatch → MISMATCH + `promotion_allowed: false`), health window over api/worker/db/integration/product met threshold-gaps, SHA-256 `reproducibility_key`, output `incident-promotion-v1`, `ledger_untouched`/`read_only`; authenticated `POST /api/v1/incidents/:id/promotion-gate`-boundary slaat gate als operationele incident evidence op met `PROMOTION_GATE` audit en muteert de ledger niet; GUI `incident-promotion-panel` onder Settings met `Prepare synthetic gate` → `Run promotion gate`. Rode basis `tests/unit/incident-promotion.test.mjs` + `tests/smoke/incident-promotion-contract.test.mjs` (TC-US-1706/A/B). Evidence: volledige regressie **478/478 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build api web` healthy; web 200 met `incident-promotion-panel`; `/health/ready ready`; 20m-logscan schoon (3 `error`-regels zijn verwachte negatieve testpaden `ADDON_SCOPE_DENIED`/`INVALID_*`). Alle data synthetisch. |
-| US-1707 | Als operator wil ik automatisch veilig kunnen rollbacken. | **Done lokaal 19 oktober 2026** — pure `apps/api/src/incident-rollback.ts`-kernel `buildRollbackGate` met policy-approved image/schema-combinaties (onbekende combo → DENIED + `rollback_allowed: false`), data restore altijd separaat via sandbox-runbook, SHA-256 `reproducibility_key`, output `incident-rollback-v1`, `ledger_untouched`/`read_only`; authenticated `POST /api/v1/incidents/:id/rollback-gate`-boundary slaat gate als operationele incident evidence op met `ROLLBACK_GATE` audit en muteert de ledger niet; GUI `incident-rollback-panel` onder Settings met `Prepare synthetic gate` → `Run rollback gate`. Rode basis `tests/unit/incident-rollback.test.mjs` + `tests/smoke/incident-rollback-contract.test.mjs` (TC-US-1707/A/B). Evidence: volledige regressie **485/485 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build api web` healthy; web 200 met `incident-rollback-panel` + 68 panelmarkers via curl bevestigd; `/health/ready ready`; 20m-logscan schoon. Alle data synthetisch. |
-| US-1708 | Als product owner wil ik incidenten met bewijs kunnen sluiten. | **Done lokaal 19 oktober 2026** — pure `apps/api/src/incident-closure.ts`-kernel `buildIncidentClosure` met verplichte root cause/impact/timeline(≥2 events)/fix/test/release/prevention (ontbrekend → BLOCKED + `missing_fields`), SHA-256 `reproducibility_key`, output `incident-closure-v1`, `ledger_untouched`/`read_only`; authenticated `POST /api/v1/incidents/:id/closure`-boundary slaat closure als operationele incident evidence op met `INCIDENT_CLOSURE` audit en muteert de ledger niet; GUI `incident-closure-panel` onder Settings met `Prepare synthetic closure` → `Run incident closure`. Rode basis `tests/unit/incident-closure.test.mjs` + `tests/smoke/incident-closure-contract.test.mjs` (TC-US-1708/A/B). Evidence: volledige regressie **492/492 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build api web` healthy; web 200 met `incident-closure-panel` via curl bevestigd; `/health/ready ready`; 20m-logscan schoon. Alle data synthetisch. |
-| US-1709 | Als SRE wil ik geslaagde incidentoplossingen als runbook/skill proposal hergebruiken. | **Done lokaal 19 oktober 2026** — pure `apps/api/src/incident-skill-proposal.ts`-kernel `buildSkillProposal` met review/security-scan/test gates (alleen APPROVED+CLEAN+PASS → ACTIVE, anders BLOCKED + `blockers`), SHA-256 `reproducibility_key`, output `incident-skill-proposal-v1`, `ledger_untouched`/`read_only`; authenticated `POST /api/v1/incidents/:id/skill-proposal`-boundary slaat proposal als operationele incident evidence op met `SKILL_PROPOSAL` audit en muteert de ledger niet; GUI `incident-skill-panel` onder Settings met `Prepare synthetic proposal` → `Run skill proposal`. Rode basis `tests/unit/incident-skill-proposal.test.mjs` + `tests/smoke/incident-skill-proposal-contract.test.mjs` (TC-US-1709/A/B). Evidence: volledige regressie **499/499 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); traceability-test bijgewerkt (US-1707–1709 Done, pending-set leeg); `up -d --build api web` healthy; web 200 met `incident-skill-panel` + 70 panelmarkers via curl bevestigd; `/health/ready ready`; 20m-logscan schoon. Alle data synthetisch. |
+| ID | User story | GUI-breadcrumb | Acceptatiecriteria |
+|---|---|---|---|
+| US-1701 | Als operator wil ik alerts automatisch naar één incident routeren. | `Settings / Operations / Incident router` | Fingerprint, severity, release, service en correlation data worden gegroepeerd. |
+| US-1702 | Als incident agent wil ik een evidence bundle krijgen. | `Settings / Operations / Incident evidence` | Logs, traces, metrics, deploys, migrations, runbooks en PII-redaction zijn gekoppeld. |
+| US-1703 | Als diagnosis agent wil ik een reproduceerbare hypothese maken. | `Settings / Operations / Incident diagnosis` | Hypothesis bevat confidence, affected path, invariant en voorgestelde regression test. |
+| US-1704 | Als fix agent wil ik eerst een falende regression test toevoegen. | `Settings / Operations / Incident fix` | Test faalt op de oude commit en slaagt na de kleinste fix. |
+| US-1705 | Als verifier agent wil ik een onafhankelijke security- en regression review uitvoeren. | `Settings / Operations / Incident verifier` | **Done lokaal 19 oktober 2026** — pure `apps/api/src/incident-verifier.ts`-kernel `buildVerifierReview` met coverage-verdict (PASS alleen bij 0 missing + alle PASS), security-verdict (BLOCKED bij blocking finding), `promotion_allowed`, SHA-256 `reproducibility_key`, output `incident-verifier-v1`, `ledger_untouched`/`read_only`; authenticated `POST /api/v1/incidents/:id/verifier-review`-boundary slaat review als operationele incident evidence op met `VERIFIER_REVIEW` audit en muteert de ledger niet; GUI `incident-verifier-panel` onder Settings met `Prepare synthetic review` → `Run verifier review`. Rode basis `tests/unit/incident-verifier.test.mjs` + `tests/smoke/incident-verifier-contract.test.mjs` (TC-US-1705/A/B). Evidence: volledige regressie **471/471 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build` healthy (9/9); web 200 met `incident-verifier-panel`; `/health/ready ready`; 20m-logscan schoon (alleen verwachte negatieve testpaden). Alle data synthetisch. |
+| US-1706 | Als release agent wil ik alleen het geverifieerde image promoten. | `Settings / Operations / Promotion gate` | **Done lokaal 19 oktober 2026** — pure `apps/api/src/incident-promotion.ts`-kernel `buildPromotionGate` met exacte artifact-identity (commit SHA, image digest, SBOM digest, migration version, staging result; mismatch → MISMATCH + `promotion_allowed: false`), health window over api/worker/db/integration/product met threshold-gaps, SHA-256 `reproducibility_key`, output `incident-promotion-v1`, `ledger_untouched`/`read_only`; authenticated `POST /api/v1/incidents/:id/promotion-gate`-boundary slaat gate als operationele incident evidence op met `PROMOTION_GATE` audit en muteert de ledger niet; GUI `incident-promotion-panel` onder Settings met `Prepare synthetic gate` → `Run promotion gate`. Rode basis `tests/unit/incident-promotion.test.mjs` + `tests/smoke/incident-promotion-contract.test.mjs` (TC-US-1706/A/B). Evidence: volledige regressie **478/478 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build api web` healthy; web 200 met `incident-promotion-panel`; `/health/ready ready`; 20m-logscan schoon (3 `error`-regels zijn verwachte negatieve testpaden `ADDON_SCOPE_DENIED`/`INVALID_*`). Alle data synthetisch. |
+| US-1707 | Als operator wil ik automatisch veilig kunnen rollbacken. | `Settings / Operations / Rollback gate` | **Done lokaal 19 oktober 2026** — pure `apps/api/src/incident-rollback.ts`-kernel `buildRollbackGate` met policy-approved image/schema-combinaties (onbekende combo → DENIED + `rollback_allowed: false`), data restore altijd separaat via sandbox-runbook, SHA-256 `reproducibility_key`, output `incident-rollback-v1`, `ledger_untouched`/`read_only`; authenticated `POST /api/v1/incidents/:id/rollback-gate`-boundary slaat gate als operationele incident evidence op met `ROLLBACK_GATE` audit en muteert de ledger niet; GUI `incident-rollback-panel` onder Settings met `Prepare synthetic gate` → `Run rollback gate`. Rode basis `tests/unit/incident-rollback.test.mjs` + `tests/smoke/incident-rollback-contract.test.mjs` (TC-US-1707/A/B). Evidence: volledige regressie **485/485 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build api web` healthy; web 200 met `incident-rollback-panel` + 68 panelmarkers via curl bevestigd; `/health/ready ready`; 20m-logscan schoon. Alle data synthetisch. |
+| US-1708 | Als product owner wil ik incidenten met bewijs kunnen sluiten. | `Settings / Operations / Incident closure` | **Done lokaal 19 oktober 2026** — pure `apps/api/src/incident-closure.ts`-kernel `buildIncidentClosure` met verplichte root cause/impact/timeline(≥2 events)/fix/test/release/prevention (ontbrekend → BLOCKED + `missing_fields`), SHA-256 `reproducibility_key`, output `incident-closure-v1`, `ledger_untouched`/`read_only`; authenticated `POST /api/v1/incidents/:id/closure`-boundary slaat closure als operationele incident evidence op met `INCIDENT_CLOSURE` audit en muteert de ledger niet; GUI `incident-closure-panel` onder Settings met `Prepare synthetic closure` → `Run incident closure`. Rode basis `tests/unit/incident-closure.test.mjs` + `tests/smoke/incident-closure-contract.test.mjs` (TC-US-1708/A/B). Evidence: volledige regressie **492/492 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); `up -d --build api web` healthy; web 200 met `incident-closure-panel` via curl bevestigd; `/health/ready ready`; 20m-logscan schoon. Alle data synthetisch. |
+| US-1709 | Als SRE wil ik geslaagde incidentoplossingen als runbook/skill proposal hergebruiken. | `Settings / Operations / Runbook reuse` | **Done lokaal 19 oktober 2026** — pure `apps/api/src/incident-skill-proposal.ts`-kernel `buildSkillProposal` met review/security-scan/test gates (alleen APPROVED+CLEAN+PASS → ACTIVE, anders BLOCKED + `blockers`), SHA-256 `reproducibility_key`, output `incident-skill-proposal-v1`, `ledger_untouched`/`read_only`; authenticated `POST /api/v1/incidents/:id/skill-proposal`-boundary slaat proposal als operationele incident evidence op met `SKILL_PROPOSAL` audit en muteert de ledger niet; GUI `incident-skill-panel` onder Settings met `Prepare synthetic proposal` → `Run skill proposal`. Rode basis `tests/unit/incident-skill-proposal.test.mjs` + `tests/smoke/incident-skill-proposal-contract.test.mjs` (TC-US-1709/A/B). Evidence: volledige regressie **499/499 groen, 0 failures** (`STACK_SMOKE=1`, Compose-netwerk); traceability-test bijgewerkt (US-1707–1709 Done, pending-set leeg); `up -d --build api web` healthy; web 200 met `incident-skill-panel` + 70 panelmarkers via curl bevestigd; `/health/ready ready`; 20m-logscan schoon. Alle data synthetisch. |
 
 ### User-story Definition of Ready
 
@@ -2136,6 +2148,8 @@ De opgegeven Snowball-publieke portfolio liet op het moment van onderzoek een **
 
 ## 1. Navigatie en algemene UX
 
+De volledige, leidende presentatie-specificatie staat in [docs/ux-guidelines.md](docs/ux-guidelines.md). Die specificatie vervangt de onderstaande samenvatting wanneer regels voor informatiehiërarchie, componentgedrag, datavisualisatie, responsive gedrag, toegankelijkheid of tone of voice worden geïmplementeerd. De UX-laag blijft read-only ten opzichte van de canonical ledger en maakt data-as-of, calculation version, status en trace/correlation-ID zichtbaar.
+
 - Hoofdnavigatie met **Portfolio**, **Performance**, **Dividends**, **Calendar** en **Actions**.
 - Globale indicatoren in de header:
   - actuele portfolio waarde;
@@ -2930,6 +2944,8 @@ Wealthfolio overlapt met Ghostfolio en Endute op privacy, self-hosting en portfo
 70. Goal funding via share-weighted accountallocaties en contribution-room tracking.
 71. Retirement Risk Lab met taxes, inflation, Monte Carlo, sensitivity heatmaps en SORR.
 
+Goals UX-audit aanvullend bewijs (19 oktober 2026): eerst is `tests/unit/goals-funding-ux.test.mjs` rood toegevoegd voor `TC-US-1105-UX`; daarna zijn de Goals-route en fundingflow in `apps/web/index.html` hersteld. De route heeft nu een semantische paginatitel, target/date/contribution/status-overzicht, geen onterechte `soon`-badge, disabled Save tot de synthetic fixture klaarstaat, inline loading/error/success-statussen, trace/correlation-ID’s, 44px controls en duidelijke focus states. Ook is de FIRE/Risk Lab-modulebinding gecorrigeerd: de handlers werden door scriptvolgorde niet gekoppeld en zijn nu na alle panel-markup gebonden. Gerichte UX-regressie: **3/3 groen**; volledige regressie: **523 tests / 392 pass / 0 fail / 131 skipped**; `tsc --noEmit` groen; Codex-browserflow voor Goals, funding validatiefout en herstel, budget forecast, FIRE fixture/scenario, modulekeuze, auditdrawer en profieldrawer gecontroleerd; browserconsole **0 warnings/errors**; Compose-logscan schoon op error/fatal/exception/failed/panic/unhealthy/oom. Synthetische fixture-resultaten: funding € 1.600,00 share-weighted, forecast € 6.620,00, FIRE nominal € 820.674,07 / real € 453.070,26. Geen schemawijziging, secrets of directe ledger-mutatie door de UI.
+
 ## 10. TrackinV-specifieke aanvullingen op het gegevensmodel
 
 Voor de aanvullende features zijn deze velden/entiteiten relevant:
@@ -3256,3 +3272,7 @@ US-1501 scope-hardening (18 oktober 2026): test-first is een inconsistentie gedi
 US-1703 aanvullend bewijs (18 oktober 2026): eerst zijn `tests/unit/incident-diagnosis.test.mjs` en `tests/smoke/incident-diagnosis-contract.test.mjs` toegevoegd. De pure `apps/api/src/incident-diagnosis.ts`-kernel valideert confidence 0..1, affected path, invariant en voorgestelde regression test en maakt een deterministische SHA-256 `reproducibility_key`; output is `incident-diagnosis-v1` en `read_only: true`. De authenticated `POST /api/v1/incidents/:id/hypotheses`-boundary slaat de hypothese als operationele incident evidence op, schrijft `CALCULATE`/`INCIDENT_HYPOTHESIS` audit evidence met trace/correlation-ID’s en `ledger_untouched: true`, en muteert de canonical ledger niet. De GUI kreeg een compacte `incident-diagnosis-panel` onder Settings met `Build hypothesis`, confidence `0.91`, affected path, invariant, regression test en reproducibility evidence; de viewport-shell blijft `overflow: hidden` en de flow vereist geen paginascroll. Gerichte Node 22 Docker-run: **4/4 groen**; `docker compose up -d --build api web` en API build/typecheck zijn groen. Menselijke GUI-acceptatie: Settings → Incident diagnosis → `Build hypothesis`; zichtbaar `built · reproducible`, `hypothesis · read-only`, confidence `0.91`, affected path, invariant `ledger remains untouched`, `TC-US-1703-ledger-untouched` en `incident-diagnosis-v1`. De brede bestaande UI-shell gaf bij initialisatie enkele console-errors door eerder aanwezige lazy panels; de US-1703-flow zelf slaagde. Alle data bleef synthetisch. Hiermee staat lokaal **US-1703 Done** en komt de teller op **122/133 (91,7%)**; resterend: 11 parent stories. De volgende open story is US-1704.
 
 US-1704 aanvullend bewijs (18 oktober 2026): eerst zijn `tests/unit/incident-fix-verification.test.mjs` en `tests/smoke/incident-fix-verification-contract.test.mjs` rood toegevoegd (missing module + ontbrekende route/GUI-markers). Daarna is de pure `apps/api/src/incident-fix-verification.ts`-kernel `buildFixVerification` gebouwd met FAIL→PASS-validatie, verschillende old/new commits, deterministische SHA-256 `reproducibility_key`, output `incident-fix-verification-v1`, `ledger_untouched: true` en `read_only: true`. De authenticated `POST /api/v1/incidents/:id/fix-verification`-boundary valideert owner-scoped incidents, slaat de verificatie als operationele incident evidence op, schrijft `CALCULATE`/`FIX_VERIFICATION` audit evidence met trace/correlation-ID's en muteert de canonical ledger niet; ongeldige transities geven 400. De GUI kreeg een `incident-fix-panel` onder Settings met `Prepare synthetic fix` → `Verify fix`, FAIL→PASS-evidence en reproduceerbaarheid; de viewport-shell blijft `overflow: hidden`. Tijdens de bouw zijn twee echte fouten gevonden en gefixt: (1) de runtime-alert miste verplichte velden (`title`/`release`/`message`, 400) — payload gecorrigeerd naar het US-1701-contract, (2) de alert groepeerde met eerdere runs (200 i.p.v. 201) — test is grouping-tolerant gemaakt. Gerichte run: **4/4 groen**; volledige lokale `STACK_SMOKE=1` regressie: **401/401 groen, 0 failures**; `tsc --noEmit` groen; `docker compose up -d --build api web` healthy (api ready, web 200, 6x healthy); frontendmarkers `incident-fix-panel`/`incident-fix-verification-v1` via curl bevestigd (3x). Container-logscan api/web/worker schoon; de enige DB-`action_type`-error bleek een handmatige verkenningsquery op `audit_log`, geen app-fout. Alle fixtures/runtime-data synthetisch; geen schemawijziging en geen broker-, bank-, provider- of modelcredentials gebruikt. Hiermee staat lokaal **US-1704 Done** en komt de teller op **123/133 (92,5%)**; resterend: 10 parent stories. De volgende open story is US-1705.
+
+Money Flow / Vragen UX-audit (19 oktober 2026): eerst is `tests/unit/money-flow-questions-ux.test.mjs` rood toegevoegd voor een eigen route-regio, duidelijke heading, periode/data-as-of, empty/error states, tabelalternatief, reset en trace/correlation-evidence. Daarna is `apps/web/index.html` aangepast met de Money Flow / Vragen-hiërarchie, zichtbare read-only context, keyboard-focusable controls, responsive toolbar, reset die stale evidence wist en een antwoordtabel. `apps/api/src/index.ts` logt assistant-answer-fouten nu met dezelfde trace- en correlation-ID’s en retourneert die IDs ook in foutresponses. Gerichte UX-run: **2/2 groen**; bestaande assistant-answer unit/regressie en Portfolio UX-tests **7/7 groen**; `docker compose build api web` en API typecheck groen. De Codex-browserflow controleerde Money Flow-navigatie, profiel/auditdrawer, module-, domein-, periode- en datumcontrols, synthetic fixture, vraag stellen, reset/error-state en mobiele navigatietoggle op 390px; console **0 warnings/errors**. Definitieve desktopflow toont `answered · read-only`, `MONEY_FLOW_READ`, periode/data-as-of, antwoordbron, confidence, trace en correlation. Container-logscan api/web na build/browserflow: **0 error/fatal/exception/failed/panic/unhealthy/oom**. Alle data bleef synthetisch.
+
+Analytics / Bondprofielen & cashflows UX-audit (19 oktober 2026): test-first zijn de nieuwe assertions in `tests/unit/analytics-bondprofiles-ux.test.mjs` eerst rood gemaakt voor consistente result-status, live-status, resetgedrag en trace/correlation-evidence. `apps/web/index.html` synchroniseert nu de overview-status met de gegenereerde cashflow-state, toont request-response trace/correlation-ID’s ook in de overview en verrijkt foutresponses veilig met dezelfde IDs; reset zet de view terug naar de expliciete synthetic empty state. De Codex-browserflow controleerde Analytics-navigatie, modulekeuze, precondition van Generate, synthetic fixture, Generate, tabelalternatief, Reset en keyboard focus. Schone verificatietab: **6 cashflows / 6 tabelrijen**, `calculated · read-only`, echte trace/correlation-ID’s, reset naar **0 cashflows + empty state**, browserconsole **0 warnings/errors**; container-logscan api/web/worker **0 error/fatal/exception/failed/panic/unhealthy/oom**. Gerichte UX-tests: **4/4**; GUI-shell + UX-regressie: **12/12**. Volledige hostloze Node 22-run: **396 pass, 4 environment/traceability failures, 131 skipped**; de 3 runtime-failures waren container-naar-host `fetch failed`, de resterende failure is de bestaande Done-story traceability-gap voor `TC-US-1402-UX` en `TC-US-1403-UX`. Geen schemawijziging, secrets of directe ledger-mutatie; alle data synthetisch.

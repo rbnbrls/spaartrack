@@ -21,6 +21,22 @@ Spaartrack is een private portfolio-, dividend- en Money Flow-app. De canonical 
 - Tests uitschakelen om een release groen te maken.
 - Een database rollback aannemen als gevolg van een image rollback.
 
+## Branch- en commitconventies (US-0004, TC-US-0004)
+
+- Branches: `feat/<US-id>-korte-naam`, `fix/<issue>-korte-naam`; één bounded context per branch.
+- Commits: `<type>(<US-id>): <omschrijving>` met types `feat|fix|test|chore|docs`; bounded, atomic commits.
+- Iedere PR refereert `US-*` en `TC-US-*`; zonder traceability geen merge.
+
+## Definition of Ready
+
+- User story met acceptatiecriteria in roadmap.md; gekoppelde `TC-US-*` in test-cases.md.
+- Bounded context + owner bekend; geen open upstream gate-blocker.
+
+## Definition of Done
+
+- Rode `TC-US-*`-test eerst, daarna groen; regressie groen; `tsc`/lint groen.
+- Evidence (testtelling, health, logscan) gelogd in roadmap.md; alleen synthetische data.
+
 ## Lokale commando's
 
     cp .env.example .env

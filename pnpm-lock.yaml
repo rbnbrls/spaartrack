@@ -12,8 +12,8 @@ importers:
         specifier: ^22.10.2
         version: 22.20.5
       typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
+        specifier: '5.7'
+        version: 5.7.3
 
   apps/agent-control-plane: {}
 
@@ -95,8 +95,8 @@ packages:
     resolution: {integrity: sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==}
     engines: {node: '>= 10.x'}
 
-  typescript@5.9.3:
-    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+  typescript@5.7.3:
+    resolution: {integrity: sha512-84MVSjMEHP+FQRPy3pX9sTVV/INIex71s9TL2Gm5FG/WG1SqXeKyZ0k7/blY/4FdOzI12CBy1vGc4og/eus0fw==}
     engines: {node: '>=14.17'}
     hasBin: true
 
@@ -166,7 +166,7 @@ snapshots:
 
   split2@4.2.0: {}
 
-  typescript@5.9.3: {}
+  typescript@5.7.3: {}
 
   undici-types@6.21.0: {}
 

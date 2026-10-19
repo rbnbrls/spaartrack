@@ -27,6 +27,23 @@ test("local GUI uses synthetic evidence and no provider credentials", () => {
   assert.doesNotMatch(html, /(api[_-]?key|client[_-]?secret|password\s*=)/i);
 });
 
+test("Module switcher stays compact and uses the active page context", () => {
+  assert.match(html, /module-nav-select/);
+  assert.match(html, /module-nav-label\">\$\{active\} modules/);
+  assert.match(html, /aria-label=\"\$\{active\} modules\"/);
+  assert.match(html, /id=\"page-subtitle\"/);
+  assert.match(html, /dataset\.route='Settings'/);
+  assert.doesNotMatch(html, /visual placeholder geselecteerd/);
+});
+
+test("initial portfolio cockpit has a compact no-scroll viewport contract and code-built visuals", () => {
+  assert.match(html, /@media\(min-width:761px\) and \(max-height:800px\)/);
+  assert.match(html, /body\[data-route="Portfolio"\] \.content > \.grid-main/);
+  assert.match(html, /<svg[^>]+id="portfolio-line-chart"/);
+  assert.match(html, /class="donut"[^>]+id="allocation-donut"/);
+  assert.doesNotMatch(html, /<img\b/i);
+});
+
 test("bond pricing fixture keeps the session token in its pricing context", () => {
   assert.match(html, /bondPricingContext=\{token:session\.token,instrumentId:instrument\.id\}/);
   assert.doesNotMatch(html, /bondPricingContext=\{token,instrumentId:instrument\.id\}/);

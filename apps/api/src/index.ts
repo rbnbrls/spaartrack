@@ -41,6 +41,11 @@ import { buildIncidentAlert, incidentFingerprint, severityRank } from "./inciden
 import { buildIncidentEvidenceBundle, type IncidentEvidenceInput } from "./incident-evidence.js";
 import { buildIncidentHypothesis, type IncidentHypothesisInput } from "./incident-diagnosis.js";
 import { buildFixVerification } from "./incident-fix-verification.js";
+import { buildVerifierReview } from "./incident-verifier.js";
+import { buildPromotionGate } from "./incident-promotion.js";
+import { buildRollbackGate } from "./incident-rollback.js";
+import { buildIncidentClosure } from "./incident-closure.js";
+import { buildSkillProposal } from "./incident-skill-proposal.js";
 
 const port = Number(process.env.PORT || 8080);
 const release = process.env.APP_RELEASE || "local";
@@ -734,8 +739,10 @@ async function assistantAnswerRoute(req: IncomingMessage, res: ServerResponse): 
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
     const status = message === "INVALID_ASSISTANT_ANSWER" ? 400 : 500;
-    console.error(redactedLog({ level: "error", operation: "assistant_answer_failed", error: message }));
-    json(res, status, { error: status === 400 ? message : "ASSISTANT_ANSWER_REQUEST_FAILED" });
+    const trace = traceId(req);
+    const correlation = correlationId(req);
+    console.error(redactedLog({ level: "error", operation: "assistant_answer_failed", error: message, trace_id: trace, correlation_id: correlation }));
+    json(res, status, { error: status === 400 ? message : "ASSISTANT_ANSWER_REQUEST_FAILED", trace_id: trace, correlation_id: correlation });
     return true;
   }
 }
@@ -4496,7 +4503,8 @@ async function riskMetricsRoute(req: IncomingMessage, res: ServerResponse): Prom
     await auditEvent(req, res, userId, "CALCULATE", "RISK_METRIC_SNAPSHOT", String(persisted.rows[0].id), { portfolio_id: portfolioId, benchmark_id: benchmarkId, calculation_version: metrics.calculation_version, observations: metrics.observations });
     json(res, 200, result);
   } catch (error) {
-    console.error(redactedLog({ level: "error", operation: "risk_metrics_failed", error: error instanceof Error ? error.message : String(error) }));
+    const traced = res as TracedResponse;
+    console.error(redactedLog({ level: "error", operation: "risk_metrics_failed", trace_id: traced.trace_id || traceId(req), correlation_id: traced.correlation_id || correlationId(req), error: error instanceof Error ? error.message : String(error) }));
     if (!res.writableEnded) json(res, 400, { error: "RISK_METRICS_REQUEST_FAILED" });
   }
   return true;
@@ -4621,7 +4629,7 @@ async function bondPricingRoute(req: IncomingMessage, res: ServerResponse): Prom
   } catch (error) {
     const message = (error as Error).message;
     if (["INVALID_BOND_PRICING_INPUT", "INVALID_BOND_YIELD", "INVALID_BOND_PRICE", "SETTLEMENT_OUT_OF_RANGE", "INVALID_BOND_PROFILE", "YTM_NOT_FOUND"].includes(message)) { json(res, 400, { error: message }); return true; }
-    console.error(redactedLog({ level: "error", operation: "bond_pricing_failed", error: message }));
+    console.error(redactedLog({ level: "error", operation: "bond_pricing_failed", trace_id: traceId(req), correlation_id: correlationId(req), error: message }));
     if (!res.writableEnded) json(res, 400, { error: "BOND_PRICING_FAILED" });
     return true;
   }
@@ -4651,7 +4659,7 @@ async function bondCurveScenarioRoute(req: IncomingMessage, res: ServerResponse)
   } catch (error) {
     const message = (error as Error).message;
     if (["INVALID_BOND_CURVE", "INVALID_BOND_CURVE_SHIFT", "INVALID_BOND_CURVE_DATE", "INVALID_BOND_CURVE_CURRENCY"].includes(message)) { json(res, 400, { error: message }); return true; }
-    console.error(redactedLog({ level: "error", operation: "bond_curve_scenario_failed", error: message }));
+    console.error(redactedLog({ level: "error", operation: "bond_curve_scenario_failed", trace_id: traceId(req), correlation_id: correlationId(req), error: message }));
     if (!res.writableEnded) json(res, 400, { error: "BOND_CURVE_SCENARIO_FAILED" });
   }
   return true;
@@ -4712,7 +4720,7 @@ async function bondProfileRoute(req: IncomingMessage, res: ServerResponse): Prom
         json(res, 201, { instrument_id: instrumentId, instrument_name: String(row.instrument_name), ...calculation });
         return true;
       } catch (error) {
-        console.error(redactedLog({ level: "error", operation: "bond_cashflow_failed", error: (error as Error).message }));
+        console.error(redactedLog({ level: "error", operation: "bond_cashflow_failed", trace_id: traceId(req), correlation_id: correlationId(req), error: (error as Error).message }));
         if (!res.writableEnded) json(res, 400, { error: "BOND_CASHFLOW_FAILED" });
         return true;
       }
@@ -4802,7 +4810,7 @@ async function bondProfileRoute(req: IncomingMessage, res: ServerResponse): Prom
       const message = (error as Error).message;
       if (message === "INVALID_BOND_PROFILE") { json(res, 400, { error: "INVALID_BOND_PROFILE" }); return true; }
       if (message === "invalid_json") { json(res, 400, { error: "INVALID_BOND_PROFILE_REQUEST" }); return true; }
-      console.error(redactedLog({ level: "error", operation: "bond_profile_failed", error: message }));
+      console.error(redactedLog({ level: "error", operation: "bond_profile_failed", trace_id: traceId(req), correlation_id: correlationId(req), error: message }));
       if (!res.writableEnded) json(res, 400, { error: "BOND_PROFILE_REQUEST_FAILED" });
       return true;
     }
@@ -5785,6 +5793,161 @@ async function incidentRoutingRoute(req: IncomingMessage, res: ServerResponse): 
   try {
     const parsed = new URL(req.url, "http://localhost");
     const evidenceMatch = parsed.pathname.match(/^\/api\/v1\/incidents\/([0-9a-f-]{36})\/evidence$/i);
+    // incidentVerifierReviewRoute is the incident-verifier-v1 branch of incidentRoutingRoute.
+    const verifierMatch = parsed.pathname.match(/^\/api\/v1\/incidents\/([0-9a-f-]{36})\/verifier-review$/i);
+    if (req.method === "POST" && verifierMatch) {
+      const body = await readJson(req);
+      const traced = res as TracedResponse;
+      let review;
+      try {
+        review = buildVerifierReview({
+          ...(body as unknown as Record<string, unknown>),
+          incident_id: verifierMatch[1],
+          correlation_id: traced.correlation_id || String((body as Record<string, unknown>).correlation_id || ""),
+          trace_id: traced.trace_id || String((body as Record<string, unknown>).trace_id || "")
+        } as never);
+      } catch (error) {
+        json(res, 400, { error: String((error as Error).message || "INVALID_VERIFIER_REVIEW") });
+        return true;
+      }
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const incident = await client.query(`SELECT i.id FROM spaartrack.incident i WHERE i.id = $1::uuid AND EXISTS (SELECT 1 FROM spaartrack.incident_event ie WHERE ie.incident_id = i.id AND ie.actor_id = $2) FOR UPDATE`, [review.incident_id, userId]);
+        if (!incident.rowCount) { await client.query("ROLLBACK"); json(res, 404, { error: "INCIDENT_NOT_FOUND" }); return true; }
+        await client.query(`UPDATE spaartrack.incident SET evidence = evidence || $1::jsonb, last_seen_at = now() WHERE id = $2::uuid`, [JSON.stringify({ verifier_review: review }), review.incident_id]);
+        await client.query(`INSERT INTO spaartrack.incident_event (incident_id, event_type, actor_type, actor_id, payload) VALUES ($1, 'VERIFICATION', 'AGENT', $2, $3)`, [review.incident_id, userId, JSON.stringify({ calculation_version: review.calculation_version, reproducibility_key: review.reproducibility_key, coverage_verdict: review.coverage_verdict, security_verdict: review.security_verdict, promotion_allowed: review.promotion_allowed, correlation_id: review.correlation_id, trace_id: review.trace_id })]);
+        await client.query("COMMIT");
+      } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; }
+      finally { client.release(); }
+      await auditEvent(req, res, userId, "CALCULATE", "VERIFIER_REVIEW", review.incident_id, { calculation_version: review.calculation_version, reproducibility_key: review.reproducibility_key, coverage_verdict: review.coverage_verdict, security_verdict: review.security_verdict, promotion_allowed: review.promotion_allowed, ledger_untouched: true });
+      json(res, 201, { ...review, ledger_untouched: true });
+      return true;
+    }
+    // incidentSkillProposalRoute is the incident-skill-proposal-v1 branch of incidentRoutingRoute.
+    const skillMatch = parsed.pathname.match(/^\/api\/v1\/incidents\/([0-9a-f-]{36})\/skill-proposal$/i);
+    if (req.method === "POST" && skillMatch) {
+      const body = await readJson(req);
+      const traced = res as TracedResponse;
+      let proposal;
+      try {
+        proposal = buildSkillProposal({
+          ...(body as unknown as Record<string, unknown>),
+          incident_id: skillMatch[1],
+          correlation_id: traced.correlation_id || String((body as Record<string, unknown>).correlation_id || ""),
+          trace_id: traced.trace_id || String((body as Record<string, unknown>).trace_id || "")
+        } as never);
+      } catch (error) {
+        json(res, 400, { error: String((error as Error).message || "INVALID_SKILL_PROPOSAL") });
+        return true;
+      }
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const incident = await client.query(`SELECT i.id FROM spaartrack.incident i WHERE i.id = $1::uuid AND EXISTS (SELECT 1 FROM spaartrack.incident_event ie WHERE ie.incident_id = i.id AND ie.actor_id = $2) FOR UPDATE`, [proposal.incident_id, userId]);
+        if (!incident.rowCount) { await client.query("ROLLBACK"); json(res, 404, { error: "INCIDENT_NOT_FOUND" }); return true; }
+        await client.query(`UPDATE spaartrack.incident SET evidence = evidence || $1::jsonb, last_seen_at = now() WHERE id = $2::uuid`, [JSON.stringify({ skill_proposal: proposal }), proposal.incident_id]);
+        await client.query(`INSERT INTO spaartrack.incident_event (incident_id, event_type, actor_type, actor_id, payload) VALUES ($1, 'VERIFICATION', 'AGENT', $2, $3)`, [proposal.incident_id, userId, JSON.stringify({ calculation_version: proposal.calculation_version, reproducibility_key: proposal.reproducibility_key, proposal_verdict: proposal.proposal_verdict, proposal_allowed: proposal.proposal_allowed, blockers: proposal.blockers, correlation_id: proposal.correlation_id, trace_id: proposal.trace_id })]);
+        await client.query("COMMIT");
+      } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; }
+      finally { client.release(); }
+      await auditEvent(req, res, userId, "CALCULATE", "SKILL_PROPOSAL", proposal.incident_id, { calculation_version: proposal.calculation_version, reproducibility_key: proposal.reproducibility_key, proposal_verdict: proposal.proposal_verdict, proposal_allowed: proposal.proposal_allowed, blockers: proposal.blockers, ledger_untouched: true });
+      json(res, 201, { ...proposal, ledger_untouched: true });
+      return true;
+    }
+    // incidentClosureRoute is the incident-closure-v1 branch of incidentRoutingRoute.
+    const closureMatch = parsed.pathname.match(/^\/api\/v1\/incidents\/([0-9a-f-]{36})\/closure$/i);
+    if (req.method === "POST" && closureMatch) {
+      const body = await readJson(req);
+      const traced = res as TracedResponse;
+      let closure;
+      try {
+        closure = buildIncidentClosure({
+          ...(body as unknown as Record<string, unknown>),
+          incident_id: closureMatch[1],
+          correlation_id: traced.correlation_id || String((body as Record<string, unknown>).correlation_id || ""),
+          trace_id: traced.trace_id || String((body as Record<string, unknown>).trace_id || "")
+        } as never);
+      } catch (error) {
+        json(res, 400, { error: String((error as Error).message || "INVALID_INCIDENT_CLOSURE") });
+        return true;
+      }
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const incident = await client.query(`SELECT i.id FROM spaartrack.incident i WHERE i.id = $1::uuid AND EXISTS (SELECT 1 FROM spaartrack.incident_event ie WHERE ie.incident_id = i.id AND ie.actor_id = $2) FOR UPDATE`, [closure.incident_id, userId]);
+        if (!incident.rowCount) { await client.query("ROLLBACK"); json(res, 404, { error: "INCIDENT_NOT_FOUND" }); return true; }
+        await client.query(`UPDATE spaartrack.incident SET evidence = evidence || $1::jsonb, last_seen_at = now() WHERE id = $2::uuid`, [JSON.stringify({ incident_closure: closure }), closure.incident_id]);
+        await client.query(`INSERT INTO spaartrack.incident_event (incident_id, event_type, actor_type, actor_id, payload) VALUES ($1, 'VERIFICATION', 'AGENT', $2, $3)`, [closure.incident_id, userId, JSON.stringify({ calculation_version: closure.calculation_version, reproducibility_key: closure.reproducibility_key, closure_verdict: closure.closure_verdict, closure_allowed: closure.closure_allowed, correlation_id: closure.correlation_id, trace_id: closure.trace_id })]);
+        await client.query("COMMIT");
+      } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; }
+      finally { client.release(); }
+      await auditEvent(req, res, userId, "CALCULATE", "INCIDENT_CLOSURE", closure.incident_id, { calculation_version: closure.calculation_version, reproducibility_key: closure.reproducibility_key, closure_verdict: closure.closure_verdict, closure_allowed: closure.closure_allowed, missing_fields: closure.missing_fields, ledger_untouched: true });
+      json(res, 201, { ...closure, ledger_untouched: true });
+      return true;
+    }
+    // incidentRollbackGateRoute is the incident-rollback-v1 branch of incidentRoutingRoute.
+    const rollbackMatch = parsed.pathname.match(/^\/api\/v1\/incidents\/([0-9a-f-]{36})\/rollback-gate$/i);
+    if (req.method === "POST" && rollbackMatch) {
+      const body = await readJson(req);
+      const traced = res as TracedResponse;
+      let gate;
+      try {
+        gate = buildRollbackGate({
+          ...(body as unknown as Record<string, unknown>),
+          incident_id: rollbackMatch[1],
+          correlation_id: traced.correlation_id || String((body as Record<string, unknown>).correlation_id || ""),
+          trace_id: traced.trace_id || String((body as Record<string, unknown>).trace_id || "")
+        } as never);
+      } catch (error) {
+        json(res, 400, { error: String((error as Error).message || "INVALID_ROLLBACK_GATE") });
+        return true;
+      }
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const incident = await client.query(`SELECT i.id FROM spaartrack.incident i WHERE i.id = $1::uuid AND EXISTS (SELECT 1 FROM spaartrack.incident_event ie WHERE ie.incident_id = i.id AND ie.actor_id = $2) FOR UPDATE`, [gate.incident_id, userId]);
+        if (!incident.rowCount) { await client.query("ROLLBACK"); json(res, 404, { error: "INCIDENT_NOT_FOUND" }); return true; }
+        await client.query(`UPDATE spaartrack.incident SET evidence = evidence || $1::jsonb, last_seen_at = now() WHERE id = $2::uuid`, [JSON.stringify({ rollback_gate: gate }), gate.incident_id]);
+        await client.query(`INSERT INTO spaartrack.incident_event (incident_id, event_type, actor_type, actor_id, payload) VALUES ($1, 'VERIFICATION', 'AGENT', $2, $3)`, [gate.incident_id, userId, JSON.stringify({ calculation_version: gate.calculation_version, reproducibility_key: gate.reproducibility_key, policy_verdict: gate.policy_verdict, rollback_allowed: gate.rollback_allowed, data_restore_separate: gate.data_restore_separate, correlation_id: gate.correlation_id, trace_id: gate.trace_id })]);
+        await client.query("COMMIT");
+      } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; }
+      finally { client.release(); }
+      await auditEvent(req, res, userId, "CALCULATE", "ROLLBACK_GATE", gate.incident_id, { calculation_version: gate.calculation_version, reproducibility_key: gate.reproducibility_key, policy_verdict: gate.policy_verdict, rollback_allowed: gate.rollback_allowed, ledger_untouched: true });
+      json(res, 201, { ...gate, ledger_untouched: true });
+      return true;
+    }
+    // incidentPromotionGateRoute is the incident-promotion-v1 branch of incidentRoutingRoute.
+    const promotionMatch = parsed.pathname.match(/^\/api\/v1\/incidents\/([0-9a-f-]{36})\/promotion-gate$/i);
+    if (req.method === "POST" && promotionMatch) {
+      const body = await readJson(req);
+      const traced = res as TracedResponse;
+      let gate;
+      try {
+        gate = buildPromotionGate({
+          ...(body as unknown as Record<string, unknown>),
+          incident_id: promotionMatch[1],
+          correlation_id: traced.correlation_id || String((body as Record<string, unknown>).correlation_id || ""),
+          trace_id: traced.trace_id || String((body as Record<string, unknown>).trace_id || "")
+        } as never);
+      } catch (error) {
+        json(res, 400, { error: String((error as Error).message || "INVALID_PROMOTION_GATE") });
+        return true;
+      }
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const incident = await client.query(`SELECT i.id FROM spaartrack.incident i WHERE i.id = $1::uuid AND EXISTS (SELECT 1 FROM spaartrack.incident_event ie WHERE ie.incident_id = i.id AND ie.actor_id = $2) FOR UPDATE`, [gate.incident_id, userId]);
+        if (!incident.rowCount) { await client.query("ROLLBACK"); json(res, 404, { error: "INCIDENT_NOT_FOUND" }); return true; }
+        await client.query(`UPDATE spaartrack.incident SET evidence = evidence || $1::jsonb, last_seen_at = now() WHERE id = $2::uuid`, [JSON.stringify({ promotion_gate: gate }), gate.incident_id]);
+        await client.query(`INSERT INTO spaartrack.incident_event (incident_id, event_type, actor_type, actor_id, payload) VALUES ($1, 'VERIFICATION', 'AGENT', $2, $3)`, [gate.incident_id, userId, JSON.stringify({ calculation_version: gate.calculation_version, reproducibility_key: gate.reproducibility_key, identity_verdict: gate.identity_verdict, health_verdict: gate.health_verdict, promotion_allowed: gate.promotion_allowed, correlation_id: gate.correlation_id, trace_id: gate.trace_id })]);
+        await client.query("COMMIT");
+      } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; }
+      finally { client.release(); }
+      await auditEvent(req, res, userId, "CALCULATE", "PROMOTION_GATE", gate.incident_id, { calculation_version: gate.calculation_version, reproducibility_key: gate.reproducibility_key, identity_verdict: gate.identity_verdict, health_verdict: gate.health_verdict, promotion_allowed: gate.promotion_allowed, ledger_untouched: true });
+      json(res, 201, { ...gate, ledger_untouched: true });
+      return true;
+    }
     // incidentFixVerificationRoute is the incident-fix-verification-v1 branch of incidentRoutingRoute.
     const fixMatch = parsed.pathname.match(/^\/api\/v1\/incidents\/([0-9a-f-]{36})\/fix-verification$/i);
     if (req.method === "POST" && fixMatch) {
@@ -8252,7 +8415,7 @@ const server = createServer((req, res) => {
     void communityFeedRoute(req, res).then((handled) => {
       if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
     }).catch((error) => {
-      console.error(redactedLog({ level: "error", operation: "community_feed_failed", error: error instanceof Error ? error.message : "unknown" }));
+      console.error(redactedLog({ level: "error", operation: "community_feed_failed", trace_id: traceId(req), correlation_id: correlationId(req), error: error instanceof Error ? error.message : "unknown" }));
       if (!res.writableEnded) json(res, 500, { error: "COMMUNITY_FEED_REQUEST_FAILED" });
     });
     return;
