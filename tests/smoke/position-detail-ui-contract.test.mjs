@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
-const html = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const html = readWebSource();
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 
 test("TC-US-0506: position detail contract exposes identity, performance, calendar and actions", () => {

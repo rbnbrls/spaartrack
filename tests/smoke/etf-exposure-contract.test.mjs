@@ -1,17 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 
 test("US-1203 contract: ETF look-through exposes source/as-of/unresolved evidence in API, schema and GUI", async () => {
-  const [api, web, kernel, schema] = await Promise.all([
+  const [api, kernel, schema] = await Promise.all([
     read("apps/api/src/index.ts"),
-    read("apps/web/index.html"),
     read("apps/api/src/etf-exposure.ts"),
     read("database/schema.sql")
   ]);
+  const web = readWebSource();
   for (const marker of ["/api/v1/etf-exposure", "etfExposureRoute", "ETF_LOOKTHROUGH_SOURCE_REQUIRED", "ETF_LOOKTHROUGH_SNAPSHOT", "unresolved_holdings", "source_version", "as_of"]) {
     assert.match(api, new RegExp(marker.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")));
   }

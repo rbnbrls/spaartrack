@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const kernel = readFileSync(new URL("apps/api/src/offline-cache.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 
 test("TC-US-1505: offline cache is encrypted, scoped and marks stale data", () => {
   for (const marker of ["sealOfflineCache", "openOfflineCache", "offline-cache-v1", "aes-256-gcm", "expires_at", "write_allowed"]) {

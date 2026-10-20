@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readWebSource } from "../helpers/web-source.mjs";
 
-const html = readFileSync(new URL("../../apps/web/index.html", import.meta.url), "utf8");
+const html = readWebSource();
 
 test("TC-US-0503-UX: Portfolio performance chart labels both axes with unit and time scale", () => {
   assert.match(html, /addChartAxisLabels\([\s\S]*chartId:'portfolio-line-chart'/);

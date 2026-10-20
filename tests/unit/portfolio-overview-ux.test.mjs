@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
-const html = readFileSync(new URL("../../apps/web/index.html", import.meta.url), "utf8");
+const html = readWebSource();
 
 test("TC-US-0503-UX: Portfolio overview keeps navigation and icon actions accessible", () => {
   for (const label of ["Portfolio", "Performance", "Dividends", "Calendar", "Actions", "Money Flow", "Reports", "Goals", "Analytics", "Community", "Settings"]) {

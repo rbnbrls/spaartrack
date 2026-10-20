@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
-const html = readFileSync(new URL("../../apps/web/index.html", import.meta.url), "utf8");
+const html = readWebSource();
 
 test("TC-US-1105-UX: Goals funding page has a clear hierarchy and truthful navigation state", () => {
   assert.match(html, /data-nav="Goals" aria-label="Goals"(?![^>]*soon)/, "Goals is an available route, not a soon placeholder");

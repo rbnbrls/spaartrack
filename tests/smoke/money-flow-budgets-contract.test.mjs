@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
-const uiSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const uiSource = readWebSource();
 const api = process.env.API_URL || "http://localhost:18080";
 
 test("TC-US-0908: monthly budgets expose groups, rollovers and actual-versus-budget", () => {

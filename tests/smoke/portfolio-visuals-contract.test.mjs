@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readWebSource } from "../helpers/web-source.mjs";
 
-const uiSource = readFileSync(new URL("../../apps/web/index.html", import.meta.url), "utf8");
+const uiSource = readWebSource();
 
 test("TC-US-0503-ui: portfolio visuals are driven by the portfolio snapshot read model", () => {
   for (const marker of [
