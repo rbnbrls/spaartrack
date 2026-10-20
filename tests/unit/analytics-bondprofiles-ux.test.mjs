@@ -33,7 +33,7 @@ test("TC-US-1401-UX: Bond overview keeps result state and run evidence consisten
   assert.match(html, /bond-profile-reset.*overviewState\.textContent = 'synthetic fixture · read-only'/);
 });
 
-test("TC-US-1402/1403-UX: Bond calculation failures preserve traceability in API logs", () => {
+test("TC-US-1402-UX / TC-US-1403-UX: Bond calculation failures preserve traceability in API logs", () => {
   assert.match(api, /bond_profile_failed[\s\S]*trace_id[\s\S]*correlation_id/);
   assert.match(api, /bond_cashflow_failed[\s\S]*trace_id[\s\S]*correlation_id/);
   assert.match(api, /bond_pricing_failed[\s\S]*trace_id[\s\S]*correlation_id/);

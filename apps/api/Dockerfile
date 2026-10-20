@@ -5,6 +5,8 @@ COPY apps/api/package.json apps/api/package.json
 RUN corepack enable && pnpm install --no-frozen-lockfile
 COPY apps/api/tsconfig.json apps/api/tsconfig.json
 COPY apps/api/src apps/api/src
+COPY packages/integration-contracts/src packages/integration-contracts/src
+COPY packages/integration-contracts/package.json packages/integration-contracts/package.json
 RUN pnpm --filter @spaartrack/api build
 RUN pnpm deploy --filter @spaartrack/api --prod /prod
 
@@ -19,6 +21,7 @@ LABEL org.opencontainers.image.revision="$VCS_REF" \
 COPY --from=build /app/apps/api/dist ./dist
 COPY --from=build /prod/node_modules ./node_modules
 COPY --from=build /prod/package.json ./package.json
+RUN mkdir -p /var/lib/spaartrack-secrets && chown node:node /var/lib/spaartrack-secrets
 USER node
 EXPOSE 8080
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/apps/api/src/index.js"]

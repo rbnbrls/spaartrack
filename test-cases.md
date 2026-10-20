@@ -404,3 +404,13 @@ Deze tests zijn aanvullend op de story-traceability en blokkeren iedere web-faci
 ## Definition of Test Done
 
 Een storytest is pas done wanneer de test reproduceerbaar is in CI, de synthetische fixture versioned is, de verwachte uitkomst expliciet is, negatieve paden waar relevant zijn afgedekt, evidence is opgeslagen en de test aan de juiste release gate is gekoppeld.
+
+### US-0802 / US-0803 — echte Trading 212-adapter (20 oktober 2026)
+
+| Test | Story | Dekking | Acceptatie |
+|---|---|---|---|
+| TC-US-0802-live | US-0802 | unit | AES-GCM ciphertext onthult geen credentials; owner/connection-binding en tag-tampering worden gecontroleerd; scrypt accepteert uitsluitend het juiste wachtwoord. |
+| TC-US-0802-settings | US-0802 | unit + GUI | Settings opent Trading 212, passwordvelden starten leeg, login blijft behouden na reload, secrets worden na submit gewist, status en ontkoppelen werken. |
+| TC-US-0802-live-auth | US-0802 | runtime | Broker-owner kan niet via passwordless demo-login/OIDC worden geïmpersoneerd; broker-token werkt uitsluitend op de broker-boundary. |
+| TC-US-0803-live | US-0803 | unit/contract | Alleen GET, vaste hosts, Basic-auth en tracecontext; alle pagina's, order/fill-identiteiten, 401/403/429, schema drift, onveilige paginalinks, revoke vóór volgend request en retry-reset zijn getest met synthetische responses. |
+| TC-US-0803-live-runtime | US-0803 | geïsoleerde integration + GUI | Duurzame job, owner-isolatie, advisory lock, crash-reclaim, idempotente replay, transactionele snapshot/checkpoint, revoke tijdens run, audit en ongewijzigde ledger; echte provider wordt nooit aangeroepen door tests. |

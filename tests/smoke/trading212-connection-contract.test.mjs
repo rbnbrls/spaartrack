@@ -48,3 +48,16 @@ test("TC-US-0802-runtime: synthetic Trading 212 Invest and Stocks ISA mapping ca
   assert.equal((await fetch(`${api}/api/v1/connections`, { headers: { authorization: `Bearer ${token}` } })).status, 200);
   assert.equal((await fetch(`${api}/api/v1/connections`)).status, 401);
 });
+
+test('TC-US-0802-live-auth: protected broker owners cannot use passwordless demo sessions or OIDC', {skip:process.env.STACK_SMOKE!=='1'},async()=>{
+ const headers={'content-type':'application/json'};
+ const email=`synthetic-protected-broker-${Date.now()}@example.test`;
+ const owner=await fetch(`${api}/api/v1/broker/register`,{method:'POST',headers,body:JSON.stringify({email,password:'synthetic-owner-password'})});
+ assert.equal(owner.status,201);const {token}=await owner.json();
+ for(const [path,body] of [['sessions',{email}],['oidc/start',{email,provider:'synthetic'}]]){
+  assert.equal((await fetch(`${api}/api/v1/${path}`,{method:'POST',headers,body:JSON.stringify(body)})).status,401);
+ }
+ assert.equal((await fetch(`${api}/api/v1/connections`,{headers:{authorization:`Bearer ${token}`}})).status,401);
+ assert.equal((await fetch(`${api}/api/v1/broker/trading212`,{headers:{authorization:`Bearer ${token}`}})).status,200);
+ await fetch(`${api}/api/v1/broker/logout`,{method:'POST',headers:{...headers,authorization:`Bearer ${token}`},body:'{}'});
+});
