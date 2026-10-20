@@ -769,6 +769,13 @@ CREATE TABLE import_mapping (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- US-0602: unique index for the import-mapping template identity. Parity with
+-- database/migrations/0009-import-mapping-versioning.sql; the API relies on it for
+-- ON CONFLICT (user_id, name, template_version). Keep IF NOT EXISTS so schema.sql
+-- stays re-appliable over an already migrated database.
+CREATE UNIQUE INDEX IF NOT EXISTS import_mapping_owner_name_version_idx
+  ON spaartrack.import_mapping (user_id, name, template_version);
+
 CREATE TABLE import_file (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
