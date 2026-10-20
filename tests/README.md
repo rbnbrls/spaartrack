@@ -11,6 +11,7 @@ staan achter `STACK_SMOKE=1` en worden zonder die variabele overgeslagen.
 
 - `tests/unit/` — pure domeinregels, de calculation engine en de UX/UI-contracten;
 - `tests/smoke/` — provider-, API-, addon- en golden-contracten plus de stack-tests;
+- `tests/helpers/` — gedeelde testhelpers (bijvoorbeeld `tests/helpers/web-source.mjs`);
 - `tests/fixtures/` — synthetische hulpmiddelen voor de smoke-tests (bijvoorbeeld de
   Trading212 GUI-harness).
 

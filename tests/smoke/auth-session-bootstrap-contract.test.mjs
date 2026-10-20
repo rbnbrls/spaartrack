@@ -18,6 +18,7 @@ const PUBLIC_ROUTE_ALLOWLIST = new Map([
   ["identity-auth-boundary-contract.test.mjs", ["emailOnly", "login", "replayLogin"]],
   ["totp-contract.test.mjs", ["replayLogin"]],
   ["privacy-contract.test.mjs", ["loginAfterDelete"]],
+  ["privacy-lifecycle-contract.test.mjs", ["loginAfterDelete"]],
 ]);
 
 const smokeDirectory = new URL("tests/smoke/", root);

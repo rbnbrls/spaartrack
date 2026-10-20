@@ -55,7 +55,7 @@ async function createUser(label) {
 async function issueSession(email) {
   const response = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: fixtureHeaders,
+    headers: { ...jsonHeaders, "x-synthetic-fixture-key": "local-test-fixture-only" },
     body: JSON.stringify({ email, ttl_seconds: 300 })
   });
   assert.equal(response.status, 201, `fixture session failed: ${response.status}`);
