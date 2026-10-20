@@ -64,8 +64,14 @@ docker exec -e PGPASSWORD="$postgres_password" "$container_name" \
 
 schema_count="$(docker exec -e PGPASSWORD="$postgres_password" "$container_name" \
   psql -At -U "$postgres_user" -d "$postgres_db" -c "SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'spaartrack';")"
-row_count="$(docker exec -e PGPASSWORD="$postgres_password" "$container_name" \
+table_count="$(docker exec -e PGPASSWORD="$postgres_password" "$container_name" \
   psql -At -U "$postgres_user" -d "$postgres_db" -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'spaartrack';")"
+ledger_row_count="$(docker exec -e PGPASSWORD="$postgres_password" "$container_name" \
+  psql -At -U "$postgres_user" -d "$postgres_db" -c "SELECT count(*) FROM spaartrack.ledger_transaction;")"
+ledger_entry_count="$(docker exec -e PGPASSWORD="$postgres_password" "$container_name" \
+  psql -At -U "$postgres_user" -d "$postgres_db" -c "SELECT count(*) FROM spaartrack.ledger_entry;")"
+ledger_entry_amount_sum="$(docker exec -e PGPASSWORD="$postgres_password" "$container_name" \
+  psql -At -U "$postgres_user" -d "$postgres_db" -c "SELECT coalesce(sum(amount), 0) FROM spaartrack.ledger_entry;")"
 raw_payload_count="$(find "$restore_dir/object-storage" -type f \( -iname '*raw*' -o -iname '*.json' \) | wc -l | tr -d ' ')"
 report_count="$(find "$restore_dir/object-storage" -type f \( -iname '*report*' -o -iname '*.csv' -o -iname '*.pdf' \) | wc -l | tr -d ' ')"
 cat > "$restore_dir/restore-report.json" <<EOF
@@ -73,7 +79,10 @@ cat > "$restore_dir/restore-report.json" <<EOF
   "status": "restored",
   "temporary_database": "$container_name",
   "schema_count": $schema_count,
-  "row_count": $row_count,
+  "table_count": $table_count,
+  "ledger_row_count": $ledger_row_count,
+  "ledger_entry_count": $ledger_entry_count,
+  "ledger_entry_amount_sum": $ledger_entry_amount_sum,
   "raw_payload_count": $raw_payload_count,
   "report_count": $report_count,
   "object_storage_restore": true
