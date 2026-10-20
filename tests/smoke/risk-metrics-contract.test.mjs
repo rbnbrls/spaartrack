@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const api = fs.readFileSync(new URL("../../apps/api/src/index.ts", import.meta.url), "utf8");
 const kernel = fs.readFileSync(new URL("../../apps/api/src/risk-metrics.ts", import.meta.url), "utf8");
-const web = fs.readFileSync(new URL("../../apps/web/index.html", import.meta.url), "utf8");
+const web = readWebSource();
 const schema = fs.readFileSync(new URL("../../database/schema.sql", import.meta.url), "utf8");
 
 test("US-1201 contract: risk metrics API, assumptions, persistence and calm GUI are wired", () => {

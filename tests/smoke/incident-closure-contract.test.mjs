@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 
 test("US-1708: ISSUE-05 traceability covers TC-US-1708, TC-US-1708-A, TC-US-1708-B", () => {
   for (const id of ["TC-US-1708", "TC-US-1708-A", "TC-US-1708-B"]) {

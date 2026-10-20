@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const kernel = readFileSync(new URL("apps/api/src/tax-loss-harvesting.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 
 test("TC-US-1305: tax-loss harvesting is read-only, traceable and human-acceptance ready", () => {
   for (const marker of ["/api/v1/tax-loss-harvesting", "taxLossHarvestingRoute", "portfolio_member", "trace_id", "correlation_id", "CALCULATE"]) assert.match(api, new RegExp(marker.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")));

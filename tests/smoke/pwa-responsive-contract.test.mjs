@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 const nginx = readFileSync(new URL("apps/web/nginx.conf", root), "utf8");
 
 test("TC-US-1504-A: portfolio flows are responsive on mobile viewport", () => {

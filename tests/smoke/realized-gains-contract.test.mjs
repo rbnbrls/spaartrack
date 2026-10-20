@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const kernel = readFileSync(new URL("apps/api/src/tax-lots.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 
 test("TC-US-1303: realized gains expose fee and FX decomposition", () => {
   for (const marker of ["calculateRealizedGains", "/api/v1/realized-gains", "REALIZED_GAINS", "trace_id", "correlation_id"]) assert.match(api + kernel, new RegExp(marker.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")));

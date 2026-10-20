@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const api = fs.readFileSync(new URL("../../apps/api/src/index.ts", import.meta.url), "utf8");
 const kernel = fs.readFileSync(new URL("../../apps/api/src/allocation-targets.ts", import.meta.url), "utf8");
-const web = fs.readFileSync(new URL("../../apps/web/index.html", import.meta.url), "utf8");
+const web = readWebSource();
 const schema = fs.readFileSync(new URL("../../database/migrations/0019-allocation-targets.sql", import.meta.url), "utf8");
 
 test("US-1204 contract: targets are portfolio scoped, versioned and visible in the calm GUI", () => {

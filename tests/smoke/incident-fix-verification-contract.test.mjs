@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 
 test("TC-US-1704: fix verification exposes fail-first boundary and GUI panel", () => {
   for (const marker of ["incidentFixVerificationRoute", "buildFixVerification", "incident-fix-verification-v1", "FIX_VERIFICATION", "old_result", "new_result"]) {

@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const kernel = readFileSync(new URL("apps/api/src/bond-curve-scenario.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 
 test("TC-US-1403: curve observations and parallel shifts are versioned and read-only", () => {
   for (const marker of ["buildBondCurveScenario", "synthetic-curve-v1", "bond-curve-scenario-v1", "parallel_shift", "shifted_zero_rate", "read_only"]) assert.match(kernel, new RegExp(marker));

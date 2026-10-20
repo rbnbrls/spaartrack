@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readWebSource } from "../helpers/web-source.mjs";
 
-const html = readFileSync(new URL("../../apps/web/index.html", import.meta.url), "utf8");
+const html = readWebSource();
 
 test("TC-US-0701/0702/0703/0705-UX: Dividends has a complete overview contract", () => {
   assert.match(html, /id="dividend-overview-panel"[^>]*data-route="Dividends"/);

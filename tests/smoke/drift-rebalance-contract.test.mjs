@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const api = fs.readFileSync(new URL("../../apps/api/src/index.ts", import.meta.url), "utf8");
 const kernel = fs.readFileSync(new URL("../../apps/api/src/drift-rebalance.ts", import.meta.url), "utf8");
-const web = fs.readFileSync(new URL("../../apps/web/index.html", import.meta.url), "utf8");
+const web = readWebSource();
 
 test("US-1205 contract: drift suggestions are read-only, traceable and exposed in the calm GUI", () => {
   for (const marker of ["/api/v1/rebalance-suggestions", "rebalanceSuggestionsRoute", "DRIFT_REBALANCE_SNAPSHOT", "PORTFOLIO_ACCESS_FORBIDDEN", "auditEvent"]) assert.match(api, new RegExp(marker.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")));

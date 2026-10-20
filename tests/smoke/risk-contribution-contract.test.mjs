@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const api = fs.readFileSync(new URL("../../apps/api/src/index.ts", import.meta.url), "utf8");
 const kernel = fs.readFileSync(new URL("../../apps/api/src/risk-contribution.ts", import.meta.url), "utf8");
-const web = fs.readFileSync(new URL("../../apps/web/index.html", import.meta.url), "utf8");
+const web = readWebSource();
 
 test("US-1202 contract: holding/category risk contribution totalizes with methodology and GUI evidence", () => {
   for (const marker of ["/api/v1/risk-contributions", "riskContributionRoute", "RISK_CONTRIBUTION_HOLDINGS_REQUIRED", "RISK_CONTRIBUTION_SNAPSHOT", "position_snapshot"]) assert.match(api, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));

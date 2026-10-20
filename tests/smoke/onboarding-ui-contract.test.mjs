@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
-const html = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const html = readWebSource();
 const fixtureUrl = new URL("fixtures/UI-001.json", root);
 
 test("TC-US-0501: UI-001 onboarding contract leads from empty state to first action", () => {

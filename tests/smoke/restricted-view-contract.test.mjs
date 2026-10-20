@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const kernel = readFileSync(new URL("apps/api/src/restricted-view.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 
 test("TC-US-1502: restricted view returns percentages without monetary values", () => {
   for (const marker of ["projectRestrictedView", "restricted-view-v1", "RESTRICTED_VIEW", "allocation_pct", "relative_weight", "hide_amounts"]) {

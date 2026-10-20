@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readWebSource } from "../helpers/web-source.mjs";
 
-const html = readFileSync(new URL("../../apps/web/index.html", import.meta.url), "utf8");
+const html = readWebSource();
 
 test("TC-US-1404-UX: Actions option contracts page has a clear, accessible overview", () => {
   const panel = html.match(/<section[^>]*id="option-contract-panel"[\s\S]*?<\/section>/)?.[0];
