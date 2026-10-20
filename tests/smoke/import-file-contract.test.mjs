@@ -29,7 +29,7 @@ test("TC-US-0601-runtime: synthetic CSV upload is idempotency-safe and rejects u
   const jsonHeaders = { "content-type": "application/json" };
   const userResponse = await fetch(`${api}/api/v1/users`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ email, display_name: "Synthetic import owner" }) });
   assert.equal(userResponse.status, 201);
-  const sessionResponse = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const sessionResponse = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...jsonHeaders, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(sessionResponse.status, 201);
   const session = await sessionResponse.json();
   const auth = { authorization: `Bearer ${session.token}`, ...jsonHeaders };

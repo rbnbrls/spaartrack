@@ -29,9 +29,9 @@ test("TC-US-0903-runtime: paired transfers and liability payments stay visible w
   });
   assert.equal(created.status, 201);
   const user = await created.json();
-  const login = await fetch(`${api}/api/v1/sessions`, {
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" },
     body: JSON.stringify({ email: user.email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);

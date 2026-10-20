@@ -23,7 +23,7 @@ test("TC-US-0607-runtime: committed import batch can be undone without physical 
   const email = `synthetic-import-undo-0607-${suffix}@example.test`;
   const created = await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic import undo" }) });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const token = (await login.json()).token;
   const auth = { authorization: `Bearer ${token}`, ...headers };

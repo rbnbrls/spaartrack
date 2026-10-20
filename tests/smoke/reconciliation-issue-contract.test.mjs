@@ -24,7 +24,7 @@ test("TC-US-0608-runtime: unknown instrument, balance mismatch and ambiguous tra
   const email = `synthetic-reconciliation-0608-${suffix}@example.test`;
   const created = await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic reconciliation owner" }) });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const token = (await login.json()).token;
   const auth = { authorization: `Bearer ${token}`, ...headers };

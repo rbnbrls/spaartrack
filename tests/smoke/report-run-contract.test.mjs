@@ -22,7 +22,7 @@ test("TC-US-1101-A-runtime: owner can queue and read a synthetic portfolio repor
   const email = `synthetic-report-1101-${suffix}@example.test`;
   const created = await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Report Owner" }) });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const session = await login.json();
   const auth = { authorization: `Bearer ${session.token}`, "content-type": "application/json" };
@@ -73,7 +73,7 @@ test("TC-US-1101-B-runtime: completed synthetic report exposes artifact key, for
   const email = `synthetic-report-1101b-${suffix}@example.test`;
   const created = await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Report Artifact Owner" }) });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const session = await login.json();
   const auth = { authorization: `Bearer ${session.token}`, "content-type": "application/json" };
@@ -117,7 +117,7 @@ test("TC-US-1102-runtime: synthetic export respects filters, privacy scope and l
   const email = `synthetic-report-1102-${suffix}@example.test`;
   const created = await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Export Owner" }) });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const session = await login.json();
   const auth = { authorization: `Bearer ${session.token}`, "content-type": "application/json" };
@@ -157,7 +157,7 @@ test("TC-US-1102-runtime: synthetic export respects filters, privacy scope and l
   const outsiderEmail = `synthetic-report-1102-outsider-${suffix}@example.test`;
   const outsiderCreated = await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: outsiderEmail, display_name: "Synthetic Export Outsider" }) });
   assert.equal(outsiderCreated.status, 201);
-  const outsiderLogin = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: outsiderEmail, ttl_seconds: 120 }) });
+  const outsiderLogin = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email: outsiderEmail, ttl_seconds: 120 }) });
   const outsiderSession = await outsiderLogin.json();
   const denied = await fetch(`${api}/api/v1/report-runs/${run.id}/export?format=CSV&locale=nl-NL&currency=EUR`, { headers: { authorization: `Bearer ${outsiderSession.token}` } });
   assert.equal(denied.status, 404);
@@ -177,7 +177,7 @@ test("TC-US-1103-runtime: synthetic tax report traces income and trades and filt
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `synthetic-report-1103-${suffix}@example.test`;
   const user = await (await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Tax Report Owner" }) })).json();
-  const session = await (await fetch(`${api}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) })).json();
+  const session = await (await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) })).json();
   const auth = { authorization: `Bearer ${session.token}`, "content-type": "application/json" };
   const portfolio = await (await fetch(`${api}/api/v1/portfolios`, { method: "POST", headers: auth, body: JSON.stringify({ name: `Synthetic Tax Report ${suffix}`, reporting_currency_code: "EUR" }) })).json();
   const account = await (await fetch(`${api}/api/v1/accounts`, { method: "POST", headers: auth, body: JSON.stringify({ portfolio_id: portfolio.id, name: "Synthetic Tax Account", account_type: "BROKERAGE", tracking_mode: "TRANSACTIONS", base_currency_code: "EUR" }) })).json();

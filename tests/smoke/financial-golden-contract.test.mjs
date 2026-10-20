@@ -34,8 +34,8 @@ test("TC-US-0408-runtime: CALC-001 is deterministic across FX, dividend tax, fee
     body: JSON.stringify({ email, display_name: "Synthetic CALC-001" })
   });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, {
-    method: "POST", headers: { "content-type": "application/json" },
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
+    method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);

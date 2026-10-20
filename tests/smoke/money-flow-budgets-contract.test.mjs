@@ -31,7 +31,7 @@ test("TC-US-0908-runtime: budget actuals are category-scoped and rollover is ret
   const email = `synthetic-money-flow-0908-${suffix}@example.test`;
   const created = await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Money Flow 0908" }) });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const session = await login.json();
   const auth = { authorization: `Bearer ${session.token}` };

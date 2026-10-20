@@ -7,6 +7,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const migrationSource = readFileSync(new URL("database/migrations/0002-user-totp.sql", root), "utf8");
+const securityMigration = readFileSync(new URL("database/migrations/0028-totp-replay-and-lockout.sql", root), "utf8");
 const api = process.env.API_URL || "http://localhost:18080";
 
 function base32Decode(value) {
@@ -32,6 +33,12 @@ test("TC-US-0203-A: TOTP factor is encrypted, enrollable, verifiable and revocab
   assert.match(schemaSource, /user_totp_factor/);
   assert.match(migrationSource, /CREATE TABLE IF NOT EXISTS/);
   assert.match(migrationSource, /secret_ciphertext/);
+  assert.match(securityMigration, /last_used_counter/);
+  assert.match(securityMigration, /failed_attempts/);
+  assert.match(securityMigration, /locked_until/);
+  assert.match(apiSource, /last_used_counter/);
+  assert.match(apiSource, /failed_attempts/);
+  assert.match(apiSource, /locked_until/);
 });
 
 test("TC-US-0203-A-runtime: enrolment, success, invalid code and revoke", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
@@ -42,13 +49,16 @@ test("TC-US-0203-A-runtime: enrolment, success, invalid code and revoke", { skip
     body: JSON.stringify({ email, display_name: "Synthetic TOTP User 0203" })
   });
   const user = await userResponse.json();
-  const login = await fetch(`${api}/api/v1/sessions`, {
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   const session = await login.json();
   const auth = { authorization: `Bearer ${session.token}` };
+
+  const noAuthEnroll = await fetch(`${api}/api/v1/2fa/totp`, { method: "POST" });
+  assert.equal(noAuthEnroll.status, 401);
 
   const enroll = await fetch(`${api}/api/v1/2fa/totp`, { method: "POST", headers: auth });
   assert.equal(enroll.status, 201);
@@ -63,6 +73,18 @@ test("TC-US-0203-A-runtime: enrolment, success, invalid code and revoke", { skip
   });
   assert.equal(valid.status, 200);
   assert.equal((await valid.json()).verified, true);
+
+  const replay = await fetch(`${api}/api/v1/2fa/totp/verify`, {
+    method: "POST", headers: { ...auth, "content-type": "application/json" },
+    body: JSON.stringify({ code: totp(factor.secret) })
+  });
+  assert.equal(replay.status, 401);
+
+  const replayLogin = await fetch(`${api}/api/v1/sessions`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, code: totp(factor.secret), ttl_seconds: 120 })
+  });
+  assert.equal(replayLogin.status, 401);
 
   const invalid = await fetch(`${api}/api/v1/2fa/totp/verify`, {
     method: "POST", headers: { ...auth, "content-type": "application/json" },

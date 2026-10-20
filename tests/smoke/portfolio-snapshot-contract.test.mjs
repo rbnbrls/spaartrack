@@ -27,8 +27,8 @@ test("TC-US-0407-runtime: snapshot contains value, cash, flows, P&L and as-of ev
     body: JSON.stringify({ email, display_name: "Synthetic Snapshot" })
   });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, {
-    method: "POST", headers: { "content-type": "application/json" },
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
+    method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);

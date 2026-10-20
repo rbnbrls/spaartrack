@@ -30,7 +30,7 @@ test("TC-US-1001-runtime: synthetic BANK-001 catalog filters GoCardless institut
   const headers = { "content-type": "application/json" };
   const email = `synthetic-bank-1001-${Date.now()}@example.test`;
   assert.equal((await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic bank owner" }) })).status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const token = (await login.json()).token;
   const response = await fetch(`${api}/api/v1/bank-institutions?provider=gocardless&region=NL&capability=TRANSACTIONS`, { headers: { authorization: `Bearer ${token}` } });

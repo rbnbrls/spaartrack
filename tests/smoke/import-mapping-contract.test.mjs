@@ -39,7 +39,7 @@ test("TC-US-0602-runtime: template is saved, reused and versioned without ledger
   const email = `synthetic-import-mapping-0602-${suffix}@example.test`;
   const user = await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic mapping owner" }) });
   assert.equal(user.status, 201);
-  const session = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const session = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(session.status, 201);
   const auth = { authorization: `Bearer ${(await session.json()).token}`, ...headers };
   const create = await fetch(`${api}/api/v1/import-mappings`, {

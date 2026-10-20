@@ -31,14 +31,20 @@ test("TC-US-0205-runtime: login, permission change, secret access, share, export
   };
   const user = await create(email, "Synthetic Audit Owner");
   const member = await create(memberEmail, "Synthetic Audit Member");
-  const login = await fetch(`${api}/api/v1/sessions`, {
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-trace-id": "trace-audit-0205", "x-correlation-id": "corr-audit-0205" },
+    headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json", "x-trace-id": "trace-audit-0205", "x-correlation-id": "corr-audit-0205" },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);
   const session = await login.json();
   const auth = { authorization: `Bearer ${session.token}` };
+  const auditLogin = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
+    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    body: JSON.stringify({ email, ttl_seconds: 120 })
+  });
+  assert.equal(auditLogin.status, 201);
+  const auditToken = (await auditLogin.json()).token;
 
   const portfolioResponse = await fetch(`${api}/api/v1/portfolios`, {
     method: "POST", headers: { ...auth, "content-type": "application/json" },
@@ -63,18 +69,13 @@ test("TC-US-0205-runtime: login, permission change, secret access, share, export
   const logout = await fetch(`${api}/api/v1/sessions/current`, { method: "DELETE", headers: auth });
   assert.equal(logout.status, 200);
 
-  const relogin = await fetch(`${api}/api/v1/sessions`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
-  });
-  assert.equal(relogin.status, 201);
-  const secondSession = await relogin.json();
-  const audit = await fetch(`${api}/api/v1/audit`, { headers: { authorization: `Bearer ${secondSession.token}` } });
+  const audit = await fetch(`${api}/api/v1/audit`, { headers: { authorization: `Bearer ${auditToken}` } });
   assert.equal(audit.status, 200);
   const actions = new Set((await audit.json()).events.map((event) => event.action));
   for (const action of ["LOGIN", "PERMISSION_CHANGE", "SECRET_ACCESS", "SHARE", "EXPORT", "REVOKE"]) {
     assert.equal(actions.has(action), true, `missing audit action ${action}`);
   }
-  const loginEvent = (await (await fetch(`${api}/api/v1/audit`, { headers: { authorization: `Bearer ${secondSession.token}` } })).json()).events.find((event) => event.action === "LOGIN" && event.trace_id === "trace-audit-0205");
+  const loginEvent = (await fetch(`${api}/api/v1/audit`, { headers: { authorization: `Bearer ${auditToken}` } }).then((response) => response.json())).events.find((event) => event.action === "LOGIN" && event.trace_id === "trace-audit-0205");
   assert.ok(loginEvent);
   assert.equal(loginEvent.trace_id, "trace-audit-0205");
   assert.equal(loginEvent.correlation_id, "corr-audit-0205");

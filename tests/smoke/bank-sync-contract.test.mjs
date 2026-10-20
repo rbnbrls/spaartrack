@@ -33,7 +33,7 @@ test("TC-US-1004-runtime: bank sync persists snapshots, dedupes cursor replay an
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `synthetic-bank-sync-${suffix}@example.test`;
   assert.equal((await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic bank sync" }) })).status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const token = (await login.json()).token;
   const auth = { authorization: `Bearer ${token}`, ...headers };

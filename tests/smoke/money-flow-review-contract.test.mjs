@@ -32,7 +32,7 @@ test("TC-US-0907-runtime: review-required rule enters queue and override closes 
   const email = `synthetic-money-flow-0907-${suffix}@example.test`;
   const created = await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Money Flow 0907" }) });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const session = await login.json();
   const auth = { authorization: `Bearer ${session.token}` };
