@@ -78,3 +78,17 @@ test("TC-US-0103: the security job checks out with a Node 24 runtime action", ()
     `actions/checkout@v${major} targets Node 20, which GitHub removes from hosted runners on 2026-09-16; v5 and later run on Node 24`
   );
 });
+
+test("TC-US-0103: gitleaks scans pull requests with the token and permissions the action requires", () => {
+  const secretScanStep = step(job("security"), "gitleaks/gitleaks-action@");
+  assert.match(
+    secretScanStep,
+    /GITHUB_TOKEN:\s*\$\{\{\s*secrets\.GITHUB_TOKEN\s*\}\}/,
+    "gitleaks-action exits 1 on pull_request events when GITHUB_TOKEN is absent, before scanning"
+  );
+  assert.match(
+    job("security"),
+    /pull-requests:\s*write/,
+    "gitleaks-action reads the pull request commits and comments through the GitHub API"
+  );
+});

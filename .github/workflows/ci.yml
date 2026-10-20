@@ -107,6 +107,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - name: Build immutable ${{ matrix.service }} image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -114,14 +115,30 @@ jobs:
           tags: spaartrack/${{ matrix.service }}:${{ github.sha }}
           build-args: |
             VCS_REF=${{ github.sha }}
-            APP_VERSION=${{ github.ref_name }}
+            APP_VERSION=${{ github.sha }}
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.version=${{ github.sha }}
           outputs: type=oci,dest=/tmp/spaartrack-${{ matrix.service }}.tar
-          metadata-file: /tmp/spaartrack-${{ matrix.service }}.metadata.json
           sbom: true
           provenance: mode=max
+      - name: Record digest evidence
+        env:
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
+          BUILD_METADATA: ${{ steps.build.outputs.metadata }}
+        run: |
+          set -eu
+          service="${{ matrix.service }}"
+          printf '%s\n' "$BUILD_METADATA" > "/tmp/spaartrack-${service}.metadata.json"
+          printf '%s\n' "$BUILD_DIGEST" > "/tmp/spaartrack-${service}.digest.txt"
+          printf '{"service":"%s","digest":"%s","commit_sha":"%s","tag":"%s"}\n' \
+            "$service" "$BUILD_DIGEST" "${{ github.sha }}" \
+            "spaartrack/${service}:${{ github.sha }}" \
+            > "/tmp/spaartrack-${service}.digest.json"
+          test -s "/tmp/spaartrack-${service}.metadata.json"
+          test -s "/tmp/spaartrack-${service}.digest.txt"
+          test -s "/tmp/spaartrack-${service}.digest.json"
+          cat "/tmp/spaartrack-${service}.digest.json"
       - name: Upload image evidence
         uses: actions/upload-artifact@v4
         with:
@@ -129,4 +146,6 @@ jobs:
           path: |
             /tmp/spaartrack-${{ matrix.service }}.tar
             /tmp/spaartrack-${{ matrix.service }}.metadata.json
+            /tmp/spaartrack-${{ matrix.service }}.digest.txt
+            /tmp/spaartrack-${{ matrix.service }}.digest.json
           if-no-files-found: error
