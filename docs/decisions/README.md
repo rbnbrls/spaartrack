@@ -70,4 +70,14 @@ overdraft/short record, while the record's actual SHA-256 is
 23rd character only. The landed `w0-2-ledger-overdraft-short-policy-v1.md` is byte-identical to
 the owner's source file, whose bytes have not changed since 2026-10-18 14:25, so the quoted
 value is a transcription error in the determination's evidence table rather than a difference in
-the record. The determination is an owner-signed record and is left unchanged here.
+the determination is an owner-signed record and is left unchanged here.
+
+The determination's section 8 evidence table uses the source-worktree filenames
+`t_5befc971/docs/decisions/w0-2-ledger-overdraft-short-policy.md` and
+`t_5befc971/docs/decisions/w0-2-calculation-rounding-cost-basis-v2.md` (and the
+corresponding v1 source record). On this branch those source records are landed
+under versioned names: `w0-2-ledger-overdraft-short-policy.md` resolves to
+`w0-2-ledger-overdraft-short-policy-v1.md` or `-v2.md` according to the table
+row, and `w0-2-calculation-rounding-cost-basis-v1.md` / `-v2.md` retain their
+version suffixes. SHA-256 values in the evidence table disambiguate the records;
+no owner-signed determination is edited to change these historical citations.
