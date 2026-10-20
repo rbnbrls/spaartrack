@@ -11,9 +11,11 @@ staan achter `STACK_SMOKE=1` en worden zonder die variabele overgeslagen.
 
 - `tests/unit/` — pure domeinregels, de calculation engine en de UX/UI-contracten;
 - `tests/smoke/` — provider-, API-, addon- en golden-contracten plus de stack-tests;
-- `tests/helpers/` — gedeelde testhelpers (bijvoorbeeld `tests/helpers/web-source.mjs`);
 - `tests/fixtures/` — synthetische hulpmiddelen voor de smoke-tests (bijvoorbeeld de
   Trading212 GUI-harness).
+- `tests/helpers/` — gedeelde testhulpmiddelen; nu de web-source loader
+  (`tests/helpers/web-source.mjs`) die de markup en de scripts van de webfrontend
+  samenvoegt tot één bron, zodat de marker-asserties hun betekenis behouden.
 
 De versieerbare fixturepacks staan in de repo-rootmap `fixtures/` (bijvoorbeeld
 `fixtures/CALC-001.json`), niet onder `tests/`.

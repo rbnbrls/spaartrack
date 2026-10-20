@@ -32,7 +32,6 @@ const databaseUrl =
 
 const jsonHeaders = { "content-type": "application/json" };
 const bearer = (token) => ({ authorization: `Bearer ${token}` });
-const fixtureHeaders = { ...jsonHeaders, "x-synthetic-fixture-key": "local-test-fixture-only" };
 
 let pool;
 async function query(text, values) {
@@ -316,9 +315,15 @@ test("TC-US-0206-B-runtime: deletion revokes connections and credential referenc
   assert.equal((await fetch(`${api}/api/v1/users/me`, { headers: bearer(ownerToken) })).status, 401);
   assert.equal((await fetch(`${api}/api/v1/users/export`, { headers: bearer(ownerToken) })).status, 401);
   assert.equal((await fetch(`${api}/api/v1/users/${owner.id}`, { headers: bearer(ownerToken) })).status, 401);
-  const loginAfterDelete = await fetch(`${api}/api/v1/sessions`, {
+  // A deleted user must not be able to obtain a session again. This goes
+  // through the FIXTURE route on purpose: the fixture route does hand out a
+  // session for a live user (see issueSession above), so a refusal here is
+  // caused by the deletion and not by the public route refusing every
+  // email-only login. On the public route this assertion would hold for a
+  // live user too, and would therefore prove nothing.
+  const loginAfterDelete = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: jsonHeaders,
+    headers: { ...jsonHeaders, "x-synthetic-fixture-key": "local-test-fixture-only" },
     body: JSON.stringify({ email: owner.email, ttl_seconds: 120 })
   });
   assert.equal(loginAfterDelete.status, 401, "a deleted user must not be able to log in again");
