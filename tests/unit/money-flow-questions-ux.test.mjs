@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readWebSource } from "../helpers/web-source.mjs";
 
-const html = readFileSync(new URL("../../apps/web/index.html", import.meta.url), "utf8");
+const html = readWebSource();
 const api = readFileSync(new URL("../../apps/api/src/index.ts", import.meta.url), "utf8");
 
 test("TC-US-1601-UX: Money Flow questions page has a named read-only hierarchy", () => {

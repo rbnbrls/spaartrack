@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const kernel = readFileSync(new URL("apps/api/src/bond-curve-scenario.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 
 test("TC-US-1403: curve observations and parallel shifts are versioned and read-only", () => {
   for (const marker of ["buildBondCurveScenario", "synthetic-curve-v1", "bond-curve-scenario-v1", "parallel_shift", "shifted_zero_rate", "read_only"]) assert.match(kernel, new RegExp(marker));
@@ -31,7 +32,7 @@ test("TC-US-1403-runtime: synthetic parallel shift returns reproducible scenario
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-curve-${suffix}@example.test`, display_name: "Synthetic Curve Scenario" });
-  const session = await create("/api/v1/sessions", { email: user.email, ttl_seconds: 180 });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
   const auth = { authorization: `Bearer ${session.token}` };
   const body = {
     as_of_date: "2026-10-18",

@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const kernel = readFileSync(new URL("apps/api/src/portfolio-comparison.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 const adr = readFileSync(new URL("docs/adr/0002-canonical-ledger.md", root), "utf8");
 
 test("TC-US-1206: portfolio comparison contract is read-only and period-consistent", () => {
@@ -32,7 +33,7 @@ test("TC-US-1206-runtime: cash-backed portfolios compare allocation, performance
 
   const user = await create("/api/v1/users", { email, display_name: "Synthetic Comparison 1206" });
   assert.equal(user.response.status, 201);
-  const login = await create("/api/v1/sessions", { email, ttl_seconds: 120 });
+  const login = await create("/api/v1/test-fixtures/sessions", { email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
   assert.equal(login.response.status, 201);
   const auth = { authorization: `Bearer ${login.body.token}` };
   const portfolioIds = [];

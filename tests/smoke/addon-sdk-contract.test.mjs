@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const kernel = readFileSync(new URL("apps/api/src/addon-sdk.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 
 test("TC-US-1607: typed SDK reads and event hooks stay within granted scopes", () => {
   for (const marker of ["buildAddonSdkRead", "validateAddonEventHook", "addonSdkRoute", "addon-sdk-v1", "ADDON_SCOPE_DENIED", "ADDON_EVENT_NOT_GRANTED", "ledger_access"]) assert.match(api + kernel, new RegExp(marker.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")));
@@ -17,7 +18,7 @@ test("TC-US-1607-A/B runtime: typed read is denied outside grants and events sto
   const email = `synthetic-sdk-${Date.now()}@example.test`;
   let response = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Addon SDK" }) });
   assert.equal(response.status, 201);
-  response = await fetch(`${base}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
+  response = await fetch(`${base}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
   assert.equal(response.status, 201);
   const { token } = await response.json();
   const auth = { "content-type": "application/json", authorization: `Bearer ${token}`, "x-trace-id": "trace-addon-1607", "x-correlation-id": "corr-addon-1607" };

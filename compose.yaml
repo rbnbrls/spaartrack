@@ -1,29 +1,33 @@
 name: spaartrack
-
 services:
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
     ports:
-      - "${WEB_PORT:-3000}:80"
+    - ${WEB_PORT:-3000}:80
     depends_on:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1/health/ready"]
+      test:
+      - CMD
+      - wget
+      - --spider
+      - -q
+      - http://127.0.0.1/health/ready
       interval: 10s
       timeout: 3s
       retries: 5
-
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      APP_ENV: ${APP_ENV:-local}
+      APP_ENV: ${APP_ENV:-${NODE_ENV:-local}}
       BROKER_MASTER_KEY: ${BROKER_MASTER_KEY:-}
       APP_AUTH_MODE: ${APP_AUTH_MODE:-synthetic}
+      SYNTHETIC_FIXTURE_KEY: ${SYNTHETIC_FIXTURE_KEY:-}
       APP_RELEASE: ${APP_RELEASE:-local}
       APP_COMMIT_SHA: ${APP_COMMIT_SHA:-local}
       APP_IMAGE_DIGEST: ${APP_IMAGE_DIGEST:-local}
@@ -33,42 +37,51 @@ services:
       DATABASE_URL: postgres://spaartrack:change-me-local-only@db:5432/spaartrack
       REDIS_URL: redis://redis:6379/0
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      NODE_ENV: ${NODE_ENV:-development}
     volumes:
-      - broker-secrets:/var/lib/spaartrack-secrets
+    - broker-secrets:/var/lib/spaartrack-secrets
     ports:
-      - "18080:8080"
+    - 18080:8080
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test:
+      - CMD
+      - node
+      - -e
+      - 'fetch(''http://localhost:8080/health/ready'').then(r => process.exit(r.ok
+        ? 0 : 1)).catch(() => process.exit(1))'
       interval: 10s
       timeout: 3s
       retries: 10
-
   broker-worker:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ["node", "dist/apps/api/src/trading212-worker.js"]
+    command:
+    - node
+    - dist/apps/api/src/trading212-worker.js
     environment:
-      APP_ENV: ${APP_ENV:-local}
+      APP_ENV: ${APP_ENV:-${NODE_ENV:-local}}
       APP_RELEASE: ${APP_RELEASE:-local}
       BROKER_MASTER_KEY: ${BROKER_MASTER_KEY:-}
       DATABASE_URL: postgres://spaartrack:change-me-local-only@db:5432/spaartrack
+      NODE_ENV: ${NODE_ENV:-development}
     volumes:
-      - broker-secrets:/var/lib/spaartrack-secrets
+    - broker-secrets:/var/lib/spaartrack-secrets
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "test -s /tmp/broker-worker-ready"]
+      test:
+      - CMD-SHELL
+      - test -s /tmp/broker-worker-ready
       interval: 10s
       timeout: 3s
       retries: 5
-
   worker:
     build:
       context: .
@@ -78,17 +91,20 @@ services:
       APP_RELEASE: local
       DATABASE_URL: postgres://spaartrack:change-me-local-only@db:5432/spaartrack
       REDIS_URL: redis://redis:6379/0
+      NODE_ENV: ${NODE_ENV:-development}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "test -s /tmp/spaartrack-worker-ready || { echo 'worker readiness marker missing'; exit 1; }"]
+      test:
+      - CMD-SHELL
+      - test -s /tmp/spaartrack-worker-ready || { echo 'worker readiness marker missing';
+        exit 1; }
       interval: 10s
       timeout: 3s
       retries: 5
-
   db:
     image: postgres:16-alpine
     environment:
@@ -96,27 +112,33 @@ services:
       POSTGRES_USER: spaartrack
       POSTGRES_PASSWORD: change-me-local-only
     ports:
-      - "55432:5432"
+    - 55432:5432
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    - postgres-data:/var/lib/postgresql/data
+    - ./database/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U spaartrack -d spaartrack"]
+      test:
+      - CMD-SHELL
+      - pg_isready -U spaartrack -d spaartrack
       interval: 5s
       timeout: 3s
       retries: 10
-
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+    - redis-server
+    - --appendonly
+    - 'yes'
     volumes:
-      - redis-data:/data
+    - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+      - CMD
+      - redis-cli
+      - ping
       interval: 5s
       timeout: 3s
       retries: 10
-
   object-storage:
     image: rustfs/rustfs:1.0.2
     command: server /data --console-address ":9001"
@@ -124,54 +146,56 @@ services:
       RUSTFS_ACCESS_KEY: spaartrack
       RUSTFS_SECRET_KEY: change-me-local-only
     ports:
-      - "19000:9000"
-      - "19001:9001"
+    - 19000:9000
+    - 19001:9001
     volumes:
-      - object-storage-data:/data
+    - object-storage-data:/data
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9000/minio/health/live"]
+      test:
+      - CMD
+      - wget
+      - --spider
+      - -q
+      - http://127.0.0.1:9000/minio/health/live
       interval: 10s
       timeout: 5s
       retries: 5
-
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.116.1
-    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    command:
+    - --config=/etc/otelcol-contrib/config.yaml
     volumes:
-      - ./infra/monitoring/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    - ./infra/monitoring/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     ports:
-      - "4317:4317"
-      - "4318:4318"
-      - "8889:8889"
-
+    - 4317:4317
+    - 4318:4318
+    - 8889:8889
   prometheus:
     image: prom/prometheus:v3.1.0
     volumes:
-      - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./infra/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
-      - prometheus-data:/prometheus
+    - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    - ./infra/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+    - prometheus-data:/prometheus
     ports:
-      - "9090:9090"
+    - 9090:9090
     depends_on:
-      - otel-collector
-
+    - otel-collector
   grafana:
     image: grafana/grafana:11.5.2
     environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
-      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_SECURITY_ALLOW_EMBEDDING: 'true'
     volumes:
-      - grafana-data:/var/lib/grafana
+    - grafana-data:/var/lib/grafana
     ports:
-      - "3001:3000"
+    - 3001:3000
     depends_on:
-      - prometheus
-
+    - prometheus
 volumes:
-  broker-secrets:
-  postgres-data:
-  redis-data:
-  object-storage-data:
-  prometheus-data:
-  grafana-data:
+  broker-secrets: null
+  postgres-data: null
+  redis-data: null
+  object-storage-data: null
+  prometheus-data: null
+  grafana-data: null

@@ -47,16 +47,51 @@ import { buildPromotionGate } from "./incident-promotion.js";
 import { buildRollbackGate } from "./incident-rollback.js";
 import { buildIncidentClosure } from "./incident-closure.js";
 import { buildSkillProposal } from "./incident-skill-proposal.js";
+import {
+  buildPrivacyDeletionReceipt,
+  buildPrivacyExport,
+  PRIVACY_EXPORT_VERSION,
+  PRIVACY_TOMBSTONE_RETENTION_DAYS
+} from "./privacy.js";
+import { collectPrivacyExportSections } from "./privacy-export.js";
+import { buildPrivacyDeletionAuditEvent, buildPrivacyDeletionPlan, type PrivacyDeletionCounts } from "./privacy-deletion.js";
 
 const port = Number(process.env.PORT || 8080);
 const release = process.env.APP_RELEASE || "local";
-const environment = process.env.APP_ENV || "local";
+
+// Resolve runtime environment: APP_ENV is authoritative when explicitly set;
+// NODE_ENV=production only promotes an unset APP_ENV.
+// This makes the local compose stack (APP_ENV=local explicitly set) resolve to "local"
+// while a bare production image run (NODE_ENV=production, no APP_ENV) resolves to "production".
+const nodeEnvironment = process.env.NODE_ENV?.trim().toLowerCase() || "";
+const configuredAppEnvironment = process.env.APP_ENV?.trim().toLowerCase() || "";
+if (nodeEnvironment && configuredAppEnvironment && nodeEnvironment !== configuredAppEnvironment &&
+    (nodeEnvironment === "production" || configuredAppEnvironment === "production")) {
+  throw new Error("NODE_ENV and APP_ENV conflict; production runtime environment must be explicit and consistent");
+}
+const environment = configuredAppEnvironment || (nodeEnvironment === "production" ? "production" : "local");
+const authMode = process.env.APP_AUTH_MODE || "disabled";
+
+const SYNTHETIC_LOCAL_TOTP_KEY = "synthetic-local-totp-encryption-key";
+if (environment === "production") {
+  const configuredTotpKey = process.env.TOTP_ENCRYPTION_KEY ?? "";
+  if (configuredTotpKey.length < 32 || configuredTotpKey === SYNTHETIC_LOCAL_TOTP_KEY) {
+    console.error(JSON.stringify({
+      level: "error",
+      service: "api",
+      operation: "production_startup_refused",
+      reason: "TOTP_ENCRYPTION_KEY must be injected with at least 32 characters in production"
+    }));
+    process.exit(1);
+  }
+}
 const startedAt = new Date().toISOString();
 const commitSha = process.env.APP_COMMIT_SHA || process.env.COOLIFY_COMMIT_SHA || "local";
 const imageDigest = process.env.APP_IMAGE_DIGEST || process.env.COOLIFY_IMAGE_DIGEST || "local";
 const migrationVersion = process.env.APP_MIGRATION_VERSION || process.env.COOLIFY_MIGRATION_VERSION || "schema.sql";
 const deployedAt = process.env.APP_DEPLOYED_AT || startedAt;
 const databasePool = new Pool({ connectionString: process.env.DATABASE_URL });
+
 const userStatuses = ["ACTIVE", "INVITED", "SUSPENDED", "DELETED"] as const;
 const portfolioRoles = ["OWNER", "EDITOR", "VIEWER", "ACCOUNTANT", "ADVISOR"] as const;
 const accountTypes = ["BROKERAGE", "BANK", "CASH", "CREDIT_CARD", "LOAN", "CRYPTO", "PROPERTY", "CUSTOM"] as const;
@@ -88,6 +123,16 @@ const syntheticBankAccounts = [
 type PortfolioRole = typeof portfolioRoles[number];
 type UserStatus = typeof userStatuses[number];
 
+if (environment === "production") {
+  throw new Error("PRODUCTION_OIDC_ADAPTER_UNAVAILABLE");
+}
+if (authMode === "oidc" && (
+  !process.env.OIDC_ISSUER || !process.env.OIDC_CLIENT_ID || !process.env.OIDC_CLIENT_SECRET_REF ||
+  process.env.OIDC_PROVIDER_VALIDATED !== "true"
+)) {
+  throw new Error("PRODUCTION_OIDC_ADAPTER_UNAVAILABLE");
+}
+
 type TracedResponse = ServerResponse & {
   trace_id?: string;
   correlation_id?: string;
@@ -95,11 +140,9 @@ type TracedResponse = ServerResponse & {
 
 function redactedLog(fields: Record<string, unknown>): string {
   return JSON.stringify(fields)
-    .replace(/("(?:token|secret|api_key|api-key|account_number|account-number|transaction_description|transaction-description|description)"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
+    .replace(/(\"(?:token|secret|api_key|api-key|account_number|account-number|transaction_description|transaction-description|description)\"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
     .replace(/(token|secret|api_key|api-key|account_number|account-number)=?[^,}" ]+/gi, "$1=[REDACTED]");
-}
-
-function json(res: ServerResponse, status: number, body: unknown): void {
+}function json(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
@@ -173,14 +216,44 @@ function sessionResponse(row: Record<string, unknown>): Record<string, unknown> 
   return { user_id: row.user_id, expires_at: row.expires_at };
 }
 
+async function requireSelfUser(req: IncomingMessage, res: ServerResponse, userId: string): Promise<string | undefined> {
+  const actorId = await authenticatedUserId(req);
+  if (!actorId) {
+    json(res, 401, { error: "UNAUTHENTICATED" });
+    return undefined;
+  }
+  if (actorId !== userId) {
+    json(res, 403, { error: "USER_SCOPE_FORBIDDEN" });
+    return undefined;
+  }
+  return actorId;
+}
+
+function totpCounter(timestamp = Date.now()): number {
+  return Math.floor(timestamp / 1000 / 30);
+}
+
+function matchingTotpCounter(secret: string, code: string, timestamp = Date.now()): number | undefined {
+  if (!/^\d{6}$/.test(code)) return undefined;
+  const counter = totpCounter(timestamp);
+  for (const candidate of [counter - 1, counter, counter + 1]) {
+    if (candidate < 0) continue;
+    const expected = Buffer.from(totpCode(secret, candidate, true));
+    if (timingSafeEqual(Buffer.from(code), expected)) return candidate;
+  }
+  return undefined;
+}
+
 async function createSessionForUser(userId: string, ttlSeconds = 3600): Promise<{ token: string; expiresAt: unknown }> {
   const token = randomBytes(32).toString("base64url");
   const result = await databasePool.query(
     `INSERT INTO spaartrack.user_session (user_id, token_hash, expires_at)
-     VALUES ($1, $2, now() + ($3 * interval '1 second'))
+     SELECT id, $2, now() + ($3 * interval '1 second')
+     FROM spaartrack.app_user WHERE id = $1 AND status = 'ACTIVE' AND deleted_at IS NULL
      RETURNING expires_at`,
     [userId, sessionHash(token), ttlSeconds]
   );
+  if (!result.rowCount) throw new Error("SESSION_USER_NOT_ACTIVE");
   return { token, expiresAt: result.rows[0].expires_at };
 }
 
@@ -240,13 +313,13 @@ function decryptTotpSecret(row: Record<string, unknown>): string {
   ]).toString("utf8");
 }
 
-function totpCode(secret: string, timestamp = Date.now()): string {
+function totpCode(secret: string, timestampOrCounter = Date.now(), isCounter = false): string {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   let bits = "";
   for (const character of secret.replace(/=+$/, "")) bits += alphabet.indexOf(character).toString(2).padStart(5, "0");
   const key = Buffer.from((bits.match(/.{8}/g) || []).map((chunk) => Number.parseInt(chunk, 2)));
   const counter = Buffer.alloc(8);
-  counter.writeBigUInt64BE(BigInt(Math.floor(timestamp / 1000 / 30)));
+  counter.writeBigUInt64BE(BigInt(isCounter ? timestampOrCounter : Math.floor(timestampOrCounter / 1000 / 30)));
   const digest = createHmac("sha1", key).update(counter).digest();
   const offset = digest[digest.length - 1] & 0x0f;
   return String((digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, "0");
@@ -266,13 +339,31 @@ async function authenticatedUserId(req: IncomingMessage): Promise<string | undef
   return result.rowCount ? String(result.rows[0].user_id) : undefined;
 }
 
+async function authenticatedUserStatus(req: IncomingMessage): Promise<{ userId: string; status: string } | undefined> {
+  const token = authorizationToken(req);
+  if (!token) return undefined;
+  const result = await databasePool.query(
+    `SELECT s.user_id, u.status FROM spaartrack.user_session s
+     JOIN spaartrack.app_user u ON u.id = s.user_id
+     WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
+       AND u.deleted_at IS NULL`,
+    [sessionHash(token)]
+  );
+  return result.rowCount ? { userId: String(result.rows[0].user_id), status: String(result.rows[0].status) } : undefined;
+}
+
 async function totpRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-  if (environment !== "local") return false;
-  const userId = await authenticatedUserId(req);
-  if (!userId) {
+  if (environment !== "local" || authMode !== "synthetic") return false;
+  const actor = await authenticatedUserStatus(req);
+  if (!actor) {
     json(res, 401, { error: "UNAUTHENTICATED" });
     return true;
   }
+  if (actor.status !== "ACTIVE") {
+    json(res, 401, { error: "SESSION_INVALID_OR_EXPIRED" });
+    return true;
+  }
+  const userId = actor.userId;
   if (req.method === "POST" && req.url === "/api/v1/2fa/totp") {
     const secret = base32Encode(randomBytes(20));
     const encrypted = encryptTotpSecret(secret);
@@ -292,7 +383,8 @@ async function totpRoute(req: IncomingMessage, res: ServerResponse): Promise<boo
     const body = await readJson(req);
     const code = typeof body.code === "string" ? body.code : "";
     const result = await databasePool.query(
-      `SELECT secret_ciphertext, secret_iv, secret_tag FROM spaartrack.user_totp_factor
+      `SELECT id, secret_ciphertext, secret_iv, secret_tag, last_used_counter, failed_attempts, locked_until
+       FROM spaartrack.user_totp_factor
        WHERE user_id = $1 AND revoked_at IS NULL`,
       [userId]
     );
@@ -300,9 +392,43 @@ async function totpRoute(req: IncomingMessage, res: ServerResponse): Promise<boo
       json(res, 401, { error: "TOTP_INVALID" });
       return true;
     }
-    const expected = totpCode(decryptTotpSecret(result.rows[0]));
-    const valid = timingSafeEqual(Buffer.from(code), Buffer.from(expected));
-    json(res, valid ? 200 : 401, valid ? { verified: true } : { error: "TOTP_INVALID" });
+    const factor = result.rows[0];
+    if (factor.locked_until && new Date(String(factor.locked_until)).getTime() > Date.now()) {
+      json(res, 429, { error: "TOTP_ATTEMPTS_LOCKED" });
+      return true;
+    }
+    const matchedCounter = matchingTotpCounter(decryptTotpSecret(factor), code);
+    if (matchedCounter === undefined) {
+      await databasePool.query(
+        `UPDATE spaartrack.user_totp_factor
+         SET failed_attempts = failed_attempts + 1,
+             locked_until = CASE WHEN failed_attempts + 1 >= 5 THEN now() + interval '5 minutes' ELSE NULL END
+         WHERE id = $1 AND revoked_at IS NULL`,
+        [factor.id]
+      );
+      const attempts = await databasePool.query(
+        "SELECT failed_attempts FROM spaartrack.user_totp_factor WHERE id = $1",
+        [factor.id]
+      );
+      const locked = Number(attempts.rows[0]?.failed_attempts) >= 5;
+      json(res, locked ? 429 : 401, { error: locked ? "TOTP_ATTEMPTS_LOCKED" : "TOTP_INVALID" });
+      return true;
+    }
+    const accepted = await databasePool.query(
+      `UPDATE spaartrack.user_totp_factor
+       SET last_used_counter = $2, failed_attempts = 0, locked_until = NULL
+       WHERE id = $1 AND revoked_at IS NULL
+         AND (last_used_counter IS NULL OR last_used_counter < $2)
+         AND (locked_until IS NULL OR locked_until <= now())
+       RETURNING id`,
+      [factor.id, matchedCounter]
+    );
+    if (!accepted.rowCount) {
+      json(res, 401, { error: "TOTP_INVALID_OR_REPLAYED" });
+      return true;
+    }
+    await auditEvent(req, res, userId, "LOGIN", "TOTP_FACTOR", String(factor.id), { counter: matchedCounter });
+    json(res, 200, { verified: true });
     return true;
   }
   if (req.method === "DELETE" && req.url === "/api/v1/2fa/totp") {
@@ -322,28 +448,119 @@ async function totpRoute(req: IncomingMessage, res: ServerResponse): Promise<boo
 }
 
 async function sessionRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-  if (environment !== "local") return false;
-  if (req.method === "POST" && req.url === "/api/v1/sessions") {
+  if (environment !== "local" || authMode !== "synthetic") return false;
+  const fixtureSessionRoute = req.method === "POST" && req.url === "/api/v1/test-fixtures/sessions";
+  const loginSessionRoute = req.method === "POST" && req.url === "/api/v1/sessions";
+  if (fixtureSessionRoute || loginSessionRoute) {
     try {
+      if (fixtureSessionRoute) {
+        const expectedFixtureKey = process.env.SYNTHETIC_FIXTURE_KEY || "";
+        const suppliedFixtureKey = req.headers["x-synthetic-fixture-key"]?.toString() || "";
+        const suppliedKeyBytes = Buffer.from(suppliedFixtureKey);
+        const expectedKeyBytes = Buffer.from(expectedFixtureKey);
+        if (!expectedFixtureKey || suppliedKeyBytes.length !== expectedKeyBytes.length || !timingSafeEqual(suppliedKeyBytes, expectedKeyBytes)) {
+          json(res, 401, { error: "SYNTHETIC_FIXTURE_AUTH_REQUIRED" });
+          return true;
+        }
+      }
       const body = await readJson(req);
       const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      const code = typeof body.code === "string" ? body.code : "";
       const requestedTtl = typeof body.ttl_seconds === "number" ? body.ttl_seconds : 3600;
       const ttlSeconds = Math.max(1, Math.min(86_400, Math.floor(requestedTtl)));
-      const token = randomBytes(32).toString("base64url");
-      const result = await databasePool.query(
-        `INSERT INTO spaartrack.user_session (user_id, token_hash, expires_at)
-         SELECT id, $2, now() + ($3 * interval '1 second')
-         FROM spaartrack.app_user
-         WHERE lower(email) = $1 AND status = 'ACTIVE' AND deleted_at IS NULL
-         AND NOT EXISTS (SELECT 1 FROM spaartrack.broker_owner bo WHERE bo.user_id=app_user.id)
-         RETURNING user_id, expires_at`,
-        [email, sessionHash(token), ttlSeconds]
-      );
-      if (!result.rowCount) {
-        json(res, 401, { error: "INVALID_LOGIN" });
-      } else {
-        await auditEvent(req, res, String(result.rows[0].user_id), "LOGIN", "USER", String(result.rows[0].user_id));
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const users = await client.query(
+          `SELECT id FROM spaartrack.app_user
+           WHERE lower(email) = $1 AND status = 'ACTIVE' AND deleted_at IS NULL
+             AND NOT EXISTS (SELECT 1 FROM spaartrack.broker_owner bo WHERE bo.user_id=app_user.id)
+           FOR UPDATE`,
+          [email]
+        );
+        if (!users.rowCount) {
+          await client.query("ROLLBACK");
+          json(res, 401, { error: "INVALID_LOGIN" });
+          return true;
+        }
+        const userId = String(users.rows[0].id);
+        const factors = authMode === "synthetic"
+          ? await client.query(
+            `SELECT id, secret_ciphertext, secret_iv, secret_tag, last_used_counter, failed_attempts, locked_until
+             FROM spaartrack.user_totp_factor WHERE user_id = $1 AND revoked_at IS NULL FOR UPDATE`,
+            [userId]
+          )
+          : { rowCount: 0, rows: [] as Record<string, unknown>[] };
+        if (factors.rowCount) {
+          const factor = factors.rows[0];
+          if (factor.locked_until && new Date(String(factor.locked_until)).getTime() > Date.now()) {
+            await client.query("ROLLBACK");
+            json(res, 429, { error: "TOTP_ATTEMPTS_LOCKED" });
+            return true;
+          }
+          const matchedCounter = /^\d{6}$/.test(code)
+            ? matchingTotpCounter(decryptTotpSecret(factor), code)
+            : undefined;
+          if (matchedCounter === undefined) {
+            await client.query(
+              `UPDATE spaartrack.user_totp_factor
+               SET failed_attempts = failed_attempts + 1,
+                   locked_until = CASE WHEN failed_attempts + 1 >= 5 THEN now() + interval '5 minutes' ELSE NULL END
+               WHERE id = $1`,
+              [factor.id]
+            );
+            const attempts = await client.query(
+              "SELECT failed_attempts FROM spaartrack.user_totp_factor WHERE id = $1",
+              [factor.id]
+            );
+            const locked = Number(attempts.rows[0]?.failed_attempts) >= 5;
+            await client.query("COMMIT");
+            json(res, locked ? 429 : 401, { error: locked ? "TOTP_ATTEMPTS_LOCKED" : "INVALID_LOGIN" });
+            return true;
+          }
+          const consumed = await client.query(
+            `UPDATE spaartrack.user_totp_factor
+             SET last_used_counter = $2, failed_attempts = 0, locked_until = NULL
+             WHERE id = $1 AND (last_used_counter IS NULL OR last_used_counter < $2)
+               AND (locked_until IS NULL OR locked_until <= now())
+             RETURNING id`,
+            [factor.id, matchedCounter]
+          );
+          if (!consumed.rowCount) {
+            await client.query("ROLLBACK");
+            json(res, 401, { error: "INVALID_LOGIN" });
+            return true;
+          }
+        } else if (fixtureSessionRoute) {
+          // The explicit fixture credential is only for isolated local test setup.
+        } else if (authMode !== "synthetic") {
+          await client.query("ROLLBACK");
+          json(res, 401, { error: "AUTHENTICATOR_NOT_CONFIGURED" });
+          return true;
+        } else if (!factors.rowCount) {
+          await client.query("ROLLBACK");
+          json(res, 401, { error: "AUTHENTICATOR_NOT_CONFIGURED" });
+          return true;
+        } else if (body.code !== undefined) {
+          await client.query("ROLLBACK");
+          json(res, 401, { error: "TOTP_NOT_ENROLLED" });
+          return true;
+        }
+        const token = randomBytes(32).toString("base64url");
+        const result = await client.query(
+          `INSERT INTO spaartrack.user_session (user_id, token_hash, expires_at)
+           VALUES ($1, $2, now() + ($3 * interval '1 second'))
+           RETURNING user_id, expires_at`,
+          [userId, sessionHash(token), ttlSeconds]
+        );
+        await client.query("COMMIT");
+        await auditEvent(req, res, userId, "LOGIN", "USER", userId, { factor: factors.rowCount ? "TOTP" : "SYNTHETIC_LOCAL" });
         json(res, 201, { token, ...sessionResponse(result.rows[0]) });
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
       }
     } catch (error) {
       console.error(redactedLog({ operation: "session_request_failed", error: error instanceof Error ? error.message : "unknown_error" }));
@@ -396,6 +613,7 @@ async function sessionRoute(req: IncomingMessage, res: ServerResponse): Promise<
 
 async function oidcRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   if (environment !== "local") return false;
+  if (authMode !== "synthetic") return false;
 
   if (req.method === "POST" && req.url === "/api/v1/oidc/start") {
     try {
@@ -449,9 +667,11 @@ async function oidcRoute(req: IncomingMessage, res: ServerResponse): Promise<boo
       return true;
     }
     const pending = await databasePool.query(
-      `SELECT id, user_id FROM spaartrack.oidc_login_state
-       WHERE state_hash = $1 AND code_hash = $2 AND provider = $3
-         AND consumed_at IS NULL AND expires_at > now()` ,
+      `SELECT s.id, s.user_id FROM spaartrack.oidc_login_state s
+       JOIN spaartrack.app_user u ON u.id = s.user_id
+       WHERE s.state_hash = $1 AND s.code_hash = $2 AND s.provider = $3
+         AND s.consumed_at IS NULL AND s.expires_at > now()
+         AND u.status = 'ACTIVE' AND u.deleted_at IS NULL`,
       [sessionHash(state), sessionHash(code), provider]
     );
     if (!pending.rowCount) {
@@ -463,8 +683,11 @@ async function oidcRoute(req: IncomingMessage, res: ServerResponse): Promise<boo
       return true;
     }
     const consumed = await databasePool.query(
-      `UPDATE spaartrack.oidc_login_state SET consumed_at = now()
-       WHERE id = $1 AND consumed_at IS NULL RETURNING user_id`,
+      `UPDATE spaartrack.oidc_login_state s SET consumed_at = now()
+       FROM spaartrack.app_user u
+       WHERE s.id = $1 AND s.consumed_at IS NULL AND u.id = s.user_id
+         AND u.status = 'ACTIVE' AND u.deleted_at IS NULL
+       RETURNING s.user_id`,
       [pending.rows[0].id]
     );
     if (!consumed.rowCount) {
@@ -472,6 +695,14 @@ async function oidcRoute(req: IncomingMessage, res: ServerResponse): Promise<boo
       return true;
     }
     const userId = String(consumed.rows[0].user_id);
+    const enrolledFactor = await databasePool.query(
+      "SELECT 1 FROM spaartrack.user_totp_factor WHERE user_id = $1 AND revoked_at IS NULL",
+      [userId]
+    );
+    if (enrolledFactor.rowCount) {
+      json(res, 401, { error: "TOTP_REQUIRED" });
+      return true;
+    }
     const identity = await databasePool.query(
       `INSERT INTO spaartrack.auth_identity (user_id, provider, subject, email)
        SELECT id, 'synthetic-oidc', 'synthetic:' || id::text, email
@@ -1229,7 +1460,7 @@ async function portfolioRoute(req: IncomingMessage, res: ServerResponse): Promis
               p.created_at, p.updated_at, pm.role
        FROM spaartrack.portfolio p
        JOIN spaartrack.portfolio_member pm ON pm.portfolio_id = p.id
-       WHERE p.id = $1 AND pm.user_id = $2 AND pm.revoked_at IS NULL AND p.status <> 'DELETED'`,
+       WHERE p.id = $1 AND pm.user_id = $2 AND pm.revoked_at IS NULL AND p.status = 'ACTIVE'`,
       [portfolioMatch[1], userId]
     );
     if (!access.rowCount) {
@@ -2029,7 +2260,10 @@ async function moneyFlowReviewRoute(req: IncomingMessage, res: ServerResponse): 
     if (path === "/api/v1/money-flow/review-queue" && req.method === "GET") {
       const portfolioId = parsed.searchParams.get("portfolio_id")?.trim() || "";
       if (!/^[0-9a-f-]{36}$/i.test(portfolioId)) { json(res, 400, { error: "INVALID_REVIEW_QUEUE_QUERY" }); return true; }
-      const access = await databasePool.query("SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL", [portfolioId, userId]);
+      const access = await databasePool.query(
+        "SELECT 1 FROM spaartrack.portfolio_member pm JOIN spaartrack.portfolio p ON p.id = pm.portfolio_id WHERE pm.portfolio_id = $1 AND pm.user_id = $2 AND pm.revoked_at IS NULL AND p.status = 'ACTIVE'",
+        [portfolioId, userId]
+      );
       if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ACCESS_FORBIDDEN" }); return true; }
       const result = await databasePool.query("SELECT lt.id AS transaction_id, lt.description, lt.effective_date::text, tc.category_id, tc.payee_id, tc.confidence::text, tc.classification_source, tc.reviewed_by, tc.reviewed_at FROM spaartrack.ledger_transaction lt JOIN spaartrack.transaction_category tc ON tc.ledger_transaction_id = lt.id WHERE lt.portfolio_id = $1 AND tc.reviewed_at IS NULL AND tc.classification_source IN ('RULE', 'IMPORT', 'AI') ORDER BY lt.effective_date, lt.id", [portfolioId]);
       json(res, 200, { portfolio_id: portfolioId, items: result.rows.map((row) => ({ ...row, status: row.reviewed_at ? "REVIEWED" : "PENDING" })), calculation_version: "money-flow-review-v1" });
@@ -2300,8 +2534,8 @@ async function moneyFlowActivitiesRoute(req: IncomingMessage, res: ServerRespons
     return true;
   }
   const access = await databasePool.query(
-    `SELECT 1 FROM spaartrack.portfolio_member
-     WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+    `SELECT 1 FROM spaartrack.portfolio_member pm JOIN spaartrack.portfolio p ON p.id = pm.portfolio_id
+     WHERE pm.portfolio_id = $1 AND pm.user_id = $2 AND pm.revoked_at IS NULL AND p.status = 'ACTIVE'`,
     [portfolioId, userId]
   );
   if (!access.rowCount) {
@@ -8084,7 +8318,26 @@ async function ledgerTransactionRoute(req: IncomingMessage, res: ServerResponse)
 
 async function identityRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   if (environment !== "local") return false;
+  if (req.method === "GET" && req.url === "/api/v1/users/me") {
+    const userId = await authenticatedUserId(req);
+    if (!userId) {
+      json(res, 401, { error: "UNAUTHENTICATED" });
+      return true;
+    }
+    const result = await databasePool.query(
+      `SELECT id, email, display_name, status, locale, timezone, default_currency_code, created_at, updated_at, deleted_at
+       FROM spaartrack.app_user WHERE id = $1 AND status = 'ACTIVE' AND deleted_at IS NULL`,
+      [userId]
+    );
+    if (!result.rowCount) json(res, 401, { error: "SESSION_INVALID_OR_EXPIRED" });
+    else json(res, 200, userResponse(result.rows[0]));
+    return true;
+  }
   if (req.method === "POST" && req.url === "/api/v1/users") {
+    if (authMode !== "synthetic") {
+      json(res, 503, { error: "IDENTITY_PROVIDER_REQUIRED" });
+      return true;
+    }
     try {
       const body = await readJson(req);
       const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
@@ -8121,30 +8374,26 @@ async function identityRoute(req: IncomingMessage, res: ServerResponse): Promise
       json(res, 401, { error: "UNAUTHENTICATED" });
       return true;
     }
-    const [portfolios, grants] = await Promise.all([
-      databasePool.query(
-        `SELECT id, name, description, status, reporting_currency_code, privacy_scope, created_at, updated_at
-         FROM spaartrack.portfolio WHERE owner_user_id = $1 ORDER BY created_at`,
-        [userId]
-      ),
-      databasePool.query(
-        `SELECT portfolio_id, role, created_at, revoked_at
-         FROM spaartrack.portfolio_member WHERE user_id = $1 ORDER BY created_at`,
-        [userId]
-      )
-    ]);
-    await auditEvent(req, res, userId, "EXPORT", "USER", userId, { format: "json" });
-    json(res, 200, {
-      user_id: userId,
-      format: "json",
-      scope: "user-owned",
-      generated_at: new Date().toISOString(),
-      portfolios: portfolios.rows,
-      grants: grants.rows,
-      ledger: [],
-      raw_payloads: [],
-      reports: []
-    });
+    try {
+      const sections = await collectPrivacyExportSections(
+        (text, values) => databasePool.query(text, values),
+        userId
+      );
+      const bundle = buildPrivacyExport({
+        userId,
+        generatedAt: new Date().toISOString(),
+        sections
+      });
+      await auditEvent(req, res, userId, "EXPORT", "USER", userId, {
+        format: "json",
+        export_version: PRIVACY_EXPORT_VERSION,
+        sections: bundle.section_index
+      });
+      json(res, 200, bundle);
+    } catch (error) {
+      console.error(redactedLog({ level: "error", operation: "privacy_export_failed", error: error instanceof Error ? error.message : String(error) }));
+      json(res, 500, { error: "PRIVACY_EXPORT_FAILED" });
+    }
     return true;
   }
 
@@ -8154,49 +8403,75 @@ async function identityRoute(req: IncomingMessage, res: ServerResponse): Promise
       json(res, 401, { error: "UNAUTHENTICATED" });
       return true;
     }
+    const traced = res as TracedResponse;
+    const correlationId = traced.correlation_id || req.headers["x-correlation-id"]?.toString() || null;
+    const traceId = traced.trace_id || req.headers["x-trace-id"]?.toString() || null;
+    const retentionUntil = new Date(Date.now() + PRIVACY_TOMBSTONE_RETENTION_DAYS * 86_400_000).toISOString();
     const client = await databasePool.connect();
     try {
       await client.query("BEGIN");
-      const result = await client.query(
-        `UPDATE spaartrack.app_user SET status = 'DELETED', deleted_at = now(), updated_at = now()
-         WHERE id = $1 AND status <> 'DELETED'
-         RETURNING id, email, display_name, status, locale, timezone, default_currency_code, created_at, updated_at, deleted_at`,
-        [userId]
-      );
-      if (!result.rowCount) {
+      const plan = buildPrivacyDeletionPlan({
+        userId,
+        retentionUntil,
+        actorId: userId,
+        correlationId,
+        traceId
+      });
+      const counts: Record<keyof PrivacyDeletionCounts, number> = {
+        sessions: 0,
+        totp_factors: 0,
+        oidc_states: 0,
+        grants: 0,
+        portfolio_share_links: 0,
+        accountant_shares: 0,
+        owned_portfolios: 0,
+        provider_connections: 0,
+        connection_scopes: 0,
+        consent_records: 0,
+        credential_references: 0,
+        push_consents: 0,
+        auth_identities: 0,
+        tax_residency: 0
+      };
+      let deletedUser: Record<string, unknown> | undefined;
+      for (const [index, statement] of plan.statements.entries()) {
+        const result = await client.query(statement.text, statement.values);
+        const counter = plan.counted.find((entry: { key: keyof PrivacyDeletionCounts; index: number }) => entry.index === index);
+        if (counter) counts[counter.key] = result.rowCount ?? 0;
+        if (index === plan.identityUpdateIndex) deletedUser = result.rows[0] as Record<string, unknown>;
+      }
+      if (!deletedUser) {
         await client.query("ROLLBACK");
         client.release();
         json(res, 409, { error: "USER_ALREADY_DELETED" });
         return true;
       }
-      await client.query(
-        `UPDATE spaartrack.user_session SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`,
-        [userId]
-      );
-      await client.query(
-        `UPDATE spaartrack.user_totp_factor SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`,
-        [userId]
-      );
-      await client.query(
-        `UPDATE spaartrack.oidc_login_state SET consumed_at = now() WHERE user_id = $1 AND consumed_at IS NULL`,
-        [userId]
-      );
-      await client.query(
-        `UPDATE spaartrack.portfolio_member SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`,
-        [userId]
-      );
-      await client.query(
-        `UPDATE spaartrack.portfolio SET status = 'ARCHIVED', privacy_scope = 'PRIVATE', archived_at = now(), updated_at = now()
-         WHERE owner_user_id = $1 AND status <> 'DELETED'`,
-        [userId]
-      );
+      // The audit event is written inside the deletion transaction, so a
+      // committed deletion always has its audit trail and a rolled back
+      // deletion never leaves a phantom event behind.
+      const auditEvent = buildPrivacyDeletionAuditEvent({ userId, actorId: userId, correlationId, traceId });
+      const auditResult = await client.query(auditEvent.text, auditEvent.values);
+      const auditEventId = String(auditResult.rows[0].id);
+      const tombstone = plan.tombstone({ counts, auditEventId });
+      const tombstoneResult = await client.query(tombstone.text, tombstone.values);
+      const tombstoneId = String(tombstoneResult.rows[0].id);
       await client.query("COMMIT");
       client.release();
-      await auditEvent(req, res, userId, "REVOKE", "USER", userId, { reason: "user_deletion" });
-      json(res, 200, userResponse(result.rows[0]));
-    } catch {
+      json(res, 200, {
+        ...userResponse(deletedUser),
+        deletion: buildPrivacyDeletionReceipt({
+          counts,
+          auditEventId,
+          tombstoneId,
+          retentionUntil,
+          traceId,
+          correlationId
+        })
+      });
+    } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
       client.release();
+      console.error(redactedLog({ level: "error", operation: "user_deletion_failed", error: error instanceof Error ? error.message : String(error) }));
       json(res, 500, { error: "USER_DELETION_FAILED" });
     }
     return true;
@@ -8204,6 +8479,8 @@ async function identityRoute(req: IncomingMessage, res: ServerResponse): Promise
 
   const statusMatch = req.url?.match(/^\/api\/v1\/users\/([0-9a-f-]+)\/status$/i);
   if (req.method === "PATCH" && statusMatch) {
+    const actorId = await requireSelfUser(req, res, statusMatch[1]);
+    if (!actorId) return true;
     try {
       const body = await readJson(req);
       const status = body.status;
@@ -8211,15 +8488,31 @@ async function identityRoute(req: IncomingMessage, res: ServerResponse): Promise
         json(res, 400, { error: "INVALID_USER_STATUS", allowed_statuses: userStatuses });
         return true;
       }
+      if (status === "DELETED" || status === "INVITED") {
+        json(res, 400, { error: "USER_LIFECYCLE_TRANSITION_FORBIDDEN" });
+        return true;
+      }
       const result = await databasePool.query(
         `UPDATE spaartrack.app_user
-         SET status = $1, deleted_at = CASE WHEN $1 = 'DELETED' THEN now() ELSE NULL END
-         WHERE id = $2
+         SET status = $1,
+             deleted_at = CASE WHEN $1 = 'DELETED' THEN now() ELSE deleted_at END,
+             updated_at = now()
+         WHERE id = $2 AND status <> 'DELETED'
+           AND (($1 = 'SUSPENDED' AND status = 'ACTIVE') OR ($1 = 'ACTIVE' AND status = 'SUSPENDED'))
          RETURNING id, email, display_name, status, locale, timezone, default_currency_code, created_at, updated_at, deleted_at`,
         [status, statusMatch[1]]
       );
       if (!result.rowCount) json(res, 404, { error: "USER_NOT_FOUND" });
-      else json(res, 200, userResponse(result.rows[0]));
+      else {
+        if (status === "SUSPENDED" || status === "DELETED") {
+          await databasePool.query(
+            "UPDATE spaartrack.user_session SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL",
+            [statusMatch[1]]
+          );
+        }
+        await auditEvent(req, res, actorId, "PERMISSION_CHANGE", "USER", statusMatch[1], { status });
+        json(res, 200, userResponse(result.rows[0]));
+      }
     } catch {
       json(res, 400, { error: "INVALID_USER_REQUEST" });
     }
@@ -8228,6 +8521,8 @@ async function identityRoute(req: IncomingMessage, res: ServerResponse): Promise
 
   const userMatch = req.url?.match(/^\/api\/v1\/users\/([0-9a-f-]+)$/i);
   if (req.method === "GET" && userMatch) {
+    const actorId = await requireSelfUser(req, res, userMatch[1]);
+    if (!actorId) return true;
     const result = await databasePool.query(
       `SELECT id, email, display_name, status, locale, timezone, default_currency_code, created_at, updated_at, deleted_at
        FROM spaartrack.app_user WHERE id = $1`,
@@ -8352,7 +8647,7 @@ const server = createServer((req, res) => {
     void brokerRoute(req, res).catch(() => { if (!res.writableEnded) json(res, 503, { error: 'BROKER_UNAVAILABLE' }); });
     return;
   }
-  if (req.url?.startsWith("/api/v1/sessions")) {
+  if (req.url?.startsWith("/api/v1/sessions") || req.url === "/api/v1/test-fixtures/sessions") {
     void sessionRoute(req, res).then((handled) => {
       if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
     }).catch(() => {

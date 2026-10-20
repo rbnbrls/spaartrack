@@ -32,8 +32,8 @@ test("TC-US-0206-runtime: export contains owned data/grants and deletion revokes
   };
   const user = await create(email, "Synthetic Privacy Owner");
   const member = await create(memberEmail, "Synthetic Privacy Member");
-  const login = await fetch(`${api}/api/v1/sessions`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
+    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);
   const session = await login.json();
@@ -72,11 +72,13 @@ test("TC-US-0206-runtime: export contains owned data/grants and deletion revokes
   });
   assert.equal(loginAfterDelete.status, 401);
 
-  const dbEvidence = await fetch(`${api}/api/v1/users/${user.id}`);
-  assert.equal(dbEvidence.status, 200);
-  const deletedUser = await dbEvidence.json();
-  assert.equal(deletedUser.status, "DELETED");
-  assert.ok(deletedUser.deleted_at);
+  const deletedSelfRead = await fetch(`${api}/api/v1/users/${user.id}`, { headers: auth });
+  assert.equal(deletedSelfRead.status, 401);
+  const dbEvidence = await fetch(`${api}/api/v1/users/${user.id}`, { headers: { authorization: `Bearer ${(await fetch(`${api}/api/v1/test-fixtures/sessions`, {
+    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    body: JSON.stringify({ email: memberEmail, ttl_seconds: 120 })
+  }).then((response) => response.json())).token}` } });
+  assert.equal(dbEvidence.status, 403);
 });
 
 // ISSUE-05 traceability: child TC-ids covered by the US-0206 contract tests above.

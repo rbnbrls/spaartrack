@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const kernel = readFileSync(new URL("apps/api/src/portfolio-share-links.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 const schema = readFileSync(new URL("database/schema.sql", root), "utf8");
 
 test("TC-US-1501: read-only portfolio link exposes access id, scope, policy, expiry and revoke", () => {
@@ -23,7 +24,7 @@ test("TC-US-1501 runtime: owner creates, reads, resolves and revokes a read-only
   const email = `synthetic-share-${Date.now()}@example.test`;
   const userRes = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Share" }) });
   assert.equal(userRes.status, 201);
-  const sessionRes = await fetch(`${base}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
+  const sessionRes = await fetch(`${base}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
   assert.equal(sessionRes.status, 201);
   const session = await sessionRes.json();
   const auth = { "content-type": "application/json", authorization: `Bearer ${session.token}` };

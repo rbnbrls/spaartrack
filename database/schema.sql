@@ -106,7 +106,10 @@ CREATE TABLE user_totp_factor (
   period_seconds integer NOT NULL DEFAULT 30 CHECK (period_seconds BETWEEN 15 AND 120),
   digits smallint NOT NULL DEFAULT 6 CHECK (digits BETWEEN 6 AND 8),
   created_at timestamptz NOT NULL DEFAULT now(),
-  revoked_at timestamptz
+  revoked_at timestamptz,
+  last_used_counter bigint,
+  failed_attempts integer NOT NULL DEFAULT 0 CHECK (failed_attempts >= 0),
+  locked_until timestamptz
 );
 
 CREATE INDEX user_totp_factor_active_idx
@@ -126,6 +129,39 @@ CREATE TABLE oidc_login_state (
 
 CREATE INDEX oidc_login_state_active_idx
   ON oidc_login_state (state_hash) WHERE consumed_at IS NULL;
+
+-- Durable proof of a user deletion request (US-0206 / TC-US-0206-B).
+-- Deliberately not a foreign key to app_user: the tombstone must outlive any
+-- future physical purge of the identity row and must be replayable after a
+-- backup restore (ADR-0005).
+CREATE TABLE user_deletion_tombstone (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  deleted_at timestamptz NOT NULL DEFAULT now(),
+  retention_until timestamptz NOT NULL,
+  reason text NOT NULL DEFAULT 'USER_REQUESTED',
+  revoked_sessions integer NOT NULL DEFAULT 0,
+  revoked_totp_factors integer NOT NULL DEFAULT 0,
+  consumed_oidc_states integer NOT NULL DEFAULT 0,
+  revoked_grants integer NOT NULL DEFAULT 0,
+  archived_portfolios integer NOT NULL DEFAULT 0,
+  revoked_provider_connections integer NOT NULL DEFAULT 0,
+  revoked_connection_scopes integer NOT NULL DEFAULT 0,
+  revoked_consent_records integer NOT NULL DEFAULT 0,
+  revoked_credential_references integer NOT NULL DEFAULT 0,
+  ledger_rows_deleted integer NOT NULL DEFAULT 0,
+  audit_event_id uuid,
+  actor_id text,
+  correlation_id text,
+  trace_id text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX user_deletion_tombstone_user_idx
+  ON user_deletion_tombstone (user_id, deleted_at DESC);
+
+CREATE INDEX user_deletion_tombstone_retention_idx
+  ON user_deletion_tombstone (retention_until);
 
 -- ---------------------------------------------------------------------------
 -- Providers, connections and source data
@@ -765,6 +801,13 @@ CREATE TABLE import_mapping (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- US-0602: unique index for the import-mapping template identity. Parity with
+-- database/migrations/0009-import-mapping-versioning.sql; the API relies on it for
+-- ON CONFLICT (user_id, name, template_version). Keep IF NOT EXISTS so schema.sql
+-- stays re-appliable over an already migrated database.
+CREATE UNIQUE INDEX IF NOT EXISTS import_mapping_owner_name_version_idx
+  ON spaartrack.import_mapping (user_id, name, template_version);
 
 CREATE TABLE import_file (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

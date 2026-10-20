@@ -24,8 +24,8 @@ test("TC-US-0306-runtime: duplicate external and fallback identities do not crea
     body: JSON.stringify({ email, display_name: "Synthetic Ledger Idempotency" })
   });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
+    method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);
   const session = await login.json();

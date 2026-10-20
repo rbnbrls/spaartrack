@@ -15,7 +15,7 @@ test("TC-US-1604: proposal confirm/cancel with undo token is auditabel", async (
   const suffix = Date.now();
   const email = `synthetic-confirm-1604-${suffix}@example.test`;
   await api("/api/v1/users", { method: "POST", body: JSON.stringify({ email, display_name: "Synthetic Confirm" }) });
-  const session = await api("/api/v1/sessions", { method: "POST", body: JSON.stringify({ email, ttl_seconds: 900 }) });
+  const session = await api("/api/v1/test-fixtures/sessions", { method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
   assert.equal(session.status, 201);
   const auth = { Authorization: `Bearer ${session.body.token}` };
   const preview = await api("/api/v1/assistant-proposals", { method: "POST", headers: auth,

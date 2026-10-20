@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const skipRuntime = !process.env.STACK_SMOKE;
 const api = process.env.API_URL ?? "http://localhost:18080";
@@ -11,7 +12,7 @@ describe("TC-US-1605 agent scopes contract", () => {
     assert.ok(kernel.includes("capabilitiesForScope") && kernel.includes("agent-scopes-v1"));
     const route = readFileSync("apps/api/src/index.ts", "utf8");
     assert.ok(route.includes("/api/v1/agent-scopes") && route.includes("AGENT_SCOPES"));
-    const gui = readFileSync("apps/web/index.html", "utf8");
+    const gui = readWebSource();
     for (const m of ["agent-scopes-panel", "prepare-agent-scopes", "agent-scopes-submit", "agent-scopes-result", "agent-scopes-evidence", "agent-scopes-v1"]) assert.ok(gui.includes(m), m);
   });
   it("runtime: matrix is read-only en hiërarchisch", { skip: skipRuntime }, async () => {
@@ -19,7 +20,7 @@ describe("TC-US-1605 agent scopes contract", () => {
     const email = `synthetic-scopes-${suffix}@example.test`;
     let r = await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Scopes" }) });
     assert.equal(r.status, 201);
-    r = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
+    r = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
     assert.equal(r.status, 201);
     const { token } = await r.json();
     r = await fetch(`${api}/api/v1/agent-scopes`, { headers: { authorization: `Bearer ${token}`, "x-trace-id": "trace-scopes-1605", "x-correlation-id": "corr-scopes-1605" } });

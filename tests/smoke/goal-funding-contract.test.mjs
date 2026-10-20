@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
@@ -26,7 +27,7 @@ test("TC-US-1105-runtime: owner saves shares and reads a share-weighted snapshot
   const api = process.env.API_URL || "http://localhost:18080";
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const user = await (await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: `synthetic-goal-funding-${suffix}@example.test`, display_name: "Synthetic Goal Funding" }) })).json();
-  const session = await (await fetch(`${api}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: user.email, ttl_seconds: 120 }) })).json();
+  const session = await (await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email: user.email, ttl_seconds: 120 }) })).json();
   const auth = { authorization: `Bearer ${session.token}`, "content-type": "application/json" };
   const portfolio = await (await fetch(`${api}/api/v1/portfolios`, { method: "POST", headers: auth, body: JSON.stringify({ name: `Synthetic Goal Funding ${suffix}`, reporting_currency_code: "EUR" }) })).json();
   const createAccount = (payload) => fetch(`${api}/api/v1/accounts`, { method: "POST", headers: auth, body: JSON.stringify({ portfolio_id: portfolio.id, tracking_mode: "HOLDINGS", base_currency_code: "EUR", ...payload }) }).then(async (response) => { assert.equal(response.status, 201); return response.json(); });

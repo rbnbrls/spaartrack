@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const kernel = readFileSync(new URL("apps/api/src/tax-worksheet.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 
 test("TC-US-1307: tax worksheets are jurisdictional, scoped and not general advice", () => {
   for (const marker of ["/api/v1/tax-worksheets", "taxWorksheetRoute", "portfolio_member", "trace_id", "correlation_id", "CALCULATE"]) assert.match(api, new RegExp(marker.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")));
@@ -29,7 +30,7 @@ test("TC-US-1307-runtime: synthetic worksheet exposes ruleset and owner scope", 
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-tax-worksheet-${suffix}@example.test`, display_name: "Synthetic Tax Worksheet" });
-  const session = await create("/api/v1/sessions", { email: user.email, ttl_seconds: 120 });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Tax Worksheet ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const account = await create("/api/v1/accounts", { portfolio_id: portfolio.id, name: "Synthetic Brokerage", account_type: "BROKERAGE", tracking_mode: "HOLDINGS", base_currency_code: "EUR" }, auth);

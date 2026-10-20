@@ -39,7 +39,7 @@ jobs:
       REDIS_URL: redis://localhost:6379
       API_URL: http://localhost:8080
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -91,8 +91,108 @@ jobs:
           version: 9.15.5
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v3
+        if: github.event_name != 'push'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.24.3
+      # The action derives the push range from the payload's first commit and
+      # hardcodes `--no-merges --first-parent`, so a merge-commit push collapses
+      # to zero scanned commits (run 39425432922 reported "0 commits scanned").
+      # The push path therefore scans the explicit before..after range itself
+      # and fails when that range holds no scannable commit, so a collapsed
+      # range can never report a vacuous green again.
+      - name: Push secret scan
+        if: github.event_name == 'push'
+        env:
+          GITLEAKS_VERSION: 8.24.3
+          GITLEAKS_SHA256_LINUX_X64: 9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c
+          GITLEAKS_SHA256_LINUX_ARM64: 5f2edbe1f49f7b920f9e06e90759947d3c5dfc16f752fb93aaafc17e9d14cf07
+          SCAN_BASE: ${{ github.event.before }}
+          SCAN_HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          case "$(uname -m)" in
+            x86_64)
+              asset="linux_x64"
+              expected_sha="$GITLEAKS_SHA256_LINUX_X64"
+              ;;
+            aarch64 | arm64)
+              asset="linux_arm64"
+              expected_sha="$GITLEAKS_SHA256_LINUX_ARM64"
+              ;;
+            *)
+              echo "::error::unsupported runner architecture $(uname -m)"
+              exit 1
+              ;;
+          esac
+
+          install_dir="$(mktemp -d)"
+          archive="gitleaks_${GITLEAKS_VERSION}_${asset}.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "${install_dir}/${archive}" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${expected_sha}  ${install_dir}/${archive}" | sha256sum --check --strict
+          tar --extract --gzip --file "${install_dir}/${archive}" --directory "${install_dir}" gitleaks
+
+          if [ "$SCAN_BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "::error::push event carries no before SHA; refusing to scan an unknown range"
+            exit 1
+          fi
+
+          for sha in "$SCAN_BASE" "$SCAN_HEAD"; do
+            if ! git rev-parse --verify --quiet "${sha}^{commit}" >/dev/null; then
+              echo "::error::commit ${sha} is not present in the checked-out history; refusing to scan an unresolved range"
+              exit 1
+            fi
+          done
+
+          commits="$(git rev-list --count "${SCAN_BASE}..${SCAN_HEAD}")"
+          if [ "$commits" -lt 1 ]; then
+            echo "::error::push range ${SCAN_BASE}..${SCAN_HEAD} holds ${commits} commits; refusing to report a vacuous secret scan"
+            exit 1
+          fi
+
+          # Render every merge commit's own diff against its first parent, so a
+          # secret that only exists in a merge resolution is caught as well.
+          # This is a diff-rendering option, not a walk restriction: the walk
+          # still covers both parents of each merge. Restricting the walk to
+          # the first-parent line instead would drop the merged branch and
+          # collapse this range to zero commits on a merge-commit push.
+          scan_log="${install_dir}/scan.log"
+          status=0
+          "${install_dir}/gitleaks" git \
+            --no-banner \
+            --redact \
+            --exit-code=2 \
+            --report-format=sarif \
+            --report-path=results.sarif \
+            --log-level=info \
+            --log-opts="--diff-merges=first-parent ${SCAN_BASE}..${SCAN_HEAD}" \
+            . 2>&1 | tee "${scan_log}" || status="${PIPESTATUS[0]}"
+
+          if [ "$status" -eq 2 ]; then
+            echo "::error::gitleaks detected secrets in the pushed commits"
+            exit 1
+          fi
+          if [ "$status" -ne 0 ]; then
+            echo "::error::gitleaks failed to scan the pushed commits (exit ${status})"
+            exit "$status"
+          fi
+
+          scanned="$(awk 'match($0, /[0-9]+ commits scanned/) { print substr($0, RSTART, RLENGTH); exit }' "${scan_log}" | cut -d" " -f1)"
+          if [ -z "$scanned" ] || [ "$scanned" -lt 1 ]; then
+            echo "::error::gitleaks scanned ${scanned:-0} commits in ${SCAN_BASE}..${SCAN_HEAD}; refusing to report a vacuous secret scan"
+            exit 1
+          fi
+          echo "secret scan covered ${scanned} commit(s) in ${SCAN_BASE}..${SCAN_HEAD}"
+      - name: Upload secret scan report
+        if: always() && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-results.sarif
+          path: results.sarif
+          if-no-files-found: warn
       - name: Dependency audit
         run: pnpm audit --audit-level high
 
@@ -104,7 +204,7 @@ jobs:
       matrix:
         service: [web, api, worker]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v3
       - name: Build immutable ${{ matrix.service }} image
         id: build

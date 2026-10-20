@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const kernel = readFileSync(new URL("apps/api/src/tax-lots.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 
 test("TC-US-1303: realized gains expose fee and FX decomposition", () => {
   for (const marker of ["calculateRealizedGains", "/api/v1/realized-gains", "REALIZED_GAINS", "trace_id", "correlation_id"]) assert.match(api + kernel, new RegExp(marker.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")));
@@ -23,7 +24,7 @@ test("TC-US-1303-runtime: realized gains endpoint is authenticated and read-only
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-realized-gains-${suffix}@example.test`, display_name: "Synthetic Realized Gains" });
-  const session = await create("/api/v1/sessions", { email: user.email, ttl_seconds: 120 });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Realized Gains ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const account = await create("/api/v1/accounts", { portfolio_id: portfolio.id, name: "Synthetic Brokerage", account_type: "BROKERAGE", tracking_mode: "HOLDINGS", base_currency_code: "EUR" }, auth);

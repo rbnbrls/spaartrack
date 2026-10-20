@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 
 test("US-1707: ISSUE-05 traceability covers TC-US-1707, TC-US-1707-A, TC-US-1707-B", () => {
   for (const id of ["TC-US-1707", "TC-US-1707-A", "TC-US-1707-B"]) {
@@ -38,7 +39,7 @@ test("TC-US-1707 runtime: approved combination rolls back; unapproved or coupled
   const email = `synthetic-rollback-${Date.now()}@example.test`;
   const userRes = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Rollback" }) });
   assert.equal(userRes.status, 201);
-  const sessionRes = await fetch(`${base}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
+  const sessionRes = await fetch(`${base}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
   assert.equal(sessionRes.status, 201);
   const session = await sessionRes.json();
   const auth = { "content-type": "application/json", authorization: `Bearer ${session.token}` };

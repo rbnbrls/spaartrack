@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
-const html = readFileSync(new URL("../../apps/web/index.html", import.meta.url), "utf8");
+const html = readWebSource();
 
 const communityPanel = () => html.match(/<section[^>]*id="community-feed-panel"[\s\S]*?<\/form><\/section>/)?.[0] ?? "";
 

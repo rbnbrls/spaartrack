@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
-const uiSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const uiSource = readWebSource();
 const api = process.env.API_URL || "http://localhost:18080";
 
 test("TC-US-0903: paired transfers and credit-card payments expose neutral Money Flow semantics", () => {
@@ -29,9 +30,9 @@ test("TC-US-0903-runtime: paired transfers and liability payments stay visible w
   });
   assert.equal(created.status, 201);
   const user = await created.json();
-  const login = await fetch(`${api}/api/v1/sessions`, {
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" },
     body: JSON.stringify({ email: user.email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);

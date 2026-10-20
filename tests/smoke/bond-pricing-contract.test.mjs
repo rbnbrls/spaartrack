@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const api = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const kernel = readFileSync(new URL("apps/api/src/bond-pricing.ts", root), "utf8");
-const web = readFileSync(new URL("apps/web/index.html", root), "utf8");
+const web = readWebSource();
 const fixture = JSON.parse(readFileSync(new URL("fixtures/SPECIAL-001.json", root), "utf8"));
 
 test("TC-US-1402: bond pricing kernel exposes versioned YTM, dirty price, accrued interest, duration, convexity and DV01", () => {
@@ -35,7 +36,7 @@ test("TC-US-1402-A runtime: yield mode prices the synthetic bond with versioned 
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-bond-metrics-${suffix}@example.test`, display_name: "Synthetic Bond Metrics" });
-  const session = await create("/api/v1/sessions", { email: user.email, ttl_seconds: 180 });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Bond Metrics ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const instrument = await create("/api/v1/instruments", { ...fixture.bond.instrument, ticker: `BM${String(Date.now()).slice(-6)}` }, auth);
@@ -77,7 +78,7 @@ test("TC-US-1402-B runtime: price mode solves YTM and validation failures are ex
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-bond-solver-${suffix}@example.test`, display_name: "Synthetic Bond Solver" });
-  const session = await create("/api/v1/sessions", { email: user.email, ttl_seconds: 180 });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Bond Solver ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const instrument = await create("/api/v1/instruments", { ...fixture.bond.instrument, ticker: `BS${String(Date.now()).slice(-6)}` }, auth);

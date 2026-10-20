@@ -27,8 +27,8 @@ test("TC-US-0303-runtime: authenticated user registers standard and custom instr
     body: JSON.stringify({ email, display_name: "Synthetic Instrument Owner 0303" })
   });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
+    method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);
   const session = await login.json();

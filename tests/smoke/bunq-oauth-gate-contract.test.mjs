@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readWebSource } from "../helpers/web-source.mjs";
 
 const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
@@ -22,7 +23,7 @@ test("TC-US-1006-runtime: gate allows only approved read-only localhost bunq con
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `synthetic-bunq-gate-${suffix}@example.test`;
   assert.equal((await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic bunq gate" }) })).status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const auth = { authorization: `Bearer ${(await login.json()).token}`, ...headers };
   const valid = await fetch(`${api}/api/v1/bunq-oauth/deployment-gate`, { method: "POST", headers: auth, body: JSON.stringify({ fixture: "BANK-001", provider: "bunq", scopes: ["accounts:read", "balances:read", "transactions:read"], redirect_uri: "http://localhost:3000/bunq/callback", legal_decision: "APPROVED", read_only_permissions: true }) });

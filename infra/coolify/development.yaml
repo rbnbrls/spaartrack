@@ -14,6 +14,7 @@ spec:
     postDeployHook: infra/coolify/hooks/post-deploy.sh
     releasePath: /api/v1/release
   runtime:
+    NODE_ENV: development
     APP_ENV: development
     APP_RELEASE: development
     APP_COMMIT_SHA: COOLIFY_COMMIT_SHA

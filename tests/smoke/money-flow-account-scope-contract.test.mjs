@@ -30,7 +30,7 @@ test("TC-US-0901-runtime: member opts in/out only eligible accounts and cannot c
     const email = `synthetic-money-flow-0901-${label}-${suffix}@example.test`;
     const created = await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: `Synthetic Money Flow ${label}` }) });
     assert.equal(created.status, 201);
-    const login = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+    const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
     assert.equal(login.status, 201);
     const session = await login.json();
     return { authorization: `Bearer ${session.token}` };

@@ -25,8 +25,8 @@ test("TC-US-0305-runtime: draft/pending/post transitions and VOID preserve the o
     body: JSON.stringify({ email, display_name: "Synthetic Ledger State 0305" })
   });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/sessions`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
+    method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);
   const session = await login.json();
@@ -94,8 +94,8 @@ test("TC-US-0305-runtime: draft/pending/post transitions and VOID preserve the o
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: outsiderEmail, display_name: "Synthetic Outsider 0305" })
   });
   assert.equal(outsiderCreated.status, 201);
-  const outsiderLogin = await fetch(`${api}/api/v1/sessions`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: outsiderEmail, ttl_seconds: 120 })
+  const outsiderLogin = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
+    method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email: outsiderEmail, ttl_seconds: 120 })
   });
   const outsiderSession = await outsiderLogin.json();
   const denied = await fetch(`${api}/api/v1/ledger/transactions/${draft.id}`, {
