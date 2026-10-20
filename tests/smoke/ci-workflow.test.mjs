@@ -58,10 +58,23 @@ test("TC-US-0105: CI bootstraps the API entrypoint that the build actually emits
 });
 
 test("TC-US-0103: security job checks out full history so the gitleaks range resolves", () => {
-  const checkoutStep = step(job("security"), "- uses: actions/checkout@v4");
+  // The marker stays version-agnostic on purpose: pinning an exact major here
+  // broke this test on every GitHub Actions runtime bump. The Node 24 floor is
+  // asserted separately below, where a failure actually means something.
+  const checkoutStep = step(job("security"), "- uses: actions/checkout@");
   assert.match(
     checkoutStep,
     /fetch-depth:\s*0/,
     "gitleaks scans a <before>^..<after> range and needs a full clone (fetch-depth: 0)"
+  );
+});
+
+test("TC-US-0103: the security job checks out with a Node 24 runtime action", () => {
+  const checkoutStep = step(job("security"), "- uses: actions/checkout@");
+  const major = checkoutStep.match(/actions\/checkout@v(\d+)/)?.[1];
+  assert.ok(major, "the security job must pin an actions/checkout major version");
+  assert.ok(
+    Number(major) >= 5,
+    `actions/checkout@v${major} targets Node 20, which GitHub removes from hosted runners on 2026-09-16; v5 and later run on Node 24`
   );
 });
