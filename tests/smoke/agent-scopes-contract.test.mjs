@@ -19,7 +19,7 @@ describe("TC-US-1605 agent scopes contract", () => {
     const email = `synthetic-scopes-${suffix}@example.test`;
     let r = await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Scopes" }) });
     assert.equal(r.status, 201);
-    r = await fetch(`${api}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
+    r = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
     assert.equal(r.status, 201);
     const { token } = await r.json();
     r = await fetch(`${api}/api/v1/agent-scopes`, { headers: { authorization: `Bearer ${token}`, "x-trace-id": "trace-scopes-1605", "x-correlation-id": "corr-scopes-1605" } });

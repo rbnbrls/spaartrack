@@ -23,7 +23,7 @@ test("TC-US-1602 runtime: BYOK session is visible per session and revokeable", {
   const email = `synthetic-model-${Date.now()}@example.test`;
   const userRes = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Model" }) });
   assert.equal(userRes.status, 201);
-  const sessionRes = await fetch(`${base}/api/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
+  const sessionRes = await fetch(`${base}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
   assert.equal(sessionRes.status, 201);
   const session = await sessionRes.json();
   const auth = { "content-type": "application/json", authorization: `Bearer ${session.token}` };

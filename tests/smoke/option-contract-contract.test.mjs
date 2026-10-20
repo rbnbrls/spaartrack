@@ -50,7 +50,7 @@ test("TC-US-1404-runtime: synthetic option contract is registered, managed and l
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-option-${suffix}@example.test`, display_name: "Synthetic Option User" });
-  const session = await create("/api/v1/sessions", { email: user.email, ttl_seconds: 180 });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Options ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const underlying = await create("/api/v1/instruments", { ...fixture.option.underlying, ticker: `EQS${String(Date.now()).slice(-6)}` }, auth);
@@ -109,7 +109,7 @@ test("TC-US-1404-runtime: Greeks are computed from the managed contract with gol
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-option-greeks-${suffix}@example.test`, display_name: "Synthetic Option Greeks" });
-  const session = await create("/api/v1/sessions", { email: user.email, ttl_seconds: 180 });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Greeks ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const underlying = await create("/api/v1/instruments", { ...fixture.option.underlying, ticker: `EQG${String(Date.now()).slice(-6)}` }, auth);
@@ -182,14 +182,14 @@ test("TC-US-1404-runtime: option contract registration outside the portfolio is 
     return JSON.parse(raw);
   };
   const owner = await create("/api/v1/users", { email: `synthetic-option-owner-${suffix}@example.test`, display_name: "Synthetic Option Owner" });
-  const ownerSession = await create("/api/v1/sessions", { email: owner.email, ttl_seconds: 120 });
+  const ownerSession = await create("/api/v1/test-fixtures/sessions", { email: owner.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
   const ownerAuth = { authorization: `Bearer ${ownerSession.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Option Isolated ${suffix}`, reporting_currency_code: "EUR" }, ownerAuth);
   const underlying = await create("/api/v1/instruments", { ...fixture.option.underlying, ticker: `EQO${String(Date.now()).slice(-6)}` }, ownerAuth);
   const instrument = await create("/api/v1/instruments", { ...fixture.option.instrument, ticker: `OO${String(Date.now()).slice(-6)}` }, ownerAuth);
 
   const outsider = await create("/api/v1/users", { email: `synthetic-option-outsider-${suffix}@example.test`, display_name: "Synthetic Option Outsider" });
-  const outsiderSession = await create("/api/v1/sessions", { email: outsider.email, ttl_seconds: 120 });
+  const outsiderSession = await create("/api/v1/test-fixtures/sessions", { email: outsider.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
   const outsiderAuth = { authorization: `Bearer ${outsiderSession.token}` };
   const response = await fetch(`${base}/api/v1/option-contracts`, { method: "POST", headers: { "content-type": "application/json", ...outsiderAuth }, body: JSON.stringify({ portfolio_id: portfolio.id, instrument_id: instrument.id, underlying_instrument_id: underlying.id, ...fixture.option.contract }) });
   assert.equal(response.status, 403);
