@@ -47,6 +47,14 @@ import { buildPromotionGate } from "./incident-promotion.js";
 import { buildRollbackGate } from "./incident-rollback.js";
 import { buildIncidentClosure } from "./incident-closure.js";
 import { buildSkillProposal } from "./incident-skill-proposal.js";
+import {
+  buildPrivacyDeletionReceipt,
+  buildPrivacyExport,
+  PRIVACY_EXPORT_VERSION,
+  PRIVACY_TOMBSTONE_RETENTION_DAYS
+} from "./privacy.js";
+import { collectPrivacyExportSections } from "./privacy-export.js";
+import { buildPrivacyDeletionAuditEvent, buildPrivacyDeletionPlan, type PrivacyDeletionCounts } from "./privacy-deletion.js";
 
 const port = Number(process.env.PORT || 8080);
 const release = process.env.APP_RELEASE || "local";
@@ -1428,7 +1436,7 @@ async function portfolioRoute(req: IncomingMessage, res: ServerResponse): Promis
               p.created_at, p.updated_at, pm.role
        FROM spaartrack.portfolio p
        JOIN spaartrack.portfolio_member pm ON pm.portfolio_id = p.id
-       WHERE p.id = $1 AND pm.user_id = $2 AND pm.revoked_at IS NULL AND p.status <> 'DELETED'`,
+       WHERE p.id = $1 AND pm.user_id = $2 AND pm.revoked_at IS NULL AND p.status = 'ACTIVE'`,
       [portfolioMatch[1], userId]
     );
     if (!access.rowCount) {
@@ -2228,7 +2236,10 @@ async function moneyFlowReviewRoute(req: IncomingMessage, res: ServerResponse): 
     if (path === "/api/v1/money-flow/review-queue" && req.method === "GET") {
       const portfolioId = parsed.searchParams.get("portfolio_id")?.trim() || "";
       if (!/^[0-9a-f-]{36}$/i.test(portfolioId)) { json(res, 400, { error: "INVALID_REVIEW_QUEUE_QUERY" }); return true; }
-      const access = await databasePool.query("SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL", [portfolioId, userId]);
+      const access = await databasePool.query(
+        "SELECT 1 FROM spaartrack.portfolio_member pm JOIN spaartrack.portfolio p ON p.id = pm.portfolio_id WHERE pm.portfolio_id = $1 AND pm.user_id = $2 AND pm.revoked_at IS NULL AND p.status = 'ACTIVE'",
+        [portfolioId, userId]
+      );
       if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ACCESS_FORBIDDEN" }); return true; }
       const result = await databasePool.query("SELECT lt.id AS transaction_id, lt.description, lt.effective_date::text, tc.category_id, tc.payee_id, tc.confidence::text, tc.classification_source, tc.reviewed_by, tc.reviewed_at FROM spaartrack.ledger_transaction lt JOIN spaartrack.transaction_category tc ON tc.ledger_transaction_id = lt.id WHERE lt.portfolio_id = $1 AND tc.reviewed_at IS NULL AND tc.classification_source IN ('RULE', 'IMPORT', 'AI') ORDER BY lt.effective_date, lt.id", [portfolioId]);
       json(res, 200, { portfolio_id: portfolioId, items: result.rows.map((row) => ({ ...row, status: row.reviewed_at ? "REVIEWED" : "PENDING" })), calculation_version: "money-flow-review-v1" });
@@ -2499,8 +2510,8 @@ async function moneyFlowActivitiesRoute(req: IncomingMessage, res: ServerRespons
     return true;
   }
   const access = await databasePool.query(
-    `SELECT 1 FROM spaartrack.portfolio_member
-     WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+    `SELECT 1 FROM spaartrack.portfolio_member pm JOIN spaartrack.portfolio p ON p.id = pm.portfolio_id
+     WHERE pm.portfolio_id = $1 AND pm.user_id = $2 AND pm.revoked_at IS NULL AND p.status = 'ACTIVE'`,
     [portfolioId, userId]
   );
   if (!access.rowCount) {
@@ -8339,30 +8350,26 @@ async function identityRoute(req: IncomingMessage, res: ServerResponse): Promise
       json(res, 401, { error: "UNAUTHENTICATED" });
       return true;
     }
-    const [portfolios, grants] = await Promise.all([
-      databasePool.query(
-        `SELECT id, name, description, status, reporting_currency_code, privacy_scope, created_at, updated_at
-         FROM spaartrack.portfolio WHERE owner_user_id = $1 ORDER BY created_at`,
-        [userId]
-      ),
-      databasePool.query(
-        `SELECT portfolio_id, role, created_at, revoked_at
-         FROM spaartrack.portfolio_member WHERE user_id = $1 ORDER BY created_at`,
-        [userId]
-      )
-    ]);
-    await auditEvent(req, res, userId, "EXPORT", "USER", userId, { format: "json" });
-    json(res, 200, {
-      user_id: userId,
-      format: "json",
-      scope: "user-owned",
-      generated_at: new Date().toISOString(),
-      portfolios: portfolios.rows,
-      grants: grants.rows,
-      ledger: [],
-      raw_payloads: [],
-      reports: []
-    });
+    try {
+      const sections = await collectPrivacyExportSections(
+        (text, values) => databasePool.query(text, values),
+        userId
+      );
+      const bundle = buildPrivacyExport({
+        userId,
+        generatedAt: new Date().toISOString(),
+        sections
+      });
+      await auditEvent(req, res, userId, "EXPORT", "USER", userId, {
+        format: "json",
+        export_version: PRIVACY_EXPORT_VERSION,
+        sections: bundle.section_index
+      });
+      json(res, 200, bundle);
+    } catch (error) {
+      console.error(redactedLog({ level: "error", operation: "privacy_export_failed", error: error instanceof Error ? error.message : String(error) }));
+      json(res, 500, { error: "PRIVACY_EXPORT_FAILED" });
+    }
     return true;
   }
 
@@ -8372,49 +8379,75 @@ async function identityRoute(req: IncomingMessage, res: ServerResponse): Promise
       json(res, 401, { error: "UNAUTHENTICATED" });
       return true;
     }
+    const traced = res as TracedResponse;
+    const correlationId = traced.correlation_id || req.headers["x-correlation-id"]?.toString() || null;
+    const traceId = traced.trace_id || req.headers["x-trace-id"]?.toString() || null;
+    const retentionUntil = new Date(Date.now() + PRIVACY_TOMBSTONE_RETENTION_DAYS * 86_400_000).toISOString();
     const client = await databasePool.connect();
     try {
       await client.query("BEGIN");
-      const result = await client.query(
-        `UPDATE spaartrack.app_user SET status = 'DELETED', deleted_at = now(), updated_at = now()
-         WHERE id = $1 AND status <> 'DELETED'
-         RETURNING id, email, display_name, status, locale, timezone, default_currency_code, created_at, updated_at, deleted_at`,
-        [userId]
-      );
-      if (!result.rowCount) {
+      const plan = buildPrivacyDeletionPlan({
+        userId,
+        retentionUntil,
+        actorId: userId,
+        correlationId,
+        traceId
+      });
+      const counts: Record<keyof PrivacyDeletionCounts, number> = {
+        sessions: 0,
+        totp_factors: 0,
+        oidc_states: 0,
+        grants: 0,
+        portfolio_share_links: 0,
+        accountant_shares: 0,
+        owned_portfolios: 0,
+        provider_connections: 0,
+        connection_scopes: 0,
+        consent_records: 0,
+        credential_references: 0,
+        push_consents: 0,
+        auth_identities: 0,
+        tax_residency: 0
+      };
+      let deletedUser: Record<string, unknown> | undefined;
+      for (const [index, statement] of plan.statements.entries()) {
+        const result = await client.query(statement.text, statement.values);
+        const counter = plan.counted.find((entry: { key: keyof PrivacyDeletionCounts; index: number }) => entry.index === index);
+        if (counter) counts[counter.key] = result.rowCount ?? 0;
+        if (index === plan.identityUpdateIndex) deletedUser = result.rows[0] as Record<string, unknown>;
+      }
+      if (!deletedUser) {
         await client.query("ROLLBACK");
         client.release();
         json(res, 409, { error: "USER_ALREADY_DELETED" });
         return true;
       }
-      await client.query(
-        `UPDATE spaartrack.user_session SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`,
-        [userId]
-      );
-      await client.query(
-        `UPDATE spaartrack.user_totp_factor SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`,
-        [userId]
-      );
-      await client.query(
-        `UPDATE spaartrack.oidc_login_state SET consumed_at = now() WHERE user_id = $1 AND consumed_at IS NULL`,
-        [userId]
-      );
-      await client.query(
-        `UPDATE spaartrack.portfolio_member SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`,
-        [userId]
-      );
-      await client.query(
-        `UPDATE spaartrack.portfolio SET status = 'ARCHIVED', privacy_scope = 'PRIVATE', archived_at = now(), updated_at = now()
-         WHERE owner_user_id = $1 AND status <> 'DELETED'`,
-        [userId]
-      );
+      // The audit event is written inside the deletion transaction, so a
+      // committed deletion always has its audit trail and a rolled back
+      // deletion never leaves a phantom event behind.
+      const auditEvent = buildPrivacyDeletionAuditEvent({ userId, actorId: userId, correlationId, traceId });
+      const auditResult = await client.query(auditEvent.text, auditEvent.values);
+      const auditEventId = String(auditResult.rows[0].id);
+      const tombstone = plan.tombstone({ counts, auditEventId });
+      const tombstoneResult = await client.query(tombstone.text, tombstone.values);
+      const tombstoneId = String(tombstoneResult.rows[0].id);
       await client.query("COMMIT");
       client.release();
-      await auditEvent(req, res, userId, "REVOKE", "USER", userId, { reason: "user_deletion" });
-      json(res, 200, userResponse(result.rows[0]));
-    } catch {
+      json(res, 200, {
+        ...userResponse(deletedUser),
+        deletion: buildPrivacyDeletionReceipt({
+          counts,
+          auditEventId,
+          tombstoneId,
+          retentionUntil,
+          traceId,
+          correlationId
+        })
+      });
+    } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
       client.release();
+      console.error(redactedLog({ level: "error", operation: "user_deletion_failed", error: error instanceof Error ? error.message : String(error) }));
       json(res, 500, { error: "USER_DELETION_FAILED" });
     }
     return true;
