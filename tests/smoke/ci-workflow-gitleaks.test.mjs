@@ -156,6 +156,61 @@ test("TC-US-0103: the security job scans the full history", () => {
   );
 });
 
+// TC-US-0103 — the push path must scan the commits the push actually introduced.
+//
+// gitleaks-action@v3 derives the push range from the payload's FIRST commit
+// (payload.commits[0].id) and hardcodes `--no-merges --first-parent`. On a
+// merge-commit push that combination collapses to zero commits: the merge
+// commit is excluded by --no-merges and every commit on its first-parent path
+// is excluded by the range start. Run 39425432922 therefore reported
+// "INF 0 commits scanned. / INF no leaks found" — a vacuous green.
+//
+// The action stays on pull_request events (it annotates the PR through the
+// GitHub API and its range is correct there), while push events run gitleaks
+// directly with the explicit before..after range of the pushed commits.
+test("TC-US-0103: the push secret scan scans the pushed commit range, not an empty one", () => {
+  const action = stepNamed(securityJob, "Secret scan");
+  assert.match(
+    action,
+    /if:\s*github\.event_name\s*!=\s*'push'/,
+    "the gitleaks-action range collapses to 0 commits on a merge-commit push, so it must not run on push events"
+  );
+
+  const pushScan = stepNamed(securityJob, "Push secret scan");
+  assert.match(
+    pushScan,
+    /github\.event\.before/,
+    "the push scan must start at the SHA the push replaced"
+  );
+  assert.match(
+    pushScan,
+    /github\.sha/,
+    "the push scan must end at the SHA the push introduced"
+  );
+
+  const logOpts = pushScan.match(/--log-opts="([^"]*)"/)?.[1] ?? "";
+  assert.ok(logOpts, "the push scan must pass an explicit range to gitleaks");
+  assert.match(
+    logOpts,
+    /\$\{SCAN_BASE\}\.\.\$\{SCAN_HEAD\}/,
+    "the push scan must scan the explicit before..after range of the push"
+  );
+  assert.doesNotMatch(
+    logOpts,
+    /(^|\s)--first-parent(\s|$)/,
+    "a first-parent walk drops the merged branch and collapses the range to zero commits on a merge-commit push"
+  );
+
+  assert.match(
+    pushScan,
+    /rev-list\s+--count/,
+    "the push scan must count the commits in its range and fail when the range is empty, so a collapsed range can never report a vacuous green"
+  );
+  assert.doesNotMatch(pushScan, /continue-on-error:\s*true/);
+  assert.doesNotMatch(pushScan, /\|\|\s*true/);
+  assert.doesNotMatch(pushScan, /if:\s*.*\b(always|failure|cancelled)\(\)/);
+});
+
 test("TC-US-0103: the image gate still depends on both the verify and the security job", () => {
   const needs = imageJob.match(/^\s{4}needs:\s*\[(.*)\]\s*$/m)?.[1] ?? "";
   const required = needs
