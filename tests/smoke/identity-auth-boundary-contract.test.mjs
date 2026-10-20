@@ -78,7 +78,7 @@ test("TC-US-0203-OIDC-DEPLOY: production startup: self-asserted provider validat
     "-e", "OIDC_CLIENT_ID=synthetic-client",
     "-e", "OIDC_CLIENT_SECRET_REF=synthetic/test-reference",
     "-e", "OIDC_PROVIDER_VALIDATED=true",
-    "--entrypoint", "node", "api", "dist/index.js"
+    "--entrypoint", "node", "api", "dist/apps/api/src/index.js"
   ], { encoding: "utf8", timeout: 60_000 });
   assert.notEqual(result.status, 0, `production startup unexpectedly succeeded: ${result.stdout}`);
   assert.match(`${result.stdout}\n${result.stderr}`, /PRODUCTION_OIDC_ADAPTER_UNAVAILABLE/);
