@@ -24,7 +24,7 @@ services:
       APP_ENV: ${APP_ENV:-local}
       BROKER_MASTER_KEY: ${BROKER_MASTER_KEY:-}
       APP_AUTH_MODE: ${APP_AUTH_MODE:-synthetic}
-      SYNTHETIC_FIXTURE_KEY: ${SYNTHETIC_FIXTURE_KEY:-local-test-fixture-only}
+      SYNTHETIC_FIXTURE_KEY: ${SYNTHETIC_FIXTURE_KEY:-}
       APP_RELEASE: ${APP_RELEASE:-local}
       APP_COMMIT_SHA: ${APP_COMMIT_SHA:-local}
       APP_IMAGE_DIGEST: ${APP_IMAGE_DIGEST:-local}
