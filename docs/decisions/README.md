@@ -1,6 +1,6 @@
 # W0-2 owner decision records — index
 
-Documentation-only index of the W0-2 owner decision artifacts landed by task `t_b1ce7c43`.
+Documentation-only index of the W0-2 owner decision artifacts landed by task `t_b1ce7c43` and by task `t_c5f78fc3`.
 
 These artifacts are owner-signed records of W0-2 (Wave 0) financial-policy decisions for
 `US-0002` (`US-0002-A`, `US-0002-B`, `US-0002-C`) and their tests
@@ -24,6 +24,7 @@ for the authoritative wording.
 | `w0-2-ledger-policy-closeout.md` | `t_49141da4` | 2026-10-18 | v1 | Owner-decision reconciliation and precise escalation of the remaining unanswered policies. |
 | `w0-2-ledger-concurrence-rounding-cost-basis-v1.md` | `t_eea535ff` | 2026-10-19 | v1 | Bounded Ledger concurrence on the Calculations D-ROUNDING-01 and D-COST-BASIS-01 proposals only. |
 | `w0-2-sell-cash-leg-determination-v1.md` | `t_d2bd0b46` | 2026-10-20 | v1 | Ledger determination that the SELL-direction field denotes the SELL cash leg; the contract-value change is NOT DECIDED pending reciprocal Calculations concurrence. |
+| `w0-2-sell-cash-leg-concurrence-v1.md` | `t_ff54ddc9` | 2026-10-20 | v1 | Calculations reciprocal concurrence on the SELL cash leg and its CREDIT value; records that no approved B-case output or version changes and that D-OVERDRAFT-01 and D-SHORT-01 are not approved by it. |
 
 ## Supersession
 
