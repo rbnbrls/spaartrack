@@ -4,13 +4,38 @@ set -euo pipefail
 backup_dir="${1:?usage: restore-local.sh BACKUP_DIR RESTORE_DIR}"
 restore_dir="${2:?usage: restore-local.sh BACKUP_DIR RESTORE_DIR}"
 passphrase="${SPARTRACK_BACKUP_PASSPHRASE:-}"
+hmac_key="${SPARTRACK_BACKUP_HMAC_KEY:-}"
+encryption_key_id="${SPARTRACK_BACKUP_ENCRYPTION_KEY_ID:-synthetic-local-encryption-v1}"
+hmac_key_id="${SPARTRACK_BACKUP_HMAC_KEY_ID:-synthetic-local-hmac-v1}"
 postgres_user="${POSTGRES_USER:-spaartrack}"
 postgres_db="${POSTGRES_DB:-spaartrack}"
 postgres_password="${POSTGRES_PASSWORD:-change-me-local-only}"
+production=0
+if [[ "$(printf '%s' "${APP_ENV:-local}" | tr '[:upper:]' '[:lower:]')" == "production" ]]; then
+  production=1
+fi
 
 if [[ -z "$passphrase" ]]; then
   echo "SPARTRACK_BACKUP_PASSPHRASE is required" >&2
   exit 2
+fi
+if [[ -z "$hmac_key" ]]; then
+  echo "SPARTRACK_BACKUP_HMAC_KEY is required" >&2
+  exit 2
+fi
+if [[ "$hmac_key" == "$passphrase" ]]; then
+  echo "SPARTRACK_BACKUP_HMAC_KEY must differ from SPARTRACK_BACKUP_PASSPHRASE" >&2
+  exit 2
+fi
+if [[ $production -eq 1 ]]; then
+  if [[ ${#passphrase} -lt 32 ]]; then
+    echo "SPARTRACK_BACKUP_PASSPHRASE must contain at least 32 characters in production" >&2
+    exit 2
+  fi
+  if [[ ${#hmac_key} -lt 32 ]]; then
+    echo "SPARTRACK_BACKUP_HMAC_KEY must contain at least 32 characters in production" >&2
+    exit 2
+  fi
 fi
 
 metadata="$(find "$backup_dir" -maxdepth 1 -name 'backup-*.metadata.json' -print -quit)"
@@ -19,13 +44,125 @@ if [[ -z "$metadata" ]]; then
   exit 1
 fi
 
-work_dir="$(mktemp -d)"
-container_name="spaartrack-restore-$RANDOM"
-cleanup() {
-  docker rm -f "$container_name" >/dev/null 2>&1 || true
-  rm -rf "$work_dir"
-}
-trap cleanup EXIT
+metadata_hmac="$metadata.hmac"
+if [[ ! -f "$metadata_hmac" ]]; then
+  echo "backup metadata HMAC not found" >&2
+  exit 1
+fi
+
+if ! python3 - "$metadata" "$metadata_hmac" <<'PY'
+import hashlib
+import hmac
+import os
+import pathlib
+import sys
+
+expected = hmac.new(
+    os.environ["SPARTRACK_BACKUP_HMAC_KEY"].encode(),
+    pathlib.Path(sys.argv[1]).read_bytes(),
+    hashlib.sha256,
+).hexdigest()
+raw = pathlib.Path(sys.argv[2]).read_text().strip()
+if not raw:
+    raise SystemExit(1)
+key_id, _, digest = raw.partition(" ")
+if not key_id or not digest:
+    raise SystemExit(1)
+# Constant-time comparison of digests
+if not hmac.compare_digest(expected, digest):
+    raise SystemExit(1)
+# Verify the key id in sidecar matches the injected hmac_key_id
+injected_hmac_key_id = os.environ.get("SPARTRACK_BACKUP_HMAC_KEY_ID", "")
+if key_id != injected_hmac_key_id:
+    raise SystemExit(1)
+PY
+then
+  echo "backup metadata HMAC verification failed" >&2
+  exit 1
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 is required for backup metadata validation" >&2
+  exit 2
+fi
+
+# Parse and validate metadata schema, key versions, and artifact paths
+metadata_parsed="$(python3 - "$metadata" <<'PY'
+import json
+import os
+import pathlib
+import sys
+
+try:
+    metadata = json.loads(pathlib.Path(sys.argv[1]).read_text())
+except json.JSONDecodeError:
+    raise SystemExit(1)
+
+# Required fields
+required = ["backup_id", "created_at", "encrypted", "cipher", "integrity", "encryption_key_id", "hmac_key_id", "retention_days", "source", "schema", "artifacts"]
+for field in required:
+    if field not in metadata:
+        raise SystemExit(1)
+
+if metadata.get("encrypted") is not True:
+    raise SystemExit(1)
+if metadata.get("cipher") != "aes-256-cbc":
+    raise SystemExit(1)
+if metadata.get("integrity") != "hmac-sha256":
+    raise SystemExit(1)
+
+artifacts = metadata.get("artifacts")
+if not isinstance(artifacts, list) or len(artifacts) != 2:
+    raise SystemExit(1)
+kinds = sorted(a.get("kind") for a in artifacts)
+if kinds != ["object-storage", "postgresql"]:
+    raise SystemExit(1)
+
+for artifact in artifacts:
+    if not isinstance(artifact.get("kind"), str) or not isinstance(artifact.get("file"), str) or not isinstance(artifact.get("sha256"), str):
+        raise SystemExit(1)
+    if len(artifact["sha256"]) != 64:
+        raise SystemExit(1)
+    # Reject path traversal attempts
+    fname = artifact["file"]
+    if "/" in fname or fname.startswith(".") or fname != pathlib.Path(fname).name:
+        raise SystemExit(1)
+
+retention = metadata.get("retention_days")
+if not isinstance(retention, int) or retention <= 0:
+    raise SystemExit(1)
+
+enc_key_id = metadata.get("encryption_key_id", "")
+hmac_key_id = metadata.get("hmac_key_id", "")
+injected_enc_key_id = os.environ.get("SPARTRACK_BACKUP_ENCRYPTION_KEY_ID", "")
+injected_hmac_key_id = os.environ.get("SPARTRACK_BACKUP_HMAC_KEY_ID", "")
+
+# Validate key versions match injected references
+if enc_key_id != injected_enc_key_id or hmac_key_id != injected_hmac_key_id:
+    raise SystemExit(1)
+
+# Output for shell consumption
+print(f"ENC_KEY_ID={enc_key_id}")
+print(f"HMAC_KEY_ID={hmac_key_id}")
+for artifact in artifacts:
+    print(f"ARTIFACT_{artifact['kind'].upper()}={artifact['file']}")
+    print(f"CHECKSUM_{artifact['kind'].upper()}={artifact['sha256']}")
+PY
+)"
+if [[ $? -ne 0 ]]; then
+  echo "backup metadata schema invalid or key version mismatch" >&2
+  exit 1
+fi
+
+# Parse the python output
+eval "$metadata_parsed"
+
+# Restore target must be empty for an isolated drill
+mkdir -p "$restore_dir"
+if [[ -n "$(find "$restore_dir" -mindepth 1 -print -quit)" ]]; then
+  echo "restore target must be empty for an isolated drill" >&2
+  exit 2
+fi
 
 sha256_file() {
   if command -v shasum >/dev/null 2>&1; then
@@ -35,15 +172,21 @@ sha256_file() {
   fi
 }
 
-read_artifact() {
-  local kind="$1"
-  sed -n "s/.*\"kind\": \"$kind\", \"file\": \"\([^\"]*\)\", \"sha256\": \"\([^\"]*\)\".*/\1 \2/p" "$metadata"
-}
+postgres_artifact="$ARTIFACT_POSTGRESQL"
+postgres_checksum="$CHECKSUM_POSTGRESQL"
+object_artifact="$ARTIFACT_OBJECT_STORAGE"
+object_checksum="$CHECKSUM_OBJECT_STORAGE"
 
-read -r postgres_artifact postgres_checksum <<<"$(read_artifact postgresql)"
-read -r object_artifact object_checksum <<<"$(read_artifact object-storage)"
 [[ "$(sha256_file "$backup_dir/$postgres_artifact")" == "$postgres_checksum" ]] || { echo "postgres checksum mismatch" >&2; exit 1; }
 [[ "$(sha256_file "$backup_dir/$object_artifact")" == "$object_checksum" ]] || { echo "object-storage checksum mismatch" >&2; exit 1; }
+
+work_dir="$(mktemp -d)"
+container_name="spaartrack-restore-$RANDOM"
+cleanup() {
+  docker rm -f "$container_name" >/dev/null 2>&1 || true
+  rm -rf "$work_dir"
+}
+trap cleanup EXIT
 
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 \
   -in "$backup_dir/$postgres_artifact" -out "$work_dir/postgres.dump" \
@@ -153,7 +296,9 @@ cat > "$restore_dir/restore-report.json" <<EOF
   "ledger_entry_amount_sum": $ledger_entry_amount_sum,
   "raw_payload_count": $raw_payload_count,
   "report_count": $report_count,
-  "object_storage_restore": true
+  "object_storage_restore": true,
+  "encryption_key_id": "$ENC_KEY_ID",
+  "hmac_key_id": "$HMAC_KEY_ID"
 }
 EOF
 cat "$restore_dir/restore-report.json"

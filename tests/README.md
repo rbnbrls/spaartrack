@@ -17,11 +17,10 @@ staan achter `STACK_SMOKE=1` en worden zonder die variabele overgeslagen.
 
 - `tests/unit/` — pure domeinregels, de calculation engine en de UX/UI-contracten;
 - `tests/smoke/` — provider-, API-, addon- en golden-contracten plus de stack-tests;
+- `tests/runtime/` — executable runtime tests die een gebouwde image en Docker benodigen;
+- `tests/helpers/` — gedeelde testhelpers (bijvoorbeeld `tests/helpers/web-source.mjs`);
 - `tests/fixtures/` — synthetische hulpmiddelen voor de smoke-tests (bijvoorbeeld de
   Trading212 GUI-harness);
-- `tests/helpers/` — gedeelde testhulpmiddelen; nu de web-source loader
-  (`tests/helpers/web-source.mjs`) die de markup en de scripts van de webfrontend
-  samenvoegt tot één bron, zodat de marker-asserties hun betekenis behouden;
 - `tests/contract-freeze/` — de financiële invariantencontracten van Wave 0
   (US-0002-A/B/C). Deze laag is RED by design en draait op `pnpm test:contract-freeze`,
   buiten de standaard-suite om.

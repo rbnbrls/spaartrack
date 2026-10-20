@@ -58,14 +58,40 @@ import { buildPrivacyDeletionAuditEvent, buildPrivacyDeletionPlan, type PrivacyD
 
 const port = Number(process.env.PORT || 8080);
 const release = process.env.APP_RELEASE || "local";
-const environment = process.env.APP_ENV || "local";
+
+// Resolve runtime environment: APP_ENV is authoritative when explicitly set;
+// NODE_ENV=production only promotes an unset APP_ENV.
+// This makes the local compose stack (APP_ENV=local explicitly set) resolve to "local"
+// while a bare production image run (NODE_ENV=production, no APP_ENV) resolves to "production".
+const nodeEnvironment = process.env.NODE_ENV?.trim().toLowerCase() || "";
+const configuredAppEnvironment = process.env.APP_ENV?.trim().toLowerCase() || "";
+if (nodeEnvironment && configuredAppEnvironment && nodeEnvironment !== configuredAppEnvironment &&
+    (nodeEnvironment === "production" || configuredAppEnvironment === "production")) {
+  throw new Error("NODE_ENV and APP_ENV conflict; production runtime environment must be explicit and consistent");
+}
+const environment = configuredAppEnvironment || (nodeEnvironment === "production" ? "production" : "local");
 const authMode = process.env.APP_AUTH_MODE || "disabled";
+
+const SYNTHETIC_LOCAL_TOTP_KEY = "synthetic-local-totp-encryption-key";
+if (environment === "production") {
+  const configuredTotpKey = process.env.TOTP_ENCRYPTION_KEY ?? "";
+  if (configuredTotpKey.length < 32 || configuredTotpKey === SYNTHETIC_LOCAL_TOTP_KEY) {
+    console.error(JSON.stringify({
+      level: "error",
+      service: "api",
+      operation: "production_startup_refused",
+      reason: "TOTP_ENCRYPTION_KEY must be injected with at least 32 characters in production"
+    }));
+    process.exit(1);
+  }
+}
 const startedAt = new Date().toISOString();
 const commitSha = process.env.APP_COMMIT_SHA || process.env.COOLIFY_COMMIT_SHA || "local";
 const imageDigest = process.env.APP_IMAGE_DIGEST || process.env.COOLIFY_IMAGE_DIGEST || "local";
 const migrationVersion = process.env.APP_MIGRATION_VERSION || process.env.COOLIFY_MIGRATION_VERSION || "schema.sql";
 const deployedAt = process.env.APP_DEPLOYED_AT || startedAt;
 const databasePool = new Pool({ connectionString: process.env.DATABASE_URL });
+
 const userStatuses = ["ACTIVE", "INVITED", "SUSPENDED", "DELETED"] as const;
 const portfolioRoles = ["OWNER", "EDITOR", "VIEWER", "ACCOUNTANT", "ADVISOR"] as const;
 const accountTypes = ["BROKERAGE", "BANK", "CASH", "CREDIT_CARD", "LOAN", "CRYPTO", "PROPERTY", "CUSTOM"] as const;
@@ -104,7 +130,7 @@ if (authMode === "oidc" && (
   !process.env.OIDC_ISSUER || !process.env.OIDC_CLIENT_ID || !process.env.OIDC_CLIENT_SECRET_REF ||
   process.env.OIDC_PROVIDER_VALIDATED !== "true"
 )) {
-  throw new Error("PRODUCTION_OIDC_VALIDATION_REQUIRED");
+  throw new Error("PRODUCTION_OIDC_ADAPTER_UNAVAILABLE");
 }
 
 type TracedResponse = ServerResponse & {
@@ -114,11 +140,9 @@ type TracedResponse = ServerResponse & {
 
 function redactedLog(fields: Record<string, unknown>): string {
   return JSON.stringify(fields)
-    .replace(/("(?:token|secret|api_key|api-key|account_number|account-number|transaction_description|transaction-description|description)"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
+    .replace(/(\"(?:token|secret|api_key|api-key|account_number|account-number|transaction_description|transaction-description|description)\"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
     .replace(/(token|secret|api_key|api-key|account_number|account-number)=?[^,}" ]+/gi, "$1=[REDACTED]");
-}
-
-function json(res: ServerResponse, status: number, body: unknown): void {
+}function json(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
