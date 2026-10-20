@@ -106,7 +106,10 @@ CREATE TABLE user_totp_factor (
   period_seconds integer NOT NULL DEFAULT 30 CHECK (period_seconds BETWEEN 15 AND 120),
   digits smallint NOT NULL DEFAULT 6 CHECK (digits BETWEEN 6 AND 8),
   created_at timestamptz NOT NULL DEFAULT now(),
-  revoked_at timestamptz
+  revoked_at timestamptz,
+  last_used_counter bigint,
+  failed_attempts integer NOT NULL DEFAULT 0 CHECK (failed_attempts >= 0),
+  locked_until timestamptz
 );
 
 CREATE INDEX user_totp_factor_active_idx
