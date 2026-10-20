@@ -1,0 +1,207 @@
+{
+  "contract_id": "W0-2-financial-invariants",
+  "version": "1.0.0",
+  "fixture_policy": "Synthetic only; no provider credentials, user secrets, or production data.",
+  "traceability": {
+    "stories": ["US-0002-A", "US-0002-B", "US-0002-C"],
+    "tests": ["TC-US-0002-A", "TC-US-0002-B", "TC-US-0002-C"],
+    "release_gates": ["TC-X-003", "TC-X-006", "TC-X-007"]
+  },
+  "common": {
+    "portfolio_id": "synthetic-portfolio-0002",
+    "reporting_currency_code": "EUR",
+    "calculation_version": "cost-basis-v1 / pnl-v1 / ledger-replay-v1",
+    "source_type": "MANUAL",
+    "state": "POSTED"
+  },
+  "owner_decisions_approved": false,
+  "cases": [
+    {
+      "case_id": "A-CASH-SIGNS-001",
+      "trace": "TC-US-0002-A",
+      "given": {
+        "account_id": "synthetic-cash-eur",
+        "currency_code": "EUR",
+        "opening_balance": "0.000000000000",
+        "transactions": [
+          {"activity_type": "DEPOSIT", "amount": "100.00", "expected_direction": "CREDIT"},
+          {"activity_type": "WITHDRAWAL", "amount": "20.00", "expected_direction": "DEBIT"}
+        ]
+      },
+      "when": "Post both transactions once and replay the account balance.",
+      "then": {
+        "balance_by_account_currency": "80.000000000000",
+        "external_contribution": "100.000000000000",
+        "external_spending": "20.000000000000",
+        "cash_entry_amounts_are_non_negative": true
+      },
+      "decision_dependencies": []
+    },
+    {
+      "case_id": "A-BUY-SELL-QUANTITY-001",
+      "trace": "TC-US-0002-A",
+      "given": {
+        "account_id": "synthetic-brokerage-eur",
+        "instrument_id": "synthetic-equity-eur",
+        "currency_code": "EUR",
+        "transactions": [
+          {"activity_type": "BUY", "quantity": "10", "unit_price": "10", "amount": "100"},
+          {"activity_type": "SELL", "quantity": "4", "unit_price": "15", "amount": "60"}
+        ]
+      },
+      "when": "Replay posted position entries in effective-date order.",
+      "then": {
+        "remaining_quantity": "6.000000000000",
+        "cash_entry_direction_buy": "DEBIT",
+        "cash_entry_direction_sell": "CREDIT",
+        "sell_quantity_must_not_increase_position": true
+      },
+      "decision_dependencies": ["D-OVERDRAFT-01", "D-SHORT-01"]
+    },
+    {
+      "case_id": "A-SHORT-REJECTION-001",
+      "trace": "TC-US-0002-A",
+      "given": {
+        "account_id": "synthetic-brokerage-eur-short",
+        "instrument_id": "synthetic-equity-eur-short",
+        "currency_code": "EUR",
+        "posted_position_quantity": "3.000000000000",
+        "requested_sell_quantity": "4.000000000000"
+      },
+      "when": "Submit a SELL of 4 shares against a posted position of 3 shares, then request a correction of an earlier BUY that would leave a retained SELL above the available quantity.",
+      "then": {
+        "sell_above_available_quantity_is_rejected": true,
+        "rejection_status": 409,
+        "rejection_error": "SHORT_POSITION_NOT_PERMITTED",
+        "no_short_position_is_opened": true,
+        "no_short_cover_operation_exists": true,
+        "correction_that_would_break_the_position_constraint_is_rejected": true,
+        "correction_rejection_error": "CORRECTION_BREAKS_POSITION_CONSTRAINT"
+      },
+      "decision_dependencies": ["D-SHORT-01"]
+    },
+    {
+      "case_id": "B-PARTIAL-SELL-FIFO-WAC-001",
+      "trace": "TC-US-0002-B",
+      "given": {
+        "instrument_id": "synthetic-equity-eur",
+        "currency_code": "EUR",
+        "transactions": [
+          {"activity_type": "BUY", "amount": "100", "quantity": "10", "unit_price": "10", "fee_amount": "2", "tax_amount": "1"},
+          {"activity_type": "BUY", "amount": "70", "quantity": "5", "unit_price": "14", "fee_amount": "1", "tax_amount": "0"},
+          {"activity_type": "SELL", "amount": "240", "quantity": "12", "unit_price": "20", "fee_amount": "3", "tax_amount": "4"}
+        ]
+      },
+      "when": "Calculate cost basis and realized gain under the named method.",
+      "then": {
+        "FIFO": {"remaining_quantity": "3.000000000000", "remaining_cost_basis": "42.600000000000", "realized_gain": "101.600000000000"},
+        "WAC": {"remaining_quantity": "3.000000000000", "remaining_cost_basis": "34.800000000000", "realized_gain": "93.800000000000"},
+        "total_fees": "6.000000000000",
+        "total_taxes": "5.000000000000",
+        "cost_basis_method_is_reported": true,
+        "calculation_version_is_reported": true
+      },
+      "decision_dependencies": ["D-ROUNDING-01", "D-FEE-TAX-01", "D-COST-BASIS-01"]
+    },
+    {
+      "case_id": "B-PRICE-FX-DECOMPOSITION-001",
+      "trace": "TC-US-0002-B",
+      "given": {
+        "instrument_id": "synthetic-equity-usd",
+        "currency_code": "USD",
+        "transactions": [
+          {"activity_type": "BUY", "amount": "100", "quantity": "10", "unit_price": "10", "fee_amount": "2", "tax_amount": "1"},
+          {"activity_type": "SELL", "amount": "60", "quantity": "4", "unit_price": "15", "fee_amount": "1", "tax_amount": "1"}
+        ],
+        "valuation": {"price": "20", "valuation_fx_rate": "0.9", "cost_basis_fx_rate": "0.8"}
+      },
+      "when": "Calculate realized and unrealized P&L in the declared reporting currency.",
+      "then": {
+        "remaining_quantity": "6.000000000000",
+        "remaining_cost_basis_transaction_currency": "61.800000000000",
+        "realized_pnl_transaction_currency": "16.800000000000",
+        "realized_pnl_reporting_currency": "15.120000000000",
+        "price_pnl_reporting_currency": "46.560000000000",
+        "fx_pnl_reporting_currency": "12.000000000000",
+        "unrealized_pnl_reporting_currency": "58.560000000000",
+        "total_pnl_reporting_currency": "73.680000000000",
+        "fees_total": "3.000000000000",
+        "taxes_total": "2.000000000000"
+      },
+      "decision_dependencies": ["D-ROUNDING-01", "D-FEE-TAX-01", "D-COST-BASIS-01"]
+    },
+    {
+      "case_id": "C-PAIRED-TRANSFER-NEUTRALITY-001",
+      "trace": "TC-US-0002-C",
+      "given": {
+        "source_account_id": "synthetic-cash-eur-a",
+        "destination_account_id": "synthetic-cash-eur-b",
+        "currency_code": "EUR",
+        "amount": "25.50",
+        "external_id": "synthetic-transfer-0002-001"
+      },
+      "when": "Post, replay, then correct/VOID the paired transfer as one financial action.",
+      "then": {
+        "source_activity_type": "TRANSFER_OUT",
+        "destination_activity_type": "TRANSFER_IN",
+        "source_direction": "DEBIT",
+        "destination_direction": "CREDIT",
+        "both_legs_reference_each_other": true,
+        "both_legs_are_external_flow_false": true,
+        "portfolio_external_contribution_delta": "0.000000000000",
+        "portfolio_external_spending_delta": "0.000000000000",
+        "correction_preserves_both_original_legs": true,
+        "correction_reason_and_actor_are_auditable": true
+      },
+      "decision_dependencies": ["D-TRANSFER-01"]
+    },
+    {
+      "case_id": "C-IDEMPOTENCY-REPLAY-CONFLICT-001",
+      "trace": "TC-US-0002-C",
+      "given": {
+        "account_id": "synthetic-cash-eur-a",
+        "identity": {"kind": "external_id", "value": "synthetic-external-0002-001"},
+        "normalized_posting": {"activity_type": "DEPOSIT", "amount": "42.00", "currency_code": "EUR", "effective_date": "2026-04-01"}
+      },
+      "when": "Submit the normalized posting twice, then reuse its identity with changed posting content; repeat on another account.",
+      "then": {
+        "exact_replay_returns_original_activity": true,
+        "exact_replay_creates_no_second_entry_audit_action_or_event": true,
+        "changed_content_response_status": 409,
+        "changed_content_error": "IDEMPOTENCY_KEY_CONFLICT",
+        "different_account_is_independent": true,
+        "replay_outputs_and_hash_are_deterministic_for_same_ledger_and_version": true
+      },
+      "decision_dependencies": []
+    },
+    {
+      "case_id": "C-VOID-REPLAY-RESTORE-001",
+      "trace": "TC-US-0002-C",
+      "given": {
+        "synthetic_ledger_activity_ids": ["synthetic-activity-deposit", "synthetic-activity-buy", "synthetic-activity-transfer-out", "synthetic-activity-transfer-in"],
+        "correction_reason": "Synthetic duplicate correction",
+        "trace_id": "trace-w0-2-void-001",
+        "correlation_id": "corr-w0-2-ledger-001"
+      },
+      "when": "Replay before correction, apply authorized correction/VOID, replay again, back up and restore the synthetic database, then replay the restored ledger.",
+      "then": {
+        "original_activity_and_entries_are_preserved": true,
+        "voided_activity_is_excluded_from_posted_balance_and_totals": true,
+        "correction_has_reason_actor_trace_id_and_correlation_id": true,
+        "restored_balances_equal_pre_backup_balances": true,
+        "restored_totals_equal_pre_backup_totals": true,
+        "restored_replay_hash_matches_same_logical_ledger_and_calculation_version": true,
+        "restore_database_is_disposable_and_isolated": true
+      },
+      "decision_dependencies": ["D-TRANSFER-01"]
+    }
+  ],
+  "unresolved_decisions": [
+    {"id": "D-OVERDRAFT-01", "owner": "Ledger owner", "owner_disposition": "NOT DECIDED", "question": "Can a cash account go negative? If so, which account types, roles, effective dates, and overdraft limits apply?", "test_impact": "Define accepted/rejected BUY, WITHDRAWAL, FEE, TAX and TRANSFER_OUT when available cash is insufficient."},
+    {"id": "D-SHORT-01", "owner": "Ledger owner", "owner_disposition": "DECIDED", "question": "Are short positions permitted? If so, how are short quantity, cost basis, borrow/corporate-action treatment, and covering trades represented?", "test_impact": "Define accepted/rejected SELL when available quantity is insufficient."},
+    {"id": "D-ROUNDING-01", "owner": "Ledger + Calculations owners", "owner_disposition": "PARTIALLY DECIDED", "question": "What are quantity, unit-price, FX and currency minor-unit precision; rounding mode; intermediate-rounding boundary; and residual allocation rule?", "test_impact": "Pin exact results for partial lot allocation, repeating WAC division, FX conversion, and restore hash serialization."},
+    {"id": "D-FEE-TAX-01", "owner": "Ledger + Calculations owners", "owner_disposition": "JOINTLY APPROVED", "question": "Are fee_amount and tax_amount additional cash postings or informational components already included in amount? How are BUY/SELL/dividend fees and taxes allocated between cash, basis, proceeds and P&L?", "test_impact": "Define cash balance and realized/unrealized P&L results without double-counting fee/tax."},
+    {"id": "D-COST-BASIS-01", "owner": "Calculations owner", "owner_disposition": "DECIDED", "question": "Which cost-basis method is the canonical default, what are lot selection/allocation rules, and how are acquisition fees/taxes and disposal fees/taxes treated?", "test_impact": "Select method/version and pin results; current examples exercise FIFO and WAC only."},
+    {"id": "D-TRANSFER-01", "owner": "Ledger owner", "owner_disposition": "PARTIALLY DECIDED", "question": "Does VOID/correction of one transfer leg always correct both legs atomically, including after either leg is already VOID or was replayed? What is the reversal activity/audit shape?", "test_impact": "Pin one-leg correction, retry, partial-failure and paired-leg replay assertions."}
+  ]
+}

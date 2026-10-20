@@ -4,6 +4,12 @@ De testsuite draait met `node --experimental-strip-types --test tests/unit/*.tes
 (equivalent: `pnpm test`, of `make test`). `pnpm check` draait daarnaast `pnpm lint` en
 `pnpm typecheck` (`tsc --noEmit`); `make check` is het equivalent daarvan.
 
+De laag `tests/contract-freeze/` draait bewust **niet** mee in de standaard-suite: de
+contracten daar zijn RED by design tot de domeineigenaren hun openstaande
+financiële beslissingen hebben vastgelegd. Die laag draait op een eigen commando
+(`pnpm test:contract-freeze`), zodat de regressie-gate van de andere stories groen
+blijft.
+
 Tests die een draaiende stack nodig hebben (PostgreSQL, Redis, object storage, API)
 staan achter `STACK_SMOKE=1` en worden zonder die variabele overgeslagen.
 
@@ -12,10 +18,13 @@ staan achter `STACK_SMOKE=1` en worden zonder die variabele overgeslagen.
 - `tests/unit/` — pure domeinregels, de calculation engine en de UX/UI-contracten;
 - `tests/smoke/` — provider-, API-, addon- en golden-contracten plus de stack-tests;
 - `tests/fixtures/` — synthetische hulpmiddelen voor de smoke-tests (bijvoorbeeld de
-  Trading212 GUI-harness).
+  Trading212 GUI-harness);
 - `tests/helpers/` — gedeelde testhulpmiddelen; nu de web-source loader
   (`tests/helpers/web-source.mjs`) die de markup en de scripts van de webfrontend
-  samenvoegt tot één bron, zodat de marker-asserties hun betekenis behouden.
+  samenvoegt tot één bron, zodat de marker-asserties hun betekenis behouden;
+- `tests/contract-freeze/` — de financiële invariantencontracten van Wave 0
+  (US-0002-A/B/C). Deze laag is RED by design en draait op `pnpm test:contract-freeze`,
+  buiten de standaard-suite om.
 
 De versieerbare fixturepacks staan in de repo-rootmap `fixtures/` (bijvoorbeeld
 `fixtures/CALC-001.json`), niet onder `tests/`.
