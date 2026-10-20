@@ -1,3 +1,4 @@
+import { createBrokerRoute } from './broker-route.js';
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createConnection } from "node:net";
@@ -258,7 +259,8 @@ async function authenticatedUserId(req: IncomingMessage): Promise<string | undef
     `SELECT s.user_id FROM spaartrack.user_session s
      JOIN spaartrack.app_user u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
-       AND u.status = 'ACTIVE' AND u.deleted_at IS NULL`,
+       AND u.status = 'ACTIVE' AND u.deleted_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM spaartrack.broker_owner bo WHERE bo.user_id=u.id)`,
     [sessionHash(token)]
   );
   return result.rowCount ? String(result.rows[0].user_id) : undefined;
@@ -333,6 +335,7 @@ async function sessionRoute(req: IncomingMessage, res: ServerResponse): Promise<
          SELECT id, $2, now() + ($3 * interval '1 second')
          FROM spaartrack.app_user
          WHERE lower(email) = $1 AND status = 'ACTIVE' AND deleted_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM spaartrack.broker_owner bo WHERE bo.user_id=app_user.id)
          RETURNING user_id, expires_at`,
         [email, sessionHash(token), ttlSeconds]
       );
@@ -360,7 +363,8 @@ async function sessionRoute(req: IncomingMessage, res: ServerResponse): Promise<
        FROM spaartrack.user_session s
        JOIN spaartrack.app_user u ON u.id = s.user_id
        WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
-         AND u.status = 'ACTIVE' AND u.deleted_at IS NULL`,
+         AND u.status = 'ACTIVE' AND u.deleted_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM spaartrack.broker_owner bo WHERE bo.user_id=u.id)`,
       [sessionHash(token)]
     );
     if (!result.rowCount) json(res, 401, { error: "SESSION_INVALID_OR_EXPIRED" });
@@ -411,6 +415,7 @@ async function oidcRoute(req: IncomingMessage, res: ServerResponse): Promise<boo
          SELECT id, $2, $3, $4, $5, now() + interval '5 minutes'
          FROM spaartrack.app_user
          WHERE lower(email) = $1 AND status = 'ACTIVE' AND deleted_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM spaartrack.broker_owner bo WHERE bo.user_id=app_user.id)
          RETURNING expires_at`,
         [email, provider, sessionHash(state), sessionHash(code), redirectUri]
       );
@@ -8291,6 +8296,8 @@ async function readiness(res: ServerResponse): Promise<void> {
   });
 }
 
+const brokerRoute = createBrokerRoute({ pool: databasePool, readJson, json });
+
 const server = createServer((req, res) => {
   const id = correlationId(req);
   const trace = traceId(req);
@@ -8339,6 +8346,10 @@ const server = createServer((req, res) => {
     }).catch(() => {
       if (!res.writableEnded) json(res, 500, { error: "AUDIT_REQUEST_FAILED" });
     });
+    return;
+  }
+  if (req.url?.startsWith('/api/v1/broker/')) {
+    void brokerRoute(req, res).catch(() => { if (!res.writableEnded) json(res, 503, { error: 'BROKER_UNAVAILABLE' }); });
     return;
   }
   if (req.url?.startsWith("/api/v1/sessions")) {

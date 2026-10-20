@@ -20,11 +20,18 @@ test("backend-pending features are represented as disabled placeholders", () => 
   assert.match(html, /<button[^>]*id="add-action"[^>]*disabled[^>]*>[\s\S]*?Add action/);
 });
 
-test("local GUI uses synthetic evidence and no provider credentials", () => {
+test("local GUI keeps demo evidence synthetic and broker credential inputs empty", () => {
   assert.match(html, /synthetic/);
   assert.match(html, /trace-id/);
   assert.match(html, /correlation-id/);
-  assert.doesNotMatch(html, /(api[_-]?key|client[_-]?secret|password\s*=)/i);
+  // US-0802 now explicitly permits credential entry; embedded credential values remain forbidden.
+  for (const id of ['trading212-api-key', 'trading212-api-secret', 'trading212-password']) {
+    const input = html.match(new RegExp(`<input[^>]*id="${id}"[^>]*>`))?.[0];
+    assert.ok(input);
+    assert.match(input, /type="password"/);
+    assert.doesNotMatch(input, /value="[^"]+"/);
+  }
+  assert.doesNotMatch(html, /(?:api_key|api_secret|client_secret|password)\s*[:=]\s*['"][^'"]+['"]/i);
 });
 
 test("Module switcher stays compact and uses the active page context", () => {
