@@ -12,7 +12,12 @@ const apiEntrypoint = apiPackage.scripts.start.replace(/^node\s+/, "").replace(/
 const apiEntrypointDistPath = `apps/api/dist/${apiEntrypoint}`;
 
 function job(name) {
-  const match = workflow.match(new RegExp(`^ {2}${name}:\\n[\\s\\S]*?(?=^ {2}[A-Za-z][\\w-]*:\\n)`, "m"));
+  // The last job in the workflow has no following job header, so its block runs
+  // to the end of the file. The alternation keeps the earlier job boundary as
+  // the preferred stop, so the span of every non-final job is unchanged.
+  const match = workflow.match(
+    new RegExp(`^ {2}${name}:\\n[\\s\\S]*?(?=^ {2}[A-Za-z][\\w-]*:\\n|(?![\\s\\S]))`, "m")
+  );
   assert.ok(match, `workflow must contain a ${name} job`);
   return match[0];
 }
@@ -77,6 +82,54 @@ test("TC-US-0103: the security job checks out with a Node 24 runtime action", ()
     Number(major) >= 5,
     `actions/checkout@v${major} targets Node 20, which GitHub removes from hosted runners on 2026-09-16; v5 and later run on Node 24`
   );
+});
+
+// The three jobs below extend the Node 24 floor above to EVERY job in the
+// workflow. The `security` job was migrated to the Node 24 checkout line
+// first, which left `verify` and `image` on the deprecated Node 20 line — an
+// asymmetry that the workflow-level assertions below can no longer survive.
+//
+// The marker stays version-agnostic on purpose: pinning an exact major broke
+// this file on every GitHub Actions runtime bump. What is asserted is the
+// Node 24 FLOOR (major >= 5), not a specific major.
+test("TC-US-0103: every CI job checks out with a Node 24 runtime action", () => {
+  for (const name of ["verify", "security", "image"]) {
+    const checkoutStep = step(job(name), "- uses: actions/checkout@");
+    const major = checkoutStep.match(/actions\/checkout@v(\d+)/)?.[1];
+    assert.ok(major, `the ${name} job must pin an actions/checkout major version`);
+    assert.ok(
+      Number(major) >= 5,
+      `the ${name} job checks out with actions/checkout@v${major}, which targets Node 20; GitHub removes Node 20 from hosted runners on 2026-09-16, so v5 and later (Node 24) are required`
+    );
+  }
+});
+
+test("TC-US-0103: the CI workflow pins one checkout runtime line for every job", () => {
+  const majors = ["verify", "security", "image"].map((name) => {
+    const checkoutStep = step(job(name), "- uses: actions/checkout@");
+    const major = checkoutStep.match(/actions\/checkout@v(\d+)/)?.[1];
+    assert.ok(major, `the ${name} job must pin an actions/checkout major version`);
+    return Number(major);
+  });
+  assert.equal(
+    new Set(majors).size,
+    1,
+    `all CI jobs must use the same actions/checkout major, found [${majors.join(", ")}]`
+  );
+});
+
+test("TC-US-0103: no checkout reference in the workflow targets a removed runtime", () => {
+  // A workflow-wide sweep, so a job added later cannot reintroduce a
+  // deprecated checkout line without failing this contract.
+  const references = workflow.match(/actions\/checkout@v\d+/g) ?? [];
+  assert.ok(references.length > 0, "the workflow must reference actions/checkout");
+  for (const reference of references) {
+    const major = Number(reference.match(/@v(\d+)/)[1]);
+    assert.ok(
+      major >= 5,
+      `${reference} targets Node 20, which GitHub removes from hosted runners on 2026-09-16; v5 and later run on Node 24`
+    );
+  }
 });
 
 test("TC-US-0103: gitleaks scans pull requests with the token and permissions the action requires", () => {
