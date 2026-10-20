@@ -57,7 +57,7 @@ jobs:
         run: pnpm --filter @spaartrack/api build
       - name: Start API bootstrap
         run: |
-          node apps/api/dist/index.js > /tmp/spaartrack-api.log 2>&1 &
+          pnpm --filter @spaartrack/api start > /tmp/spaartrack-api.log 2>&1 &
           echo $! > /tmp/spaartrack-api.pid
           for attempt in $(seq 1 20); do curl --fail --silent http://localhost:8080/health/ready && break; sleep 1; done
           curl --fail --silent http://localhost:8080/health/ready >/dev/null
@@ -80,6 +80,8 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
