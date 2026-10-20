@@ -93,26 +93,26 @@ test("TC-US-0602-SCHEMA: a fresh schema.sql bootstrap applies cleanly and create
   assert.equal(started.status, 0, `could not start the probe database: ${started.stderr}`);
 
   try {
-    let ready = false;
-    for (let attempt = 0; attempt < 60 && !ready; attempt += 1) {
-      const probe = run(["exec", name, "pg_isready", "-U", "spaartrack", "-d", "spaartrack"], 30_000);
-      ready = probe.status === 0;
-      if (!ready) spawnSync("sleep", ["1"]);
+    // The postgres entrypoint starts a TEMPORARY server to run the init
+    // scripts and then restarts. pg_isready answers during that temporary
+    // phase, so readiness must be proven by the schema actually being
+    // present, not by the port accepting connections.
+    let applied = false;
+    let lastOutput = "";
+    for (let attempt = 0; attempt < 90 && !applied; attempt += 1) {
+      const probe = run([
+        "exec", name, "psql", "-U", "spaartrack", "-d", "spaartrack", "-tAc",
+        "select count(*) from pg_indexes where schemaname='spaartrack' and indexname='import_mapping_owner_name_version_idx'",
+      ], 30_000);
+      lastOutput = `${probe.stdout || ""}${probe.stderr || ""}`;
+      if (probe.status === 0 && probe.stdout.trim() === "1") applied = true;
+      else spawnSync("sleep", ["1"]);
     }
-    assert.ok(ready, "probe database did not become ready");
+    assert.ok(applied, `fresh bootstrap did not create import_mapping_owner_name_version_idx:\n${lastOutput}`);
 
     // The bootstrap must have applied without a fatal error.
-    const errors = run([
-      "logs", name,
-    ]);
+    const errors = run(["logs", name]);
     assert.doesNotMatch(errors.stdout || "", /FATAL|ERROR:/, `schema.sql failed on a fresh database:\n${errors.stdout}`);
-
-    const index = run([
-      "exec", name, "psql", "-U", "spaartrack", "-d", "spaartrack", "-tAc",
-      "select count(*) from pg_indexes where schemaname='spaartrack' and indexname='import_mapping_owner_name_version_idx'",
-    ]);
-    assert.equal(index.status, 0, `probe database rejected the schema: ${index.stderr}`);
-    assert.equal(index.stdout.trim(), "1", "fresh bootstrap did not create import_mapping_owner_name_version_idx");
   } finally {
     run(["rm", "-f", name], 60_000);
   }
