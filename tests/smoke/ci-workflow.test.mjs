@@ -58,10 +58,24 @@ test("TC-US-0105: CI bootstraps the API entrypoint that the build actually emits
 });
 
 test("TC-US-0103: security job checks out full history so the gitleaks range resolves", () => {
-  const checkoutStep = step(job("security"), "- uses: actions/checkout@v4");
+  const checkoutStep = step(job("security"), "- uses: actions/checkout@v6");
   assert.match(
     checkoutStep,
     /fetch-depth:\s*0/,
     "gitleaks scans a <before>^..<after> range and needs a full clone (fetch-depth: 0)"
+  );
+});
+
+test("TC-US-0103: gitleaks scans pull requests with the token and permissions the action requires", () => {
+  const secretScanStep = step(job("security"), "gitleaks/gitleaks-action@");
+  assert.match(
+    secretScanStep,
+    /GITHUB_TOKEN:\s*\$\{\{\s*secrets\.GITHUB_TOKEN\s*\}\}/,
+    "gitleaks-action exits 1 on pull_request events when GITHUB_TOKEN is absent, before scanning"
+  );
+  assert.match(
+    job("security"),
+    /pull-requests:\s*write/,
+    "gitleaks-action reads the pull request commits and comments through the GitHub API"
   );
 });
