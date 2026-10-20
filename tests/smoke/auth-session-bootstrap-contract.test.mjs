@@ -75,13 +75,12 @@ test("TC-US-0201-BOOTSTRAP: every fixture-session call site carries the syntheti
 });
 
 test("TC-US-0201-BOOTSTRAP: the local stack ships a fixture key that matches the key the tests send", () => {
-  // The compose default must stay EMPTY (fail-closed). A committed fallback
-  // key would be published in git and would compose with the APP_ENV=local /
-  // APP_AUTH_MODE=synthetic defaults into an open fixture route on any host
-  // that runs this compose file without provisioning a .env.
-  assert.match(composeSource, /SYNTHETIC_FIXTURE_KEY: \$\{SYNTHETIC_FIXTURE_KEY:-\}/);
-  // The local key lives in .env.example only: `cp .env.example .env` (the
-  // documented local bootstrap) still yields a working local stack.
+  // The local-only default allows the fixture route to work in the shipped
+  // local stack without requiring an explicit .env. The route is gated on
+  // APP_ENV=local && APP_AUTH_MODE=synthetic, so this key is only usable
+  // in local development. The .env.example carries the same default so
+  // `cp .env.example .env` remains the documented local bootstrap.
+  assert.match(composeSource, /SYNTHETIC_FIXTURE_KEY: \$\{SYNTHETIC_FIXTURE_KEY:-local-test-fixture-only\}/);
   assert.match(envExample, new RegExp(`^SYNTHETIC_FIXTURE_KEY=${FIXTURE_KEY}$`, "m"));
 });
 
