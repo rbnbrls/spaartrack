@@ -25,6 +25,7 @@ for the authoritative wording.
 | `w0-2-ledger-concurrence-rounding-cost-basis-v1.md` | `t_eea535ff` | 2026-10-19 | v1 | Bounded Ledger concurrence on the Calculations D-ROUNDING-01 and D-COST-BASIS-01 proposals only. |
 | `w0-2-sell-cash-leg-determination-v1.md` | `t_d2bd0b46` | 2026-10-20 | v1 | Ledger determination that the SELL-direction field denotes the SELL cash leg; the contract-value change is NOT DECIDED pending reciprocal Calculations concurrence. |
 | `w0-2-sell-cash-leg-concurrence-v1.md` | `t_ff54ddc9` | 2026-10-20 | v1 | Calculations reciprocal concurrence on the SELL cash leg and its CREDIT value; records that no approved B-case output or version changes and that D-OVERDRAFT-01 and D-SHORT-01 are not approved by it. |
+| `w0-2-replay-restore-canonical-serialization-v1.md` | `t_5ae31bf2` | 2026-10-20 | v1 | Calculations owner decision for the calculation-record half of D-ROUNDING-01 item 3: the `calc-record-v1` calculation-record serialization and the `ledger-replay-hash-v1` hash-version compatibility rule. The canonical ledger-row byte representation and the restore-equality contract remain NOT DECIDED and are handed to the Ledger owner. |
 
 ## Supersession
 

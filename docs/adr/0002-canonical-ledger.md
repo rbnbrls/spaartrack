@@ -25,3 +25,7 @@ Testbare regels; elke regel heeft een contracttest in `tests/smoke/ledger-*.test
 - corrections en voids behouden auditability;
 - idempotency, replay en restore worden release gates;
 - dashboard-state mag nooit de financiële waarheid overschrijven.
+
+## Architecture contract clarification
+
+For the US-0001 contract, reusing the same identity from a different connection/source returns the original transaction and entries when the normalized command is identical; otherwise it returns `409 IDEMPOTENCY_KEY_CONFLICT`. Reusing the same identity in another account is valid and independent. The provider connection/source is provenance, not a uniqueness dimension.
