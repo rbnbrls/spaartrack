@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -7,7 +8,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const diagnosisSource = readFileSync(new URL("apps/api/src/incident-diagnosis.ts", root), "utf8");
 const webSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
-const api = process.env.API_URL || "http://localhost:18080";
+const api = apiUrl;
 
 test("TC-US-1703: diagnosis hypothesis contract is versioned and traceable", () => {
   for (const value of ["incidentDiagnosisRoute", "/hypotheses", "incident-diagnosis-v1", "proposed_regression_test", "reproducibility_key"]) {

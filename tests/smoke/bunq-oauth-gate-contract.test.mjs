@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -7,7 +8,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const contractsSource = readFileSync(new URL("packages/integration-contracts/src/index.ts", root), "utf8");
 const webSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
-const api = process.env.API_URL || "http://localhost:18080";
+const api = apiUrl;
 
 test("TC-US-1006: direct bunq OAuth stays behind compliance deployment gate", () => {
   for (const value of ["bunqOAuthDeploymentGateRoute", "/api/v1/bunq-oauth/deployment-gate", "compliance_check", "redirect_uri", "legal_decision", "read_only_permissions", "BUNQ_OAUTH_DISABLED", "bunq-oauth-deployment-gate-v1", "human_approval_required"]) {

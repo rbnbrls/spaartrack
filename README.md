@@ -17,8 +17,8 @@ De domeinfeatures worden volgens de dependency-ordered slices en TDD-testgevalle
 ## Starten
 
     cp .env.example .env
-    docker compose up -d --build
-    docker compose ps
+    scripts/dev/compose.sh up -d --build
+    scripts/dev/compose.sh ps
     curl http://localhost:18080/health/live
     curl http://localhost:18080/health/ready
 

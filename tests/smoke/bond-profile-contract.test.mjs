@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -25,7 +26,7 @@ test("TC-US-1401: bond profile contract is read-only, traceable and human-accept
 });
 
 test("TC-US-1401-runtime: bond profile endpoint is authenticated", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const response = await fetch(`${base}/api/v1/bond-profiles`);
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error, "UNAUTHENTICATED");
@@ -33,7 +34,7 @@ test("TC-US-1401-runtime: bond profile endpoint is authenticated", { skip: proce
 
 test("TC-US-1401-runtime: synthetic bond profile is registered and resolvable with duplicate and validation failures", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -74,7 +75,7 @@ test("TC-US-1401-runtime: synthetic bond profile is registered and resolvable wi
 
 test("TC-US-1401-runtime: bond cashflow schedule is dated, idempotent and ledger-neutral", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -125,7 +126,7 @@ test("TC-US-1401-runtime: bond cashflow schedule is dated, idempotent and ledger
 
 test("TC-US-1401-runtime: bond schedule without profile gives a clear error", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -143,7 +144,7 @@ test("TC-US-1401-runtime: bond schedule without profile gives a clear error", { 
 
 test("TC-US-1401-runtime: bond profile creation outside portfolio gives a clear error", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();

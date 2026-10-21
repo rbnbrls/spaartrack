@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -6,7 +7,7 @@ import { readWebSource } from "../helpers/web-source.mjs";
 const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const uiSource = readWebSource();
-const api = process.env.API_URL || "http://localhost:18080";
+const api = apiUrl;
 
 test("TC-US-0910: Money Flow currency report exposes native and base currency with period-end FX", () => {
   for (const value of [

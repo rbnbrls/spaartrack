@@ -1,13 +1,13 @@
 .PHONY: up down logs check test db-validate
 
 up:
-	docker compose up -d --build
+	scripts/dev/compose.sh up -d --build
 
 down:
-	docker compose down
+	scripts/dev/compose.sh down
 
 logs:
-	docker compose logs -f
+	scripts/dev/compose.sh logs -f
 
 check:
 	pnpm check

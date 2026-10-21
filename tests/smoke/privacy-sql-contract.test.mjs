@@ -1,3 +1,4 @@
+import { databaseUrl as resolvedDatabaseUrl } from "../support/local-endpoints.mjs";
 // Executes the real export and deletion SQL against a real PostgreSQL.
 //
 // This is the regression test for the QA defect where BOTH privacy endpoints
@@ -24,10 +25,7 @@ import { buildPrivacyDeletionAuditEvent, buildPrivacyDeletionPlan } from "../../
 const require = createRequire(import.meta.url);
 const { Pool } = require("../../apps/api/node_modules/pg");
 
-const databaseUrl =
-  process.env.PRIVACY_TEST_DATABASE_URL ||
-  process.env.DATABASE_URL ||
-  "postgres://spaartrack:change-me-local-only@localhost:55432/spaartrack";
+const databaseUrl = resolvedDatabaseUrl;
 
 const dbUp = spawnSync("docker", ["compose", "ps", "--format", "json", "db"], { encoding: "utf8", timeout: 30_000 });
 

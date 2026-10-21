@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -8,7 +9,7 @@ const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const contractsSource = readFileSync(new URL("packages/integration-contracts/src/index.ts", root), "utf8");
 const webSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
-const api = process.env.API_URL || "http://localhost:18080";
+const api = apiUrl;
 
 test("TC-US-0802: Trading 212 connection is read-only, vault-referenced and revocable", () => {
   for (const value of ["/api/v1/connections", "trading212", "TRADING_212", "credential_secret_ref", "vault_path", "INVEST", "STOCKS_ISA", "REVOKED", "read-only", "connection-revoked-v1"]) {

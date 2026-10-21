@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -18,7 +19,7 @@ test("TC-US-1603: proposal preview without ledger mutation", () => {
 });
 
 test("TC-US-1603 runtime: preview proposal with undo token", { skip: !process.env.STACK_SMOKE }, async () => {
-  const base = (process.env.API_URL || "http://localhost:18080").replace(/\/$/, "");
+  const base = (apiUrl).replace(/\/$/, "");
   const email = `synthetic-proposal-${Date.now()}@example.test`;
   const userRes = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Proposal" }) });
   assert.equal(userRes.status, 201);

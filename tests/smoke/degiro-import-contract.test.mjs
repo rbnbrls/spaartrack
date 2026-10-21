@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -9,7 +10,7 @@ const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const contractsSource = readFileSync(new URL("packages/integration-contracts/src/index.ts", root), "utf8");
 const webSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
 const fixture = readFileSync(new URL("fixtures/PROVIDER-001-degiro.csv", root), "utf8");
-const api = process.env.API_URL || "http://localhost:18080";
+const api = apiUrl;
 
 test("TC-US-0804: DEGIRO CSV contract exposes versioned layout, canonical candidates and reconciliation", () => {
   for (const value of [

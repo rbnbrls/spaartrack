@@ -1,3 +1,4 @@
+import { webUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -141,7 +142,7 @@ test("TC-US-0501-web: the web image ships the extracted scripts", () => {
 });
 
 test("TC-US-0501-web runtime: the built web image serves the extracted scripts", { skip: !process.env.STACK_SMOKE }, async () => {
-  const base = (process.env.WEB_URL || "http://localhost:3000").replace(/\/$/, "");
+  const base = (webUrl).replace(/\/$/, "");
   const page = await fetch(`${base}/`);
   assert.equal(page.status, 200);
   const body = await page.text();

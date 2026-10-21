@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -20,7 +21,7 @@ test("TC-US-0506: position detail contract exposes identity, performance, calend
 });
 
 test("TC-US-0506-runtime: detail endpoint keeps the portfolio access boundary", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const unauthenticated = await fetch(`${process.env.API_URL || "http://localhost:18080"}/api/v1/position-details`);
+  const unauthenticated = await fetch(`${apiUrl}/api/v1/position-details`);
   assert.equal(unauthenticated.status, 401);
 });
 

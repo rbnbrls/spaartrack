@@ -1,3 +1,5 @@
+import { databaseUrl as resolvedDatabaseUrl } from "../support/local-endpoints.mjs";
+import { apiUrl } from "../support/local-endpoints.mjs";
 // TC-US-0206 runtime contract: the privacy export and deletion lifecycle.
 //
 // This is the failing test the B-003 remediation was supposed to have. It
@@ -24,11 +26,8 @@ import { PRIVACY_EXPORT_SECTION_NAMES } from "../../apps/api/src/privacy-export.
 const require = createRequire(import.meta.url);
 const { Pool } = require("../../apps/api/node_modules/pg");
 
-const api = process.env.API_URL || "http://localhost:18080";
-const databaseUrl =
-  process.env.PRIVACY_TEST_DATABASE_URL ||
-  process.env.DATABASE_URL ||
-  "postgres://spaartrack:change-me-local-only@localhost:55432/spaartrack";
+const api = apiUrl;
+const databaseUrl = resolvedDatabaseUrl;
 
 const jsonHeaders = { "content-type": "application/json" };
 const bearer = (token) => ({ authorization: `Bearer ${token}` });

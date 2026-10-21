@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -18,7 +19,7 @@ test("TC-US-1601: assistant answers cite source period, confidence and read scop
 });
 
 test("TC-US-1601 runtime: portfolio and money flow answers are read-only and audited", { skip: !process.env.STACK_SMOKE }, async () => {
-  const base = (process.env.API_URL || "http://localhost:18080").replace(/\/$/, "");
+  const base = (apiUrl).replace(/\/$/, "");
   const email = `synthetic-assistant-${Date.now()}@example.test`;
   const userRes = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Assistant" }) });
   assert.equal(userRes.status, 201);

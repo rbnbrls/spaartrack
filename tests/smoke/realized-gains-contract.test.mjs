@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -16,7 +17,7 @@ test("TC-US-1303: realized gains expose fee and FX decomposition", () => {
 
 test("TC-US-1303-runtime: realized gains endpoint is authenticated and read-only", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
