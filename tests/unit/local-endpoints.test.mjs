@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   apiUrl,
@@ -39,4 +40,11 @@ test("local endpoint resolver exposes the override variable for each endpoint", 
     url: databaseUrl,
     override: "DATABASE_URL",
   });
+});
+
+test("broker runtime resolves its database endpoint through the shared resolver", () => {
+  const source = readFileSync(new URL("../smoke/trading212-live-runtime.test.mjs", import.meta.url), "utf8");
+  assert.match(source, /local-endpoints\.mjs/);
+  assert.match(source, /databaseUrl/);
+  assert.match(source, /connectionString:databaseUrl/);
 });
