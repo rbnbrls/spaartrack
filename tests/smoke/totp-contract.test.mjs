@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
@@ -51,7 +52,7 @@ test("TC-US-0203-A-runtime: enrolment, success, invalid code and revoke", { skip
   const user = await userResponse.json();
   const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   const session = await login.json();

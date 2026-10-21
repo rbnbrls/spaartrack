@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -98,7 +99,7 @@ test("TC-US-0203-B-TOTP-runtime: synthetic OIDC callback cannot issue a session 
   const user = await created.json();
 
   const bootstrap = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(bootstrap.status, 201);

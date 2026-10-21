@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -33,14 +34,14 @@ test("TC-US-0205-runtime: login, permission change, secret access, share, export
   const member = await create(memberEmail, "Synthetic Audit Member");
   const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json", "x-trace-id": "trace-audit-0205", "x-correlation-id": "corr-audit-0205" },
+    headers: { "x-synthetic-fixture-key": fixtureKey(), "content-type": "application/json", "x-trace-id": "trace-audit-0205", "x-correlation-id": "corr-audit-0205" },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);
   const session = await login.json();
   const auth = { authorization: `Bearer ${session.token}` };
   const auditLogin = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(auditLogin.status, 201);

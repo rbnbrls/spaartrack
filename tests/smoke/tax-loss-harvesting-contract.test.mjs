@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -30,7 +31,7 @@ test("TC-US-1305-runtime: synthetic loss candidate is calculated without ledger 
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-tax-loss-${suffix}@example.test`, display_name: "Synthetic Tax Loss" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Tax Loss ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const account = await create("/api/v1/accounts", { portfolio_id: portfolio.id, name: "Synthetic Brokerage", account_type: "BROKERAGE", tracking_mode: "HOLDINGS", base_currency_code: "EUR" }, auth);

@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -33,7 +34,7 @@ test("TC-US-0206-runtime: export contains owned data/grants and deletion revokes
   const user = await create(email, "Synthetic Privacy Owner");
   const member = await create(memberEmail, "Synthetic Privacy Member");
   const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 })
+    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() }, body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);
   const session = await login.json();
@@ -75,7 +76,7 @@ test("TC-US-0206-runtime: export contains owned data/grants and deletion revokes
   const deletedSelfRead = await fetch(`${api}/api/v1/users/${user.id}`, { headers: auth });
   assert.equal(deletedSelfRead.status, 401);
   const dbEvidence = await fetch(`${api}/api/v1/users/${user.id}`, { headers: { authorization: `Bearer ${(await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email: memberEmail, ttl_seconds: 120 })
   }).then((response) => response.json())).token}` } });
   assert.equal(dbEvidence.status, 403);

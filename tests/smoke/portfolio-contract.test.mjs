@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -25,7 +26,7 @@ test("TC-US-0301-runtime: authenticated owner creates and reads a configured por
   assert.equal(userResponse.status, 201);
   const user = await userResponse.json();
   const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
+    method: "POST", headers: { "x-synthetic-fixture-key": fixtureKey(), "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);
   const session = await login.json();

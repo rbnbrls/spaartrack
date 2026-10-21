@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -24,7 +25,7 @@ test("TC-US-1007-runtime: expiry keeps historical sync and reconnect dedupes pre
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `synthetic-bank-reconnect-${suffix}@example.test`;
   assert.equal((await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic bank reconnect" }) })).status, 201);
-  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": fixtureKey() }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const token = (await login.json()).token;
   const auth = { authorization: `Bearer ${token}`, ...headers };

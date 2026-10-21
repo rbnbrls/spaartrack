@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -35,7 +36,7 @@ test("TC-US-0408-runtime: CALC-001 is deterministic across FX, dividend tax, fee
   });
   assert.equal(created.status, 201);
   const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" },
+    method: "POST", headers: { "x-synthetic-fixture-key": fixtureKey(), "content-type": "application/json" },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);

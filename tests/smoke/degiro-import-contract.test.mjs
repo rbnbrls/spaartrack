@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -29,7 +30,7 @@ test("TC-US-0804-runtime: synthetic DEGIRO preview normalizes rows and reports r
   const headers = { "content-type": "application/json" };
   const email = `synthetic-degiro-0804-${suffix}@example.test`;
   assert.equal((await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic DEGIRO owner" }) })).status, 201);
-  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": fixtureKey() }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const auth = { authorization: `Bearer ${(await login.json()).token}`, ...headers };
   const portfolio = await (await fetch(`${api}/api/v1/portfolios`, { method: "POST", headers: auth, body: JSON.stringify({ name: `Synthetic DEGIRO ${suffix}`, reporting_currency_code: "EUR", privacy_scope: "PRIVATE" }) })).json();

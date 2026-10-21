@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 // TC-US-0206 runtime contract: the privacy export and deletion lifecycle.
 //
 // This is the failing test the B-003 remediation was supposed to have. It
@@ -54,7 +55,7 @@ async function createUser(label) {
 async function issueSession(email) {
   const response = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { ...jsonHeaders, "x-synthetic-fixture-key": "local-test-fixture-only" },
+    headers: { ...jsonHeaders, "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 300 })
   });
   assert.equal(response.status, 201, `fixture session failed: ${response.status}`);
@@ -323,7 +324,7 @@ test("TC-US-0206-B-runtime: deletion revokes connections and credential referenc
   // live user too, and would therefore prove nothing.
   const loginAfterDelete = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { ...jsonHeaders, "x-synthetic-fixture-key": "local-test-fixture-only" },
+    headers: { ...jsonHeaders, "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email: owner.email, ttl_seconds: 120 })
   });
   assert.equal(loginAfterDelete.status, 401, "a deleted user must not be able to log in again");

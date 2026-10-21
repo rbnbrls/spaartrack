@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -23,7 +24,7 @@ test("TC-US-1606-A/B runtime: synthetic addon installs, starts, stops and revoke
   const email = `synthetic-addon-${Date.now()}@example.test`;
   let response = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Addon" }) });
   assert.equal(response.status, 201);
-  response = await fetch(`${base}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
+  response = await fetch(`${base}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
   assert.equal(response.status, 201);
   const { token } = await response.json();
   const auth = { "content-type": "application/json", authorization: `Bearer ${token}`, "x-trace-id": "trace-addon-1606", "x-correlation-id": "corr-addon-1606" };

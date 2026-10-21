@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -33,7 +34,7 @@ test("TC-US-1206-runtime: cash-backed portfolios compare allocation, performance
 
   const user = await create("/api/v1/users", { email, display_name: "Synthetic Comparison 1206" });
   assert.equal(user.response.status, 201);
-  const login = await create("/api/v1/test-fixtures/sessions", { email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const login = await create("/api/v1/test-fixtures/sessions", { email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": fixtureKey() });
   assert.equal(login.response.status, 201);
   const auth = { authorization: `Bearer ${login.body.token}` };
   const portfolioIds = [];

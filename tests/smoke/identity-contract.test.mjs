@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -46,7 +47,7 @@ test("TC-US-0201-A: local user can be created and transitioned through lifecycle
 
   const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);
@@ -75,7 +76,7 @@ test("TC-US-0201-A: local user can be created and transitioned through lifecycle
   });
   assert.equal(deletionUser.status, 201);
   const deleteLogin = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email: deleteEmail, ttl_seconds: 120 })
   });
   assert.equal(deleteLogin.status, 201);
@@ -95,7 +96,7 @@ test("TC-US-0201-A-status-runtime: suspension and deletion revoke existing sessi
   assert.equal(create.status, 201);
   const user = await create.json();
   const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);
@@ -123,7 +124,7 @@ test("TC-US-0201-auth-runtime: no-auth and outsider cannot read/change user life
   const outsider = await makeUser("outsider");
   const sessionFor = async (email) => {
     const response = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-      method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+      method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() },
       body: JSON.stringify({ email, ttl_seconds: 120 })
     });
     assert.equal(response.status, 201);

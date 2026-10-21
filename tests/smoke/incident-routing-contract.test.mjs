@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -23,7 +24,7 @@ test("TC-US-1701-runtime: repeated synthetic alerts return one active incident",
   const headers = { "content-type": "application/json" };
   const email = `synthetic-incident-${suffix}@example.test`;
   assert.equal((await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic Incident Owner" }) })).status, 201);
-  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": fixtureKey() }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const auth = { authorization: `Bearer ${(await login.json()).token}`, ...headers };
   const payload = { title: `Synthetic API timeout ${suffix}`, service: "api", environment: "local", release: "local", severity: "SEV-2", message: `request timeout ${suffix}`, occurred_at: "2026-10-18T10:00:00.000Z", correlation_id: `corr-${suffix}`, trace_id: `trace-${suffix}` };

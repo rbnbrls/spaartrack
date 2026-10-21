@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -36,7 +37,7 @@ test("TC-US-1402-A runtime: yield mode prices the synthetic bond with versioned 
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-bond-metrics-${suffix}@example.test`, display_name: "Synthetic Bond Metrics" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Bond Metrics ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const instrument = await create("/api/v1/instruments", { ...fixture.bond.instrument, ticker: `BM${String(Date.now()).slice(-6)}` }, auth);
@@ -78,7 +79,7 @@ test("TC-US-1402-B runtime: price mode solves YTM and validation failures are ex
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-bond-solver-${suffix}@example.test`, display_name: "Synthetic Bond Solver" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Bond Solver ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const instrument = await create("/api/v1/instruments", { ...fixture.bond.instrument, ticker: `BS${String(Date.now()).slice(-6)}` }, auth);

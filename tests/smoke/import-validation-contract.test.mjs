@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -31,7 +32,7 @@ test("TC-US-0603-runtime: validation persists row reviews without ledger mutatio
   const email = `synthetic-import-validation-0603-${suffix}@example.test`;
   const userResponse = await fetch(`${api}/api/v1/users`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ email, display_name: "Synthetic validation owner" }) });
   assert.equal(userResponse.status, 201);
-  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...jsonHeaders, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...jsonHeaders, "x-synthetic-fixture-key": fixtureKey() }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const session = await login.json();
   const auth = { authorization: `Bearer ${session.token}`, ...jsonHeaders };

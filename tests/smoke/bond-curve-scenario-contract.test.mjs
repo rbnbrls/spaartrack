@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -32,7 +33,7 @@ test("TC-US-1403-runtime: synthetic parallel shift returns reproducible scenario
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-curve-${suffix}@example.test`, display_name: "Synthetic Curve Scenario" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const body = {
     as_of_date: "2026-10-18",

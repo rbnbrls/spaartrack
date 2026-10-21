@@ -1,3 +1,4 @@
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
@@ -41,7 +42,7 @@ async function createUser(label) {
 
 async function issueSyntheticLocalSession(email) {
   const response = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { ...jsonHeaders, "x-synthetic-fixture-key": "local-test-fixture-only" },
+    method: "POST", headers: { ...jsonHeaders, "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(response.status, 201);
