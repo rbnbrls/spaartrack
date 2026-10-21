@@ -317,8 +317,8 @@ test("TC-US-0103 runtime: the verify job enables STACK_SMOKE for the stack-runti
   assert.ok(verifyJobParsed, "the workflow must declare a verify job");
   const runtimeSteps = parsedSteps.filter((s) => s?.get("env")?.get("STACK_SMOKE") === "1" || s?.get("env")?.get("STACK_SMOKE") === 1);
   assert.ok(runtimeSteps.length >= 1, "the verify job must run a stack-runtime test step with STACK_SMOKE=1 in its env block (parsed YAML, not a comment)");
-  const runtimeStep = runtimeSteps.find((s) => stringify(s.get("run")).includes("pnpm test"));
-  assert.ok(runtimeStep, "the stack-runtime step must execute pnpm test");
+  const runtimeStep = runtimeSteps.find((s) => stringify(s.get("run")).includes("node --experimental-strip-types --test"));
+  assert.ok(runtimeStep, "the stack-runtime step must execute node test runner");
   assert.equal(String(runtimeStep.get("env")?.get("STACK_SMOKE")), "1", "the stack-runtime step must export STACK_SMOKE=1");
   assert.equal(verifyJobParsed.get("env")?.get("STACK_SMOKE"), undefined, "STACK_SMOKE must not be exported job-wide; the static gate must stay separate");
   for (const st of parsedSteps) {
@@ -329,7 +329,7 @@ test("TC-US-0103 runtime: the verify job enables STACK_SMOKE for the stack-runti
 });
 
 test("TC-US-0103 runtime: the stack-runtime step points at the compose stack endpoints", () => {
-  const runtimeStep = parsedSteps.find((s) => (String(s?.get("env")?.get("STACK_SMOKE")) === "1") && stringify(s.get("run")).includes("pnpm test"));
+  const runtimeStep = parsedSteps.find((s) => (String(s?.get("env")?.get("STACK_SMOKE")) === "1") && stringify(s.get("run")).includes("node --experimental-strip-types --test"));
   assert.ok(runtimeStep, "runtime step must exist");
   const env = runtimeStep.get("env");
   const api = env.get("API_URL");

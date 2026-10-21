@@ -89,7 +89,7 @@ jobs:
           TRACE_ID: ci-${{ github.run_id }}
           CORRELATION_ID: ci-${{ github.run_id }}
           API_CONTAINER_NAME: spaartrack-api-1
-        run: pnpm test -- --test-skip-pattern="TC-US-0203-OIDC-DEPLOY|TC-US-0205 runtime|TC-US-0602-SCHEMA"
+        run: node --experimental-strip-types --test 'tests/unit/**/*.test.mjs' 'tests/smoke/**/*.test.mjs' --test-skip-pattern="TC-US-0203-OIDC-DEPLOY|TC-US-0205 runtime|TC-US-0602-SCHEMA"
 
       - name: Upload CI evidence
         if: ${{ always() }}
