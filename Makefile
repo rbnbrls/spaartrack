@@ -1,10 +1,10 @@
 .PHONY: up down logs check test db-validate
 
 up:
-	docker compose up -d --build
+	scripts/dev/stack.sh up
 
 down:
-	docker compose down
+	scripts/dev/stack.sh down
 
 logs:
 	docker compose logs -f
