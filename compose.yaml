@@ -4,6 +4,9 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        VCS_REF: ${APP_COMMIT_SHA:-local}
+        APP_VERSION: ${APP_RELEASE:-local}
     ports:
     - ${WEB_PORT:-3000}:80
     depends_on:
@@ -23,6 +26,9 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      args:
+        VCS_REF: ${APP_COMMIT_SHA:-local}
+        APP_VERSION: ${APP_RELEASE:-local}
     environment:
       APP_ENV: ${APP_ENV:-${NODE_ENV:-local}}
       BROKER_MASTER_KEY: ${BROKER_MASTER_KEY:-}
@@ -63,6 +69,9 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      args:
+        VCS_REF: ${APP_COMMIT_SHA:-local}
+        APP_VERSION: ${APP_RELEASE:-local}
     command:
     - node
     - dist/apps/api/src/trading212-worker.js
@@ -88,6 +97,9 @@ services:
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
+      args:
+        VCS_REF: ${APP_COMMIT_SHA:-local}
+        APP_VERSION: ${APP_RELEASE:-local}
     environment:
       APP_ENV: local
       APP_RELEASE: local

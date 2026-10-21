@@ -88,6 +88,12 @@ if (environment === "production") {
 const startedAt = new Date().toISOString();
 const commitSha = process.env.APP_COMMIT_SHA || process.env.COOLIFY_COMMIT_SHA || "local";
 const imageDigest = process.env.APP_IMAGE_DIGEST || process.env.COOLIFY_IMAGE_DIGEST || "local";
+// Explicit bound/unbound observability: the flags make the fallback
+// distinguishable from a bound identity so a consumer can never mistake
+// an unbound identity for a bound one (US-0102, finding G11).
+const commitShaBound = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(commitSha);
+const imageDigestBound = /^sha256:[0-9a-f]{64}$/i.test(imageDigest);
+const identityBound = commitShaBound && imageDigestBound;
 const migrationVersion = process.env.APP_MIGRATION_VERSION || process.env.COOLIFY_MIGRATION_VERSION || "schema.sql";
 const deployedAt = process.env.APP_DEPLOYED_AT || startedAt;
 const databasePool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -9371,6 +9377,9 @@ const server = createServer((req, res) => {
       service: "api",
       commit_sha: commitSha,
       image_digest: imageDigest,
+      commit_sha_bound: commitShaBound,
+      image_digest_bound: imageDigestBound,
+      identity_bound: identityBound,
       migration_version: migrationVersion,
       deployed_at: deployedAt
     });
