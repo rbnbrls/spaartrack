@@ -2,7 +2,7 @@
 
 **Date**: 2026-10-21 UTC
 **Task**: t_ca3747a6 (Wire registry push + Coolify deploy for push-bound digests)
-**Related PR**: #30 (feat(US-0102,US-0104): wire push-bound ghcr publishing and Coolify development deploy)
+**Related PR**: #42 (docs(release): push-only promotion policy + deploy evidence)
 
 ## Summary
 
@@ -28,8 +28,8 @@ The `image` job (push-to-main gated) logged in to ghcr.io and pushed all three s
 | Service | Registry Digest (ghcr.io) | Image Tag |
 |---------|---------------------------|-----------|
 | api | `sha256:1251a03ac24c251d75ee317fe4e4c2d1c205179d244d572c8964beaeaf6f950c` | `ghcr.io/rbnbrls/spaartrack/api:d44c98e...` |
-| web | `sha256:7af8a24c82f5298a5b760fdcb81416d289924f2e7025731f3e7cd1d5fbf15da5` | `ghcr.io/rbnbrls/spaartrack/web:d44c98e...` |
-| worker | `sha256:6d2a997408a7b69e15068c5f6abe93060c8384bbe767d3458842161a89349b44` | `ghcr.io/rbnbrls/spaartrack/worker:d44c98e...` |
+| web | `sha256:3fb6f44f060297a782af410093f490770094af8a98659f8d7cc92ac296ff054e` | `ghcr.io/rbnbrls/spaartrack/web:d44c98e...` |
+| worker | `sha256:0c675bf1b732265204fa50edef355a6ac4bb0af863b88b1f241fd427b7e700bc` | `ghcr.io/rbnbrls/spaartrack/worker:d44c98e...` |
 
 ## Digest Equality Verification (digest.json == metadata.containerimage.digest == registry)
 
@@ -93,9 +93,9 @@ COOLIFY_MIGRATION_VERSION=schema.sql \
   "commit_sha": "d44c98e50eb689320e8d673238765fbe76e830e9",
   "image_digest": "sha256:1251a03ac24c251d75ee317fe4e4c2d1c205179d244d572c8964beaeaf6f950c",
   "migration_version": "schema.sql",
-  "deployed_at": "2026-10-21T17:45:23Z",
-  "trace_id": "abc123...",
-  "correlation_id": "def456..."
+  "deployed_at": "2026-10-21T17:43:11Z",
+  "trace_id": "f29fb4bf-ea8b-4e0f-b9b5-61d776eb0f03",
+  "correlation_id": "202e89d5-c481-4e4d-91b6-ee8c7f29ab5e"
 }
 ```
 
@@ -105,7 +105,9 @@ COOLIFY_MIGRATION_VERSION=schema.sql \
 - `migration_version` matches `schema.sql` ✓
 - No `local` or `unbound` values present ✓
 
-**Note**: The running images are local builds (the rehearsal uses `docker compose up -d --build`); the identity binding is verified via the environment variables passed to the API container (`APP_COMMIT_SHA`, `APP_IMAGE_DIGEST`, `APP_MIGRATION_VERSION`).
+**Note**: `trace_id` and `correlation_id` are request-scoped (generated per request via `x-trace-id`/`x-correlation-id` headers or `randomUUID()`) and change on every request. They are not stable identity fields; only `commit_sha`, `image_digest`, `migration_version`, `deployed_at`, `release`, `environment`, `service` constitute the release identity.
+
+The running images are local builds (the rehearsal uses `docker compose up -d --build`); the identity binding is verified via the environment variables passed to the API container (`APP_COMMIT_SHA`, `APP_IMAGE_DIGEST`, `APP_MIGRATION_VERSION`).
 
 ## PR Run — No Registry Push (Pull Request)
 
@@ -113,13 +115,14 @@ COOLIFY_MIGRATION_VERSION=schema.sql \
 |-------|-------|
 | **Workflow Run ID** | 39643386565 |
 | **Event** | pull_request |
-| **Head SHA** | `9cf27179aa5764ec7676a20d734d8b549b9ec22c` (ephemeral merge commit) |
+| **Head SHA (branch)** | `9cf27179aa5764ec7676a20d734d8b549b9ec22c` (branch `recover/partial-contracts-v2`) |
+| **Ephemeral merge commit (github.sha)** | `c1933ac9a915e0910745699fb71fe97b2b776cd1` (refs/pull/19/merge) |
 | **Image Jobs** | success (web/api/worker) |
 | **Registry Login** | **Not executed** (gated to push on main) |
 | **Registry Push** | **Not executed** (`push: true` gated to push on main) |
 | **Artifacts** | OCI tarballs + metadata + digest evidence (local build only) |
 
-The PR run built images locally for evidence (sbom, provenance, digest.json) but **never logged in or pushed to any registry**. This satisfies the acceptance criterion: "On pull_request, images are built but NOT pushed (no registry credentials leakage)."
+The PR run built images locally for evidence (sbom, provenance, digest.json) but **never logged in or pushed to any registry**. The digest evidence records `published: false` for all three services. This satisfies the acceptance criterion: "On pull_request, images are built but NOT pushed (no registry credentials leakage)."
 
 ## Main-Tip SHA
 
@@ -145,15 +148,10 @@ Per the push-only promotion policy in `infra/release/README.md`:
 ## Conclusions
 
 1. **Push-to-main publishing to ghcr.io works**: The workflow publishes all three service images to ghcr.io on push to main (verified from registry + CI logs). The digests are real and bound to the push commit SHA.
-
 2. **Workflow bug fixed**: The `tags` list in the `image` job previously included a Docker Hub tag (`spaartrack/<service>:<sha>`) which caused the build step to fail with a 401 on the secondary push. Fixed in #41 (commit 2dd0ba6). The `deploy` job now executes.
-
 3. **Promotion gate works**: `verify-promotion.sh` correctly approves matching sha256 digests and refuses mutable tags / mismatches. Push-bound enforcement is architectural (artifact gating + commit_sha check), not script-level.
-
 4. **Release identity binds correctly**: Local rehearsal confirms `/api/v1/release` reports the expected commit SHA, image digest, and migration version when configured with push-bound values.
-
 5. **Dry-run path is safe**: When Coolify credentials are unavailable, the deploy job logs the exact marker `COOLIFY_DRY_RUN=1, would deploy SHA=$GITHUB_SHA digest=$DIGEST` and exits cleanly (executed in CI with real values).
-
 6. **Contract test GREEN**: `tests/smoke/ci-deploy-contract.test.mjs` passes, asserting push-to-main gated registry login, push, and deploy job with correct dependencies.
 
 ## Evidence Files
