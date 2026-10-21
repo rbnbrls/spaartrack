@@ -89,7 +89,10 @@ jobs:
           TRACE_ID: ci-${{ github.run_id }}
           CORRELATION_ID: ci-${{ github.run_id }}
           API_CONTAINER_NAME: spaartrack-api-1
-        run: node --experimental-strip-types --test-skip-pattern="TC-US-0203-OIDC-DEPLOY|TC-US-0205 runtime|TC-US-0602-SCHEMA" 'tests/unit/**/*.test.mjs' 'tests/smoke/**/*.test.mjs'
+        run: |
+          set -euo pipefail
+          files=$(find tests/unit tests/smoke -name '*.test.mjs' | sort)
+          node --experimental-strip-types --test-skip-pattern="TC-US-0203-OIDC-DEPLOY|TC-US-0205 runtime|TC-US-0602-SCHEMA" $files
 
       - name: Upload CI evidence
         if: ${{ always() }}
