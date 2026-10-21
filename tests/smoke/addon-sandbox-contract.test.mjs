@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -19,7 +20,7 @@ test("TC-US-1606: addon manifest, grants, secrets, events and assets have a sand
 });
 
 test("TC-US-1606-A/B runtime: synthetic addon installs, starts, stops and revokes without raw secret or ledger mutation", { skip: !process.env.STACK_SMOKE }, async () => {
-  const base = (process.env.API_URL || "http://localhost:18080").replace(/\/$/, "");
+  const base = (apiUrl).replace(/\/$/, "");
   const email = `synthetic-addon-${Date.now()}@example.test`;
   let response = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Addon" }) });
   assert.equal(response.status, 201);

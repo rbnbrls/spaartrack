@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -41,7 +42,7 @@ test("TC-US-1405: human-acceptance panel drives the lifecycle against synthetic 
 });
 
 test("TC-US-1405-runtime: lifecycle endpoints are authenticated", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const post = await fetch(`${base}/api/v1/option-lifecycle-events`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   assert.equal(post.status, 401);
   assert.equal((await post.json()).error, "UNAUTHENTICATED");
@@ -51,7 +52,7 @@ test("TC-US-1405-runtime: lifecycle endpoints are authenticated", { skip: proces
 
 test("TC-US-1405-runtime: OPEN, partial CLOSE, idempotency and ledger neutrality hold end to end", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -153,7 +154,7 @@ test("TC-US-1405-runtime: OPEN, partial CLOSE, idempotency and ledger neutrality
 
 test("TC-US-1405-runtime: ROLL links the source close to the destination open atomically", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -222,7 +223,7 @@ test("TC-US-1405-runtime: ROLL links the source close to the destination open at
 
 test("TC-US-1405-runtime: EXERCISE, ASSIGNMENT and EXPIRY settle through underlying and cash without double counting", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -290,7 +291,7 @@ test("TC-US-1405-runtime: EXERCISE, ASSIGNMENT and EXPIRY settle through underly
 
 test("TC-US-1405-runtime: lifecycle validation, isolation and audit boundaries reject unsafe input", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();

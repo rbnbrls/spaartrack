@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -15,7 +16,7 @@ test("TC-US-1304: fiscal-year report has jurisdiction and source boundaries", ()
 });
 
 test("TC-US-1304-runtime: fiscal-year route is authenticated", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const response = await fetch(`${process.env.API_URL || "http://localhost:18080"}/api/v1/fiscal-year-reports?portfolio_id=00000000-0000-0000-0000-000000000000&fiscal_year=2026&jurisdiction=NL`);
+  const response = await fetch(`${apiUrl}/api/v1/fiscal-year-reports?portfolio_id=00000000-0000-0000-0000-000000000000&fiscal_year=2026&jurisdiction=NL`);
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error, "UNAUTHENTICATED");
 });

@@ -1,7 +1,8 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const API = process.env.API_URL || "http://localhost:18080";
+const API = apiUrl;
 const STACK_SMOKE = process.env.STACK_SMOKE === "1";
 
 async function api(path, opts = {}) {

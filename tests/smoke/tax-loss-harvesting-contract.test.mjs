@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -15,14 +16,14 @@ test("TC-US-1305: tax-loss harvesting is read-only, traceable and human-acceptan
 });
 
 test("TC-US-1305-runtime: tax-loss harvesting endpoint is authenticated", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const response = await fetch(`${process.env.API_URL || "http://localhost:18080"}/api/v1/tax-loss-harvesting?portfolio_id=00000000-0000-0000-0000-000000000000&as_of=2026-10-18`);
+  const response = await fetch(`${apiUrl}/api/v1/tax-loss-harvesting?portfolio_id=00000000-0000-0000-0000-000000000000&as_of=2026-10-18`);
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error, "UNAUTHENTICATED");
 });
 
 test("TC-US-1305-runtime: synthetic loss candidate is calculated without ledger mutation", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();

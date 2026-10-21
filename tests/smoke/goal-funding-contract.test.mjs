@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -24,7 +25,7 @@ test("TC-US-1105-UI: goal funding controls and evidence are available", () => {
 });
 
 test("TC-US-1105-runtime: owner saves shares and reads a share-weighted snapshot balance", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const api = process.env.API_URL || "http://localhost:18080";
+  const api = apiUrl;
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const user = await (await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: `synthetic-goal-funding-${suffix}@example.test`, display_name: "Synthetic Goal Funding" }) })).json();
   const session = await (await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email: user.email, ttl_seconds: 120 }) })).json();

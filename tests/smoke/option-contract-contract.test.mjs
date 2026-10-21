@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -35,7 +36,7 @@ test("TC-US-1404: option contract boundary is authenticated, traceable and human
 });
 
 test("TC-US-1404-runtime: option contract endpoint is authenticated", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const response = await fetch(`${base}/api/v1/option-contracts`);
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error, "UNAUTHENTICATED");
@@ -43,7 +44,7 @@ test("TC-US-1404-runtime: option contract endpoint is authenticated", { skip: pr
 
 test("TC-US-1404-runtime: synthetic option contract is registered, managed and ledger-neutral", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -102,7 +103,7 @@ test("TC-US-1404-runtime: synthetic option contract is registered, managed and l
 
 test("TC-US-1404-runtime: Greeks are computed from the managed contract with golden values", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -175,7 +176,7 @@ test("TC-US-1404-runtime: Greeks are computed from the managed contract with gol
 
 test("TC-US-1404-runtime: option contract registration outside the portfolio is forbidden", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();

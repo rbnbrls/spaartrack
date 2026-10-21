@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -15,14 +16,14 @@ test("TC-US-1307: tax worksheets are jurisdictional, scoped and not general advi
 });
 
 test("TC-US-1307-runtime: tax worksheet endpoint is authenticated", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const response = await fetch(`${process.env.API_URL || "http://localhost:18080"}/api/v1/tax-worksheets?portfolio_id=00000000-0000-0000-0000-000000000000&jurisdiction=NL&tax_year=2026`);
+  const response = await fetch(`${apiUrl}/api/v1/tax-worksheets?portfolio_id=00000000-0000-0000-0000-000000000000&jurisdiction=NL&tax_year=2026`);
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error, "UNAUTHENTICATED");
 });
 
 test("TC-US-1307-runtime: synthetic worksheet exposes ruleset and owner scope", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = process.env.API_URL || "http://localhost:18080";
+  const base = apiUrl;
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();

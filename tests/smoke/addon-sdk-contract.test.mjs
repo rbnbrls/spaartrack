@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -14,7 +15,7 @@ test("TC-US-1607: typed SDK reads and event hooks stay within granted scopes", (
 });
 
 test("TC-US-1607-A/B runtime: typed read is denied outside grants and events stop after revoke", { skip: !process.env.STACK_SMOKE }, async () => {
-  const base = (process.env.API_URL || "http://localhost:18080").replace(/\/$/, "");
+  const base = (apiUrl).replace(/\/$/, "");
   const email = `synthetic-sdk-${Date.now()}@example.test`;
   let response = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Addon SDK" }) });
   assert.equal(response.status, 201);
