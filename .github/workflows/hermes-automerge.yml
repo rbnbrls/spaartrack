@@ -1,0 +1,99 @@
+name: Hermes autonomous merge
+
+# This workflow never checks out or executes pull-request code. It runs from the
+# default branch on pull_request_target and delegates the final decision to
+# branch protection plus GitHub's native auto-merge queue.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: hermes-automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  queue:
+    name: Queue eligible PR for native auto-merge
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Hermes PR policy
+        id: policy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          ALLOWED_ACTORS: ${{ vars.HERMES_AUTOMERGE_ACTORS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pr_json="$(gh pr view "$PR_NUMBER" --repo "$REPOSITORY" --json \
+            author,baseRefName,headRepository,isDraft,mergeStateStatus,state)"
+
+          jq -e '.state == "OPEN" and .baseRefName == "main" and .isDraft == false' \
+            <<<"$pr_json" >/dev/null
+
+          author="$(jq -r '.author.login // empty' <<<"$pr_json")"
+          owner="${REPOSITORY%%/*}"
+          allowed="$owner"
+          if [ -n "${ALLOWED_ACTORS:-}" ]; then
+            allowed="$allowed,$ALLOWED_ACTORS"
+          fi
+
+          actor_allowed=false
+          IFS=',' read -ra actors <<<"$allowed"
+          for candidate in "${actors[@]}"; do
+            candidate="${candidate//[[:space:]]/}"
+            if [ -n "$candidate" ] && [ "$candidate" = "$author" ]; then
+              actor_allowed=true
+              break
+            fi
+          done
+          if [ "$actor_allowed" != true ]; then
+            echo "Hermes policy: author '$author' is not allowlisted; leaving PR unchanged."
+            exit 0
+          fi
+
+          head_repo="$(jq -r '.headRepository.nameWithOwner // empty' <<<"$pr_json")"
+          if [ "$head_repo" != "$REPOSITORY" ]; then
+            echo "Hermes policy: fork PRs are never auto-merged."
+            exit 0
+          fi
+
+          state="$(jq -r '.mergeStateStatus' <<<"$pr_json")"
+          case "$state" in
+            CLEAN)
+              ;;
+            BLOCKED|BEHIND|DIRTY|DRAFT|UNKNOWN|UNSTABLE)
+              echo "Hermes policy: merge state is $state; native auto-merge will not be queued."
+              exit 0
+              ;;
+            *)
+              echo "::error::unexpected merge state '$state'; refusing to queue PR."
+              exit 1
+              ;;
+          esac
+
+          echo "author=$author" >> "$GITHUB_OUTPUT"
+          echo "Hermes policy accepted PR #$PR_NUMBER."
+
+      - name: Enable native squash auto-merge
+        if: steps.policy.outputs.author != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR_NUMBER" \
+            --repo "$REPOSITORY" \
+            --auto \
+            --squash \
+            --delete-branch
