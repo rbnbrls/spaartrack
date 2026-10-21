@@ -42,10 +42,10 @@ jobs:
       - name: Validate database schema
         run: |
           for attempt in $(seq 1 20); do
-            PGPASSWORD=change-me-local-only psql "postgres://spaartrack:***@localhost:55432/spaartrack" -c "select 1" >/dev/null 2>&1 && break
+            PGPASSWORD=change-me-local-only psql "postgres://spaartrack:change-me-local-only@localhost:55432/spaartrack" -c "select 1" >/dev/null 2>&1 && break
             sleep 1
           done
-          PGPASSWORD=change-me-local-only psql "postgres://spaartrack:***@localhost:55432/spaartrack" -v ON_ERROR_STOP=1 -f database/schema.sql
+          PGPASSWORD=change-me-local-only psql "postgres://spaartrack:change-me-local-only@localhost:55432/spaartrack" -v ON_ERROR_STOP=1 -f database/schema.sql
 
       - name: Lint
         run: pnpm lint
