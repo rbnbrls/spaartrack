@@ -29,20 +29,64 @@ test("Compose does not hard-code a shared project and exposes worktree ports", (
   }
 });
 
-test("Compose wrapper derives distinct names and ports from checkout paths", () => {
+function settings(worktreeRoot, extraEnv = {}) {
   const output = execFileSync(wrapper, ["settings"], {
     cwd: root,
     encoding: "utf8",
-    env: { ...process.env, COMPOSE_WRAPPER_TEST_ONLY: "1", COMPOSE_WORKTREE_ROOT: "/tmp/spaartrack" },
+    env: {
+      ...process.env,
+      COMPOSE_WRAPPER_TEST_ONLY: "1",
+      COMPOSE_WORKTREE_ROOT: worktreeRoot,
+      ...extraEnv,
+    },
   });
-  assert.match(output, /^COMPOSE_PROJECT_NAME=spaartrack$/m);
-  assert.match(output, /^API_PORT=18080$/m);
+  return Object.fromEntries(
+    output.trim().split("\n").map((line) => line.split("=", 2)),
+  );
+}
 
-  const other = execFileSync(wrapper, ["settings"], {
-    cwd: root,
-    encoding: "utf8",
-    env: { ...process.env, COMPOSE_WRAPPER_TEST_ONLY: "1", COMPOSE_WORKTREE_ROOT: "/tmp/synthetic-worktree" },
+test("Compose wrapper derives collision-resistant names and ports from checkout paths", () => {
+  const primary = settings("/tmp/spaartrack");
+  assert.deepEqual(
+    Object.fromEntries(
+      ["COMPOSE_PROJECT_NAME", "API_PORT", "DB_PORT", "WEB_PORT", "OBJECT_STORAGE_PORT"]
+        .map((key) => [key, primary[key]]),
+    ),
+    {
+      COMPOSE_PROJECT_NAME: "spaartrack",
+      API_PORT: "18080",
+      DB_PORT: "55432",
+      WEB_PORT: "3000",
+      OBJECT_STORAGE_PORT: "19000",
+    },
+  );
+
+  const first = settings("/tmp/a/worktree");
+  const second = settings("/tmp/b/worktree");
+  assert.notEqual(first.COMPOSE_PROJECT_NAME, second.COMPOSE_PROJECT_NAME);
+  assert.notEqual(first.API_PORT, second.API_PORT);
+  assert.notEqual(first.DB_PORT, second.DB_PORT);
+
+  const dashed = settings("/tmp/x/a-b");
+  const underscored = settings("/tmp/x/a_b");
+  assert.notEqual(dashed.COMPOSE_PROJECT_NAME, underscored.COMPOSE_PROJECT_NAME);
+
+  const standardPorts = new Set([
+    "18080", "55432", "3000", "6379", "19000", "19001", "4317", "4318", "8889", "9090", "3001",
+  ]);
+  for (const value of Object.values(first)) {
+    assert.equal(standardPorts.has(value), false, `worktree emitted standard port ${value}`);
+  }
+  assert.deepEqual(settings("/tmp/a/worktree"), first);
+});
+
+test("explicit Compose and port overrides remain authoritative", () => {
+  const overridden = settings("/tmp/a/worktree", {
+    COMPOSE_PROJECT_NAME: "explicit-project",
+    API_PORT: "19999",
+    DB_PORT: "29999",
   });
-  assert.match(other, /^COMPOSE_PROJECT_NAME=synthetic-worktree$/m);
-  assert.doesNotMatch(other, /^API_PORT=18080$/m);
+  assert.equal(overridden.COMPOSE_PROJECT_NAME, "explicit-project");
+  assert.equal(overridden.API_PORT, "19999");
+  assert.equal(overridden.DB_PORT, "29999");
 });
