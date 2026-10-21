@@ -1,8 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const root = new URL("../..", import.meta.url);
+const rootPath = fileURLToPath(root);
 const manifest = readFileSync(new URL("infra/coolify/development.yaml", root), "utf8");
 const rehearsal = readFileSync(new URL("infra/coolify/rehearse-development.sh", root), "utf8");
 const releaseUrl = process.env.API_URL || "http://localhost:18080";
@@ -26,10 +29,17 @@ test("TC-US-0102-B/C: release page exposes deploy and migration identity", { ski
   const response = await fetch(`${releaseUrl}/api/v1/release`);
   assert.equal(response.status, 200);
   const body = await response.json();
+  const expectedCommitSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: rootPath, encoding: "utf8" }).trim();
   for (const field of ["release", "commit_sha", "image_digest", "migration_version", "deployed_at"]) {
     assert.equal(typeof body[field], "string", `${field} must be a string`);
     assert.ok(body[field].length > 0, `${field} must not be empty`);
   }
+  assert.equal(body.commit_sha, expectedCommitSha, "commit_sha must identify the tree under test");
+  assert.match(
+    body.image_digest,
+    /^(?:sha256:[0-9a-f]{64}|local)$/i,
+    "image_digest must be a sha256 digest or the documented local-dev unbound marker",
+  );
 });
 
 // ISSUE-05 traceability: child TC-ids covered by the US-0102 contract tests above.
