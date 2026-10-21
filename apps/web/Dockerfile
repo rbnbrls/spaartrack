@@ -1,4 +1,4 @@
-FROM nginx:1.29.2-alpine3.22
+FROM nginx:1.31.7-alpine3.24
 ARG VCS_REF=local
 ARG APP_VERSION=local
 LABEL org.opencontainers.image.revision="$VCS_REF" \

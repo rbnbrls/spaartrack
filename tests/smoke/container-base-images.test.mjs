@@ -10,9 +10,9 @@ async function firstFrom(path) {
 }
 
 test('application images use patched immutable Alpine base tags', async () => {
-  assert.equal(await firstFrom('apps/web/Dockerfile'), 'nginx:1.29.2-alpine3.22');
-  assert.equal(await firstFrom('apps/api/Dockerfile'), 'node:22.20.0-alpine3.22');
-  assert.equal(await firstFrom('apps/worker/Dockerfile'), 'node:22.20.0-alpine3.22');
+  assert.equal(await firstFrom('apps/web/Dockerfile'), 'nginx:1.31.7-alpine3.24');
+  assert.equal(await firstFrom('apps/api/Dockerfile'), 'node:22.23.3-alpine3.24');
+  assert.equal(await firstFrom('apps/worker/Dockerfile'), 'node:22.23.3-alpine3.24');
 
   for (const path of ['apps/api/Dockerfile', 'apps/worker/Dockerfile']) {
     const dockerfile = await readFile(new URL(path, root), 'utf8');

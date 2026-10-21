@@ -1,4 +1,4 @@
-FROM node:22.20.0-alpine3.22 AS build
+FROM node:22.23.3-alpine3.24 AS build
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/api/package.json apps/api/package.json
@@ -10,7 +10,7 @@ COPY packages/integration-contracts/package.json packages/integration-contracts/
 RUN pnpm --filter @spaartrack/api build
 RUN pnpm deploy --filter @spaartrack/api --prod /prod
 
-FROM node:22.20.0-alpine3.22
+FROM node:22.23.3-alpine3.24
 WORKDIR /app
 ENV NODE_ENV=production
 ARG VCS_REF=local
