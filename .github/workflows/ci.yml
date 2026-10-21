@@ -311,7 +311,32 @@ jobs:
           name: published-digest-${{ github.run_id }}-${{ matrix.service }}
           path: /tmp/spaartrack-${{ matrix.service }}.published.json
           if-no-files-found: error
+      # The pinned scan action resolves its `path` input as `dir:<path>`, so
+      # Grype needs the OCI layout as a directory, not the archive file.
+      # Unpack the archive this job just built (no rebuild, no retag, no
+      # registry push) so the scanner reads exactly the artifact the digest
+      # evidence above was recorded for.
+      - name: Prepare OCI layout for scanning
+        run: |
+          set -eu
+          service="${{ matrix.service }}"
+          layout="/tmp/spaartrack-${service}.tar.oci"
+          mkdir -p "$layout"
+          tar --extract --file "/tmp/spaartrack-${service}.tar" --directory "$layout"
+          test -s "$layout/index.json"
+      - name: Scan image
+        id: scan
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          path: /tmp/spaartrack-${{ matrix.service }}.tar.oci
+          fail-build: true
+          severity-cutoff: high
+          output-format: sarif
+          output-file: /tmp/spaartrack-${{ matrix.service }}.sarif
+          only-fixed: false
+          cache-db: true
       - name: Upload image evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: image-evidence-${{ github.run_id }}-${{ matrix.service }}
@@ -320,6 +345,7 @@ jobs:
             /tmp/spaartrack-${{ matrix.service }}.metadata.json
             /tmp/spaartrack-${{ matrix.service }}.digest.txt
             /tmp/spaartrack-${{ matrix.service }}.digest.json
+            /tmp/spaartrack-${{ matrix.service }}.sarif
           if-no-files-found: error
 
   deploy:
