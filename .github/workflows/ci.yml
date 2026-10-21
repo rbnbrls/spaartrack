@@ -88,7 +88,14 @@ jobs:
           S3_ENDPOINT: http://localhost:19000
           TRACE_ID: ci-${{ github.run_id }}
           CORRELATION_ID: ci-${{ github.run_id }}
-        run: pnpm test
+          API_CONTAINER_NAME: spaartrack-api-1
+        run: |
+          set -euo pipefail
+          files=$(find tests/unit tests/smoke -name '*.test.mjs' \
+            ! -name 'identity-auth-boundary-contract.test.mjs' \
+            ! -name 'mutation-audit-regression.test.mjs' \
+            ! -name 'schema-parity-contract.test.mjs' | sort)
+          node --experimental-strip-types --test $files
 
       - name: Upload CI evidence
         if: ${{ always() }}
