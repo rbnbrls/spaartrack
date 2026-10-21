@@ -3,8 +3,8 @@
 ## Bootstrap
 
     cp .env.example .env
-    docker compose up -d --build
-    docker compose ps
+    scripts/dev/compose.sh up -d --build
+    scripts/dev/compose.sh ps
 
 De standaardopdracht start de volledige lokale Poort A-basis: web, API, worker,
 PostgreSQL, Redis en object storage. Er zijn geen cloudcredentials nodig.
