@@ -24,6 +24,7 @@ jobs:
       REDIS_URL: redis://localhost:6379
       API_URL: http://localhost:18080
       SYNTHETIC_FIXTURE_KEY: local-test-fixture-only
+      API_CONTAINER_NAME: spaartrack-api-1
       APP_COMMIT_SHA: ${{ github.sha }}
       APP_RELEASE: ci
       APP_MIGRATION_VERSION: schema.sql
