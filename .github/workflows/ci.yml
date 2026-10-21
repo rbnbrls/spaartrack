@@ -196,9 +196,38 @@ jobs:
       - name: Dependency audit
         run: pnpm audit --audit-level high
 
+      # SAST gate — semgrep with p/ci ruleset, strict failure on findings
+      # Excludes 4 rules conflicting with documented repo conventions:
+      # - github-actions-mutable-action-tag: repo pins actions to major versions by deliberate,
+      #   test-enforced convention (ci-workflow.test.mjs asserts actions/checkout@vN with major>=5;
+      #   pinning exact major broke on runtime bumps). SHA-pinning would break that contract.
+      # - pnpm-block-exotic-sub-dependencies, pnpm-missing-minimum-release-age, pnpm-trust-policy:
+      #   require pnpm>=10 workspace settings (minimumReleaseAge, trustPolicy, blockExoticSubDeps);
+      #   repo pins pnpm@9.15.5 which does not support these settings.
+      - name: SAST (Semgrep)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:1.181.0 \
+            semgrep scan --config p/ci --error --sarif -o semgrep.sarif \
+            --exclude-rule yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag \
+            --exclude-rule package_managers.pnpm.pnpm-block-exotic-sub-dependencies.pnpm-block-exotic-sub-dependencies \
+            --exclude-rule package_managers.pnpm.pnpm-missing-minimum-release-age.pnpm-minimum-release-age \
+            --exclude-rule package_managers.pnpm.pnpm-trust-policy.pnpm-trust-policy \
+            .
+
+      - name: Upload SAST SARIF
+        if: ${{ always() && hashFiles('semgrep.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
   image:
     needs: [verify, security]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     strategy:
       fail-fast: true
       matrix:
@@ -213,6 +242,7 @@ jobs:
           context: .
           file: apps/${{ matrix.service }}/Dockerfile
           tags: spaartrack/${{ matrix.service }}:${{ github.sha }}
+          load: true
           build-args: |
             VCS_REF=${{ github.sha }}
             APP_VERSION=${{ github.sha }}
@@ -239,6 +269,33 @@ jobs:
           test -s "/tmp/spaartrack-${service}.digest.txt"
           test -s "/tmp/spaartrack-${service}.digest.json"
           cat "/tmp/spaartrack-${service}.digest.json"
+
+      # Container scan gate — Trivy scan of the locally-loaded image
+      # Scans the exact image reference produced by the build step (spaartrack/<svc>:<sha>)
+      # using the local Docker daemon. Fails on HIGH/CRITICAL, uploads SARIF.
+      # Uses .trivyignore.yaml baseline for inherited base-image CVEs (with expiry dates).
+      - name: Scan ${{ matrix.service }} image (Trivy)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: spaartrack/${{ matrix.service }}:${{ github.sha }}
+          docker-host: unix:///var/run/docker.sock
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: false
+          limit-severities-for-sarif: true
+          trivyignores: .trivyignore.yaml
+          scanners: vuln
+
+      - name: Upload Trivy SARIF
+        if: ${{ always() && hashFiles('trivy-*.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}
+
       - name: Upload image evidence
         uses: actions/upload-artifact@v4
         with:

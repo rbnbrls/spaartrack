@@ -1,0 +1,172 @@
+# Trivy baseline ignore file for inherited base-image vulnerabilities
+# These CVEs originate from the base images (node:22-alpine, nginx:1.27-alpine)
+# and are accepted pending base-image updates. Each entry has an expiry date
+# to force periodic re-evaluation. Generated from amd64 scans on 2026-10-21.
+# When an entry expires, the gate will fail and the team must either update
+# the base image or re-justify with a new expiry.
+
+# node:22-alpine (npm bundled deps in base image)
+CVE-2026-102276:
+  exp: "2026-12-31"
+  reason: "Inherited from node:22-alpine base image (npm bundled brace-expansion); base image update required"
+CVE-2026-102278:
+  exp: "2026-12-31"
+  reason: "Inherited from node:22-alpine base image (npm bundled brace-expansion); base image update required"
+CVE-2026-13149:
+  exp: "2026-12-31"
+  reason: "Inherited from node:22-alpine base image (npm bundled brace-expansion); base image update required"
+CVE-2026-14257:
+  exp: "2026-12-31"
+  reason: "Inherited from node:22-alpine base image (npm bundled brace-expansion); base image update required"
+CVE-2026-69152:
+  exp: "2026-12-31"
+  reason: "Inherited from node:22-alpine base image (npm bundled brace-expansion); base image update required"
+CVE-2026-93748:
+  exp: "2026-12-31"
+  reason: "Inherited from node:22-alpine base image (npm bundled http-cache-semantics); no fix available upstream"
+CVE-2026-69192:
+  exp: "2026-12-31"
+  reason: "Inherited from node:22-alpine base image (npm bundled ip-address); base image update required"
+CVE-2026-9496:
+  exp: "2026-12-31"
+  reason: "Inherited from node:22-alpine base image (npm bundled pacote); base image update required"
+CVE-2026-33671:
+  exp: "2026-12-31"
+  reason: "Inherited from node:22-alpine base image (npm bundled picomatch); base image update required"
+CVE-2026-48815:
+  exp: "2026-12-31"
+  reason: "Inherited from node:22-alpine base image (npm bundled sigstore); base image update required"
+
+# nginx:1.27-alpine (OS packages in base image)
+CVE-2026-33630:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (c-ares); base image update required"
+CVE-2026-5773:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (curl/libcurl); base image update required"
+CVE-2026-6276:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (curl/libcurl); base image update required"
+CVE-2026-8286:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (curl/libcurl); base image update required"
+CVE-2026-8927:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (curl/libcurl); base image update required"
+CVE-2026-92392:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (curl/libcurl); base image update required"
+CVE-2026-31789:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libcrypto3/libssl3); base image update required"
+CVE-2025-15467:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libcrypto3/libssl3); base image update required"
+CVE-2025-69421:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libcrypto3/libssl3); base image update required"
+CVE-2026-28387:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libcrypto3); base image update required"
+CVE-2026-28388:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libcrypto3); base image update required"
+CVE-2026-28389:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libcrypto3); base image update required"
+CVE-2026-28390:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libcrypto3); base image update required"
+CVE-2026-45447:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libcrypto3); base image update required"
+CVE-2026-84782:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libcrypto3); base image update required"
+CVE-2025-59375:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libexpat); base image update required"
+CVE-2026-25210:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libexpat); base image update required"
+CVE-2026-45186:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libexpat); base image update required"
+CVE-2026-66046:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libexpat); base image update required"
+CVE-2026-76641:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libexpat); base image update required"
+CVE-2026-76956:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libexpat); base image update required"
+CVE-2026-76957:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libexpat); base image update required"
+CVE-2026-77214:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libexpat); base image update required"
+CVE-2026-93990:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libexpat); base image update required"
+CVE-2025-64720:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libpng); base image update required"
+CVE-2025-65018:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libpng); base image update required"
+CVE-2025-66293:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libpng); base image update required"
+CVE-2026-22695:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libpng); base image update required"
+CVE-2026-22801:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libpng); base image update required"
+CVE-2026-25646:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libpng); base image update required"
+CVE-2026-22184:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (zlib); base image update required"
+CVE-2026-27135:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (nghttp2-libs); base image update required"
+CVE-2026-103111:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (pcre2); base image update required"
+CVE-2026-86145:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (pcre2); base image update required"
+CVE-2026-89157:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (pcre2); base image update required"
+CVE-2026-89161:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (pcre2); base image update required"
+CVE-2026-4775:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (tiff); base image update required"
+CVE-2026-40200:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (musl/musl-utils); base image update required"
+CVE-2025-32414:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libxml2); base image update required"
+CVE-2025-32415:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libxml2); base image update required"
+CVE-2025-49794:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libxml2); base image update required"
+CVE-2025-49795:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libxml2); base image update required"
+CVE-2025-49796:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libxml2); base image update required"
+CVE-2026-6732:
+  exp: "2026-12-31"
+  reason: "Inherited from nginx:1.27-alpine base image (libxml2); base image update required"
