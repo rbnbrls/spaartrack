@@ -57,6 +57,7 @@ if [[ -n "$PRIMARY_ROOT" && "$ROOT" == "$PRIMARY_ROOT" ]]; then
   GRAFANA_PORT=${GRAFANA_PORT:-3001}
 else
   [[ "$WORKTREE_ID" != spaartrack && -n "$WORKTREE_ID" ]] || fail "missing safe worktree identifier; refusing canonical project fallback"
+  [[ "$WORKTREE_ID" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || fail "invalid worktree identifier; refusing canonical project fallback"
   DERIVED_PROJECT="spaartrack-$(printf '%s' "$WORKTREE_ID" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/-+/-/g; s/^-|-$//g')"
   PROJECT=${STACK_PROJECT_NAME:-$DERIVED_PROJECT}
   [[ -n "$PROJECT" && "$PROJECT" != spaartrack ]] || [[ "$ALLOW_PRIMARY" == 1 ]] || fail "refusing unsafe canonical project name; use --allow-primary explicitly"
