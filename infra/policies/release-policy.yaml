@@ -3,20 +3,119 @@ kind: ReleasePolicy
 metadata:
   name: web-facing-release
 spec:
+  # Structural gate: the exact GitHub required status checks that branch
+  # protection on `main` enforces. These strings MUST equal the check-run
+  # names GitHub reports for `.github/workflows/ci.yml`, otherwise the gate is
+  # unsatisfiable and every merge is blocked:
+  #   verify         -> job `verify`
+  #   security       -> job `security`
+  #   image (api)    -> job `image`, matrix leg `api`
+  #   image (web)    -> job `image`, matrix leg `web`
+  #   image (worker) -> job `image`, matrix leg `worker`
   requiredChecks:
-    - lint
-    - typecheck
-    - unit
-    - financial-golden
-    - integration-contract
-    - e2e
-    - migration-dry-run
-    - restore-replay
-    - secret-scan
-    - dependency-scan
-    - sbom
-    - staging-smoke
-    - health-window
+    - verify
+    - security
+    - image (api)
+    - image (web)
+    - image (worker)
+
+  # Enforcement mechanism for `requiredChecks`. Branch protection on `main` is
+  # what makes this policy structural instead of procedural; the policy file
+  # alone enforces nothing.
+  enforcement:
+    mechanism: github-branch-protection
+    repository: rbnbrls/spaartrack
+    branch: main
+    requireLinearHistory: true
+    dismissStaleReviews: true
+    enforceAdmins: true
+    # A merge is refused unless every context in `requiredChecks` reported
+    # success on the head commit of the pull request, and the branch must be
+    # up to date with `main` before it may merge.
+    requiredStatusChecksStrict: true
+    # No pull-request approval is required to merge. The review requirement is
+    # deliberately zero: an approval quota would block every merge until a
+    # reviewer is scheduled, which is a different control from the one this
+    # card asks for (structural check enforcement). `dismissStaleReviews`
+    # still applies to whatever reviews do exist.
+    requiredApprovingReviewCount: 0
+    allowForcePushes: false
+    allowDeletions: false
+
+  # Coverage of the release gate by the enforced checks above. A policy gate is
+  # only "enforced" when some required check actually fails when that gate is
+  # violated. Everything not listed here is aspirational and MUST NOT be
+  # reported as a release gate until a check enforces it.
+  enforcedGateCoverage:
+    lint: verify
+    typecheck: verify
+    unit: verify
+    secret-scan: security
+    dependency-scan: security
+    sbom: image (api)
+    immutable-image-digest: image (api)
+    image-provenance: image (api)
+
+  # Gates that are declared by the release gate but are NOT enforced by any
+  # required status check yet. Each one names the owner and the card that must
+  # make it real before it can be called a gate.
+  aspirationalChecks:
+    - name: financial-golden
+      reason: >-
+        `tests/smoke/financial-golden-contract.test.mjs` runs inside the
+        `verify` job via `pnpm test`, but its runtime leg is gated behind
+        `STACK_SMOKE=1`, which CI does not set; the runtime golden result is
+        therefore never produced in CI.
+      owner: qa
+    - name: integration-contract
+      reason: >-
+        Contract tests run inside `verify` via `pnpm test`, but there is no
+        separate blocking integration job and no CI job that exercises the
+        deployed integration paths.
+      owner: qa
+    - name: e2e
+      reason: >-
+        No dedicated end-to-end job exists; the GUI/e2e contracts are static
+        marker assertions (roadmap ISSUE-15) and the runtime journey is not
+        executed in CI.
+      owner: qa
+    - name: migration-dry-run
+      reason: >-
+        No migration runner exists; CI applies `database/schema.sql` to an
+        empty database only, so the 27 files in `database/migrations/` are
+        applied by nothing.
+      owner: ledger
+      card: t_6ea34e66
+    - name: restore-replay
+      reason: >-
+        The backup/restore rehearsal is a local, manual step; no CI job
+        performs an encrypted backup and an isolated restore.
+      owner: platform
+    - name: staging-smoke
+      reason: >-
+        CI has no deploy step at all, so no image is ever deployed and smoked
+        against a reachable staging environment.
+      owner: platform
+      card: t_ca3747a6
+    - name: health-window
+      reason: >-
+        CI has no deploy step and no observability window is measured after a
+        promotion, so no SLO or health evidence exists per release.
+      owner: platform
+      card: t_ca3747a6
+    - name: sast
+      reason: >-
+        The SAST hunk is not on `main` and the drafted step is report-only
+        (no `--error`), so findings would not fail the job.
+      owner: security
+      card: t_fcd928fa
+    - name: container-scan
+      reason: >-
+        The `image` job builds the images but runs no trivy/grype/scan step,
+        so a vulnerable image is not blocked.
+      owner: security
+      card: t_fcd928fa
+
   immutableArtifact: true
   productionCredentialsInCi: false
   humanApprovalFor:
