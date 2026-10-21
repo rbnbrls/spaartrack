@@ -6,6 +6,12 @@
     curl --fail http://localhost:18080/health/live
     curl --fail http://localhost:18080/health/ready
 
+De standaard stack gebruikt projectnaam `spaartrack` en poorten `18080` (API),
+`55432` (database), `3000` (web) en `19000` (object storage). Voor een linked
+worktree gebruik je uitsluitend `scripts/dev/worktree-compose.sh`; die gebruikt
+een eigen projectnaam en de alternatieve poorten `18090`, `55450`, `30050` en
+`19050`, zodat beide stacks gelijktijdig kunnen draaien.
+
 `docker compose ps` moet voor `web`, `api`, `worker`, `db`, `redis` en
 `object-storage` de status `healthy` tonen.
 

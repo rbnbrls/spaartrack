@@ -6,6 +6,20 @@
     docker compose up -d --build
     docker compose ps
 
+De primaire checkout gebruikt projectnaam `spaartrack` en de standaardpoorten
+API `18080`, PostgreSQL `55432`, web `3000` en object storage `19000`.
+
+Een linked worktree mag de primaire stack niet vervangen. Start daarvoor de
+geïsoleerde override; die kiest een worktree-specifieke Compose-projectnaam en
+de expliciete alternatieve poorten (`18090`, `55450`, `30050`, `19050`):
+
+    scripts/dev/worktree-compose.sh up -d --build
+    scripts/dev/worktree-compose.sh ps
+
+Deze helper zet `COMPOSE_PROJECT_NAME` alleen voor het Compose-proces. Hij
+wijzigt geen `.env` en lekt geen alternatieve endpointvariabelen naar een
+schone gate. Stop dezelfde stack met `scripts/dev/worktree-compose.sh down`.
+
 De standaardopdracht start de volledige lokale Poort A-basis: web, API, worker,
 PostgreSQL, Redis en object storage. Er zijn geen cloudcredentials nodig.
 
