@@ -13,6 +13,7 @@ RUN pnpm deploy --filter @spaartrack/api --prod /prod
 FROM node:22.23.3-alpine3.24
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk upgrade --no-cache && npm install --global npm@latest
 ARG VCS_REF=local
 ARG APP_VERSION=local
 LABEL org.opencontainers.image.revision="$VCS_REF" \

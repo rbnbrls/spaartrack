@@ -17,5 +17,9 @@ test('application images use patched immutable Alpine base tags', async () => {
   for (const path of ['apps/api/Dockerfile', 'apps/worker/Dockerfile']) {
     const dockerfile = await readFile(new URL(path, root), 'utf8');
     assert.doesNotMatch(dockerfile, /^FROM\s+node:22-alpine/m);
+    assert.match(dockerfile, /npm install --global npm@latest/);
+    assert.match(dockerfile, /apk upgrade --no-cache/);
   }
+
+  assert.match(await readFile(new URL('apps/web/Dockerfile', root), 'utf8'), /apk upgrade --no-cache/);
 });

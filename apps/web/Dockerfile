@@ -1,4 +1,5 @@
 FROM nginx:1.31.7-alpine3.24
+RUN apk upgrade --no-cache
 ARG VCS_REF=local
 ARG APP_VERSION=local
 LABEL org.opencontainers.image.revision="$VCS_REF" \
