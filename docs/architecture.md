@@ -1,24 +1,62 @@
 # Spaartrack solution architecture
 
-Spaartrack start als modulaire monoliet met asynchrone workers:
+## Runtime and module boundary
 
-    web/PWA -> API -> application services -> bounded contexts -> PostgreSQL ledger
-                                          -> Redis jobs -> worker
-    provider adapters/imports -> raw payload -> normalizer -> review -> ledger command
+Spaartrack is a modular monolith with asynchronous workers. Modules share a PostgreSQL deployment, but shared storage is not a module interface: a context reads or changes another context's state only through its application-service contract or an explicitly versioned event. No context may depend on another context's tables or issue SQL against them directly.
+
+    web/PWA -> API -> application services -> owning bounded context
+                                          -> PostgreSQL (context-owned data)
+                                          -> Redis jobs -> worker -> application services
+    provider adapter -> raw provider evidence -> normalizer -> review -> Ledger command
+    committed domain change -> versioned event -> rebuildable read models
     API/worker -> OpenTelemetry -> collector -> Prometheus/Grafana
 
-Bounded contexts:
+The API is an inbound transport, not a domain owner. It authenticates, validates transport input, establishes trace/correlation context, and calls an application service. HTTP handlers, workers, imports, connectors, AI tools, and UI code do not write canonical ledger tables.
 
-- Identity & Access
-- Ledger
-- Portfolio
-- Market Data
-- Income & Performance
-- Integrations
-- Money Flow
-- Tax & Reporting
-- Notifications
-- AI & Addons
-- Operations
+## Bounded contexts and ownership
 
-database/schema.sql is de eerste canonical persistence-laag. database/README.md bevat de modelprincipes en vervolgmigrations.
+| Context | Owns | Does not own |
+|---|---|---|
+| Identity & Access | users, sessions, portfolio grants, authorization and privacy lifecycle | financial activity or financial truth |
+| Portfolio | portfolio lifecycle/settings, membership-facing portfolio configuration, financial-account registration, instrument identity/metadata | posted activity, cash/quantity balances, cost basis or performance truth |
+| Ledger | canonical financial commands, transaction/entry lifecycle, idempotency, correction/void, audit linkage and replay source | portfolio access policy, provider protocol, UI or derived read models |
+| Integrations | provider connections, raw payloads, sync state, provider-specific mappings and normalized candidates | canonical financial writes or portfolio authorization decisions |
+| Market Data | currency/FX, prices, identity mappings and corporate-action observations | ledger activity or silently inferred missing observations |
+| Income & Performance | income-event/forecast inputs and versioned calculations over authorized source data | canonical cash/position truth or direct ledger writes |
+| Money Flow | classifications, categories, budgets, scope-bound read models and analysis | canonical financial activity; projections are read-only over ledger facts |
+| Tax & Reporting | jurisdiction-scoped calculation/report requests and report artifacts | source ledger facts or unreviewed jurisdictional assumptions |
+| Notifications | rules, delivery intent and delivery evidence | financial facts or ledger commands |
+| AI & Addons | scoped read/proposal interfaces and permissioned addon lifecycle | direct database/ledger access or implicit confirmation of a financial command |
+| Operations | deployment, incident, backup and agent-run evidence | product financial state |
+
+Portfolio owns the portfolio/account/instrument registry and authorization-facing configuration. Ledger owns the financial meaning and persistence of posted transactions and entries. Ledger commands accept identifiers and authorization context; they do not create or redefine Portfolio-owned entities. The Portfolio context must not write ledger tables. These decisions resolve the apparent overlap in the initial context list; the table is a logical ownership map, not a declaration that a dedicated schema/service already exists.
+
+## Commands, queries and events
+
+- A financial write is an explicit Ledger application command. The server derives the principal only from the authenticated session; it ignores caller-supplied actor identity. Inside the command's database transaction it verifies that the active principal has OWNER or EDITOR membership in the requested portfolio and that every source/destination account belongs to that portfolio. An unauthenticated request is denied with 401 `UNAUTHENTICATED`; an absent, revoked, wrong-portfolio, or insufficient-role grant is denied with 403 `PORTFOLIO_ROLE_FORBIDDEN`. Authorization failure rolls back and creates no ledger, audit, or event/outbox record. The contract requires `ledger_transaction`, all `ledger_entry` rows, and the actor/source/trace/correlation audit record to commit atomically; if a ledger-change event/outbox is enabled, that record joins the same atomic commit. Any failure before commit rolls all records back; event publication is post-commit only. These atomic audit/outbox requirements are normative contract, not verified implementation claims. An idempotent replay returns the original transaction/entries and creates no new financial entries, audit action, or event. Corrections preserve the original activity and use an authorized correction/VOID command with reason and actor audit; physical deletion is forbidden.
+- Provider adapter contract: `fetch(connection_scope, cursor, trace_context) -> raw provider evidence + provider/schema version + next cursor`; normalization maps that evidence through a versioned provider mapping into typed candidates carrying connection ID, financial-account ID, external ID or fallback hash, normalized command, validation findings and trace/correlation IDs. Adapter and normalizer may persist integration-owned raw evidence/candidates but have no Ledger credentials, table access, or commit capability. A candidate is `PENDING_REVIEW` until a reviewer explicitly `APPROVE`s or `REJECT`s it; an approved candidate is committed only by an authorized principal calling the Ledger command, and the candidate then records its ledger transaction ID. Timeout/429 failures are retryable under a bounded adapter policy; 401/403 authentication/consent failures and schema/mapping failures stop automatic retry and leave evidence/candidates available for review. No provider error or retry writes the ledger. The event envelope/version, event ID, aggregate sequence, trace/correlation and causation, post-commit publication, at-least-once delivery, consumer dedupe/order, and outbox prerequisite are defined above; durable delivery and exactly-once are explicitly not claimed.
+- Idempotency identity is account-scoped, matching the existing unique account indexes and `TC-US-0306`: namespace is `(financial_account_id, identity_kind, identity_value)`, where `identity_kind` is `external_id` when supplied, otherwise `external_hash`. Provider connection/source is retained as provenance but is deliberately not a namespace dimension: reusing a key in another connection or source for the same account conflicts if normalized command content differs, or is an exact replay if normalized command content is identical; reuse in another account is valid and creates an independent activity. This chooses account-wide uniqueness within the cases' “within connection/account” wording and preserves the existing asserted cross-account reuse; the precise same-account/cross-connection behavior is explicitly captured in `TC-US-0306`. Within a namespace, the same normalized Ledger command (activity, account/destination, effective and occurred times, amount/currency, instrument, quantity/price, fee/tax, source and state) is an exact replay: it returns the original transaction/entries and creates no additional financial entries, audit action, or event. Different normalized command content returns `409 IDEMPOTENCY_KEY_CONFLICT` with no mutation. Presentation-only description/notes are excluded from fallback identity, consistent with existing TC-US-0306 behavior. The connection/account policy is a contract decision; implementation must preserve the current account-wide uniqueness unless a separately reviewed backward-compatible migration changes it.
+- Query ownership is explicit and read-only: Portfolio query services read Portfolio-owned registry/configuration and authorized Ledger projections; Income & Performance reads committed ledger facts plus version-pinned market observations; Money Flow reads classified, scope-bound ledger projections; Tax & Reporting reads authorized source facts and emits versioned calculation/report artifacts; UI and AI call only these authorized query services. Each is forbidden from writing back to Ledger or treating a projection as canonical; rebuilds derive from committed facts and pinned calculation versions. Identity & Access owns server-side grants and authorization decisions, not client/query scopes.
+- Domain events are integration notifications, not commands and not a second source of truth. The event envelope contract is: globally unique `event_id`; stable `event_type`; integer `event_version`; `occurred_at`; `aggregate_type`, `aggregate_id`, and monotonically increasing `aggregate_version`; `portfolio_id` where applicable; `trace_id`, `correlation_id`, and optional `causation_id`; and a versioned payload. Events that represent ledger changes are emitted only after the transaction commits. Before asynchronous consumers rely on delivery, the producer must persist events transactionally with the canonical command (outbox or an equivalent proven mechanism); delivery is at-least-once, consumers deduplicate by `event_id` and preserve per-aggregate version order. Exactly-once delivery is not promised.
+- Event payloads are additive within a version. A breaking semantic or shape change requires a new event version and an explicit compatibility/replay plan. Consumers must reject or quarantine unsupported versions rather than silently reinterpret them. Consumers are idempotent and rebuildable; replay uses stable event IDs/aggregate versions and the calculation version, and must not re-issue financial commands.
+- This event envelope/outbox is a contract, not a claim that the current code already implements durable event publication. No downstream asynchronous projection may assume it exists until the ledger owner and architecture reviewer approve its implementation and evidence.
+- Audit/event commit and replay evidence status: atomic transaction+entries+audit and optional outbox are required contract but current atomicity is NOT VERIFIED; audit/event/outbox failure injection evidence is absent. Publication, if implemented, must be strictly after commit. Durable outbox/event publication is NOT VERIFIED and is not claimed to exist. The current replay tests exercise repeat output/hash for their synthetic case, but the canonical replay-hash algorithm is not specified and general replay determinism is NOT VERIFIED; restore equality remains a separate release gate.
+
+## Non-goals and change control
+
+This modular-monolith decision does not authorize microservices, direct SQL between modules, a new ledger schema/migration, event sourcing as the canonical storage model, provider-specific ledger behavior, automatic posting by connectors/AI, or production deployment. `ledger_transaction` and `ledger_entry` remain the canonical financial source; events and read models are derived. Ledger schema/migration ownership is exclusive to the ledger specialist. Any shared schema/event/API change requires a contract test first, architecture and ledger-owner review, compatible expand/contract and dry-run/restore evidence before dependent work.
+
+## Story and test traceability
+
+| Roadmap story | Required test | Contract settled here |
+|---|---|---|
+| `US-0001-A` | `TC-US-0001-A` | Authenticated principal, account/portfolio role authorization, 401/403 denial, atomic transaction+entries+audit and optional outbox, idempotent replay/conflict, correction/VOID and no direct SQL are specified. |
+| `US-0001-B` | `TC-US-0001-B` | Adapter fetch/normalization port, candidate states, explicit review-to-command, account-scoped idempotency namespace with cross-connection exact-replay/conflict behavior and bounded retry/failure behavior are specified. |
+| `US-0001-C` | `TC-US-0001-C` | Portfolio/Ledger ownership and named query ownership are mapped; all projections/query consumers are read-only and cannot write back. |
+| `US-0001` | `TC-US-0001` | Epic gate: child contract outcomes are consistent and required contexts are represented. |
+
+These links point to the acceptance cases in `roadmap.md` and `test-cases.md`; they are not evidence that the tests have passed.
+
+Required contract owners: architecture owns this cross-context contract; Ledger owner reviews all financial commands, events, idempotency, schema and replay claims; QA independently verifies the linked tests and evidence. No downstream product implementation is authorized by this document alone.
+
+`database/schema.sql` is the initial shared persistence artifact, not a module contract. `database/README.md` records the canonical ledger principle and schema conventions. In the current API/repository, provider or import provenance (`source_connection_id`/source type) is not a uniqueness dimension: account-level idempotency applies uniformly within one financial account, including activity arriving through a different connection.

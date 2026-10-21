@@ -62,6 +62,9 @@ jobs:
           for attempt in $(seq 1 20); do curl --fail --silent http://localhost:8080/health/ready && break; sleep 1; done
           curl --fail --silent http://localhost:8080/health/ready >/dev/null
       - name: Tests
+        env:
+          TRACE_ID: ci-${{ github.run_id }}
+          CORRELATION_ID: ci-${{ github.run_id }}
         run: pnpm test
       - name: Upload CI evidence
         if: ${{ always() }}
