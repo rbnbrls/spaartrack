@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -9,7 +9,7 @@ const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const contractsSource = readFileSync(new URL("packages/integration-contracts/src/index.ts", root), "utf8");
 const webSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
-const api = apiUrl;
+const api = process.env.API_URL || "http://localhost:18080";
 
 test("TC-US-0802: Trading 212 connection is read-only, vault-referenced and revocable", () => {
   for (const value of ["/api/v1/connections", "trading212", "TRADING_212", "credential_secret_ref", "vault_path", "INVEST", "STOCKS_ISA", "REVOKED", "read-only", "connection-revoked-v1"]) {
@@ -25,7 +25,7 @@ test("TC-US-0802-runtime: synthetic Trading 212 Invest and Stocks ISA mapping ca
   const headers = { "content-type": "application/json" };
   const email = `synthetic-trading212-0802-${suffix}@example.test`;
   assert.equal((await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic Trading 212 owner" }) })).status, 201);
-  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": fixtureKey() }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const token = (await login.json()).token;
   const auth = { authorization: `Bearer ${token}`, ...headers };

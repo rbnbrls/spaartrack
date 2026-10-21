@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
@@ -9,7 +9,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const composeSource = readFileSync(new URL("compose.yaml", root), "utf8");
 const migrationSource = readFileSync(new URL("database/migrations/0028-totp-replay-and-lockout.sql", root), "utf8");
-const api = apiUrl;
+const api = process.env.API_URL || "http://localhost:18080";
 
 function base32Decode(value) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -42,7 +42,7 @@ async function createUser(label) {
 
 async function issueSyntheticLocalSession(email) {
   const response = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { ...jsonHeaders, "x-synthetic-fixture-key": "local-test-fixture-only" },
+    method: "POST", headers: { ...jsonHeaders, "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(response.status, 201);

@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -24,7 +24,7 @@ test("TC-US-1206-runtime: cash-backed portfolios compare allocation, performance
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `synthetic-comparison-1206-${suffix}@example.test`;
   const create = async (path, body, headers = {}) => {
-    const response = await fetch(`${apiUrl}${path}`, {
+    const response = await fetch(`${process.env.API_URL || "http://localhost:18080"}${path}`, {
       method: "POST",
       headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -34,7 +34,7 @@ test("TC-US-1206-runtime: cash-backed portfolios compare allocation, performance
 
   const user = await create("/api/v1/users", { email, display_name: "Synthetic Comparison 1206" });
   assert.equal(user.response.status, 201);
-  const login = await create("/api/v1/test-fixtures/sessions", { email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const login = await create("/api/v1/test-fixtures/sessions", { email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": fixtureKey() });
   assert.equal(login.response.status, 201);
   const auth = { authorization: `Bearer ${login.body.token}` };
   const portfolioIds = [];
@@ -73,7 +73,7 @@ test("TC-US-1206-runtime: cash-backed portfolios compare allocation, performance
     portfolioIds.push(portfolio.body.id);
   }
 
-  const comparison = await fetch(`${apiUrl}/api/v1/portfolio-comparisons?portfolio_ids=${portfolioIds.join(",")}&period_start=2026-01-01&period_end=2026-05-01`, { headers: auth });
+  const comparison = await fetch(`${process.env.API_URL || "http://localhost:18080"}/api/v1/portfolio-comparisons?portfolio_ids=${portfolioIds.join(",")}&period_start=2026-01-01&period_end=2026-05-01`, { headers: auth });
   assert.equal(comparison.status, 200);
   const result = await comparison.json();
   assert.equal(result.read_only, true);

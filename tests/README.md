@@ -19,7 +19,6 @@ staan achter `STACK_SMOKE=1` en worden zonder die variabele overgeslagen.
 - `tests/smoke/` — provider-, API-, addon- en golden-contracten plus de stack-tests;
 - `tests/runtime/` — executable runtime tests die een gebouwde image en Docker benodigen;
 - `tests/helpers/` — gedeelde testhelpers (bijvoorbeeld `tests/helpers/web-source.mjs`);
-- `tests/support/` — gedeelde suite-infrastructuur, waaronder de expliciete lokale endpoint-resolver;
 - `tests/fixtures/` — synthetische hulpmiddelen voor de smoke-tests (bijvoorbeeld de
   Trading212 GUI-harness);
 - `tests/contract-freeze/` — de financiële invariantencontracten van Wave 0
@@ -48,3 +47,19 @@ verspreid over de hierboven genoemde contracttests; de gouden kernel-fixture zel
 bestaande map.
 
 De volledige story-traceability staat in `test-cases.md`.
+
+## Synthetic fixture sessions
+
+Runtime-tests die `POST /api/v1/test-fixtures/sessions` gebruiken, lezen
+`SYNTHETIC_FIXTURE_KEY` via `tests/helpers/fixture-key.mjs`. De helper valt niet
+terug op een gepubliceerde sleutel en meldt luid wanneer de variabele ontbreekt.
+De sleutel moet aanwezig zijn in zowel de lokale stack als het testproces:
+
+    cp .env.example .env
+    set -a; . ./.env; set +a
+    pnpm test
+
+CI genereert per run een synthetische sleutel en injecteert dezelfde waarde in
+Compose en de tests. Een ontbrekende sleutel geeft: `SYNTHETIC_FIXTURE_KEY is
+required for fixture-session tests; run \`cp .env.example .env\` and export it
+before running the tests`.

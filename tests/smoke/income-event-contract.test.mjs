@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -9,7 +9,7 @@ const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const webSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
 const fixture = JSON.parse(readFileSync(new URL("fixtures/PERF-001.json", root), "utf8"));
-const api = apiUrl;
+const api = process.env.API_URL || "http://localhost:18080";
 
 test("TC-US-0701: income events separate received dividends from expected dividends by status", () => {
   for (const value of [
@@ -37,7 +37,7 @@ test("TC-US-0701-runtime: received and expected dividends stay separated across 
   const email = `synthetic-income-0701-${suffix}@example.test`;
   const created = await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic income owner" }) });
   assert.equal(created.status, 201);
-  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": fixtureKey() }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const token = (await login.json()).token;
   const auth = { authorization: `Bearer ${token}`, ...headers };

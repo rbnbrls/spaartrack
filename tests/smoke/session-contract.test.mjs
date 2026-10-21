@@ -1,11 +1,11 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
-const api = apiUrl;
+const api = process.env.API_URL || "http://localhost:18080";
 
 test("TC-US-0202: sessions are opaque, hashed, expirable and revocable", () => {
   assert.match(apiSource, /\/api\/v1\/sessions/);
@@ -43,7 +43,7 @@ test("TC-US-0202-A: local session login, expiry and logout lifecycle", { skip: p
 
   const bootstrappedLogin = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 30 })
   });
   assert.equal(bootstrappedLogin.status, 201);
@@ -55,7 +55,7 @@ test("TC-US-0202-A: local session login, expiry and logout lifecycle", { skip: p
 
   const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-trace-id": "trace-session-0202", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    headers: { "content-type": "application/json", "x-trace-id": "trace-session-0202", "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 30 })
   });
   assert.equal(login.status, 201);
@@ -79,7 +79,7 @@ test("TC-US-0202-A: local session login, expiry and logout lifecycle", { skip: p
 
   const shortLogin = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 1 })
   });
   assert.equal(shortLogin.status, 201);

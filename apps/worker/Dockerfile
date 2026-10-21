@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:22.20.0-alpine3.22 AS build
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/worker/package.json apps/worker/package.json
@@ -7,7 +7,7 @@ COPY apps/worker/tsconfig.json apps/worker/tsconfig.json
 COPY apps/worker/src apps/worker/src
 RUN pnpm --filter @spaartrack/worker build
 
-FROM node:22-alpine
+FROM node:22.20.0-alpine3.22
 WORKDIR /app
 ENV NODE_ENV=production
 ARG VCS_REF=local

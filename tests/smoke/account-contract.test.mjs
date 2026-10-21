@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
-const api = apiUrl;
+const api = process.env.API_URL || "http://localhost:18080";
 
 test("TC-US-0302: financial account types, tracking modes and statuses are contractual", () => {
   for (const value of ["/api/v1/accounts", "financial_account", "BROKERAGE", "BANK", "CASH", "CREDIT_CARD", "LOAN", "CUSTOM", "TRANSACTIONS", "HOLDINGS", "BALANCE_ONLY", "ARCHIVED"]) {
@@ -25,7 +25,7 @@ test("TC-US-0302-runtime: owner registers all local account types with tracking/
     assert.equal(created.status, 201);
     const user = await created.json();
     const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-      method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
+      method: "POST", headers: { "x-synthetic-fixture-key": fixtureKey(), "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
     });
     assert.equal(login.status, 201);
     const session = await login.json();

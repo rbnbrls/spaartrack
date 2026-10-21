@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -8,7 +8,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const diagnosisSource = readFileSync(new URL("apps/api/src/incident-diagnosis.ts", root), "utf8");
 const webSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
-const api = apiUrl;
+const api = process.env.API_URL || "http://localhost:18080";
 
 test("TC-US-1703: diagnosis hypothesis contract is versioned and traceable", () => {
   for (const value of ["incidentDiagnosisRoute", "/hypotheses", "incident-diagnosis-v1", "proposed_regression_test", "reproducibility_key"]) {
@@ -25,7 +25,7 @@ test("TC-US-1703-runtime: synthetic diagnosis hypothesis is read-only", { skip: 
   const headers = { "content-type": "application/json" };
   const email = `synthetic-diagnosis-${suffix}@example.test`;
   assert.equal((await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic Diagnosis Owner" }) })).status, 201);
-  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": fixtureKey() }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const auth = { authorization: `Bearer ${(await login.json()).token}`, ...headers };
   const alert = await fetch(`${api}/api/v1/incidents/alerts`, { method: "POST", headers: auth, body: JSON.stringify({ title: `Synthetic diagnosis ${suffix}`, service: "api", environment: "local", release: "release-1703", severity: "SEV-2", message: "synthetic failure", correlation_id: `corr-${suffix}`, trace_id: `trace-${suffix}` }) });

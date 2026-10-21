@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -7,7 +7,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const adrSource = readFileSync(new URL("docs/adr/0002-canonical-ledger.md", root), "utf8");
-const api = apiUrl;
+const api = process.env.API_URL || "http://localhost:18080";
 
 test("TC-US-0305: transaction state machine and VOID correction are contractual", () => {
   for (const value of ["PATCH", "/api/v1/ledger/transactions", "POSTED", "PENDING", "DRAFT", "VOID", "voided_at", "correction_reason", "metadata"]) {
@@ -27,7 +27,7 @@ test("TC-US-0305-runtime: draft/pending/post transitions and VOID preserve the o
   });
   assert.equal(created.status, 201);
   const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
+    method: "POST", headers: { "x-synthetic-fixture-key": fixtureKey(), "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);
   const session = await login.json();
@@ -96,7 +96,7 @@ test("TC-US-0305-runtime: draft/pending/post transitions and VOID preserve the o
   });
   assert.equal(outsiderCreated.status, 201);
   const outsiderLogin = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email: outsiderEmail, ttl_seconds: 120 })
+    method: "POST", headers: { "x-synthetic-fixture-key": fixtureKey(), "content-type": "application/json" }, body: JSON.stringify({ email: outsiderEmail, ttl_seconds: 120 })
   });
   const outsiderSession = await outsiderLogin.json();
   const denied = await fetch(`${api}/api/v1/ledger/transactions/${draft.id}`, {

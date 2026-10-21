@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -10,7 +10,7 @@ const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const replaySource = readFileSync(new URL("tests/smoke/ledger-replay-contract.test.mjs", root), "utf8");
 const backupSource = readFileSync(new URL("infra/backup/backup-local.sh", root), "utf8");
 const restoreSource = readFileSync(new URL("infra/backup/restore-local.sh", root), "utf8");
-const api = apiUrl;
+const api = process.env.API_URL || "http://localhost:18080";
 
 test("TC-US-0408: CALC-001 golden fixture covers the financial kernel contract", () => {
   assert.equal(existsSync(fixtureUrl), true);
@@ -36,7 +36,7 @@ test("TC-US-0408-runtime: CALC-001 is deterministic across FX, dividend tax, fee
   });
   assert.equal(created.status, 201);
   const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" },
+    method: "POST", headers: { "x-synthetic-fixture-key": fixtureKey(), "content-type": "application/json" },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(login.status, 201);

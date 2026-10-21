@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -42,7 +42,7 @@ test("TC-US-1405: human-acceptance panel drives the lifecycle against synthetic 
 });
 
 test("TC-US-1405-runtime: lifecycle endpoints are authenticated", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const post = await fetch(`${base}/api/v1/option-lifecycle-events`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   assert.equal(post.status, 401);
   assert.equal((await post.json()).error, "UNAUTHENTICATED");
@@ -52,7 +52,7 @@ test("TC-US-1405-runtime: lifecycle endpoints are authenticated", { skip: proces
 
 test("TC-US-1405-runtime: OPEN, partial CLOSE, idempotency and ledger neutrality hold end to end", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -60,7 +60,7 @@ test("TC-US-1405-runtime: OPEN, partial CLOSE, idempotency and ledger neutrality
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-lifecycle-${suffix}@example.test`, display_name: "Synthetic Lifecycle User" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 300 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 300 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Lifecycle ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const account = await create("/api/v1/accounts", { portfolio_id: portfolio.id, name: "Synthetic Brokerage", account_type: "BROKERAGE", tracking_mode: "HOLDINGS", base_currency_code: "EUR" }, auth);
@@ -154,7 +154,7 @@ test("TC-US-1405-runtime: OPEN, partial CLOSE, idempotency and ledger neutrality
 
 test("TC-US-1405-runtime: ROLL links the source close to the destination open atomically", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -162,7 +162,7 @@ test("TC-US-1405-runtime: ROLL links the source close to the destination open at
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-roll-${suffix}@example.test`, display_name: "Synthetic Roll User" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 300 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 300 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Roll ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const account = await create("/api/v1/accounts", { portfolio_id: portfolio.id, name: "Synthetic Brokerage", account_type: "BROKERAGE", tracking_mode: "HOLDINGS", base_currency_code: "EUR" }, auth);
@@ -223,7 +223,7 @@ test("TC-US-1405-runtime: ROLL links the source close to the destination open at
 
 test("TC-US-1405-runtime: EXERCISE, ASSIGNMENT and EXPIRY settle through underlying and cash without double counting", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -231,7 +231,7 @@ test("TC-US-1405-runtime: EXERCISE, ASSIGNMENT and EXPIRY settle through underly
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-settle-${suffix}@example.test`, display_name: "Synthetic Settlement User" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 300 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 300 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Settlement ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const account = await create("/api/v1/accounts", { portfolio_id: portfolio.id, name: "Synthetic Brokerage", account_type: "BROKERAGE", tracking_mode: "HOLDINGS", base_currency_code: "EUR" }, auth);
@@ -291,7 +291,7 @@ test("TC-US-1405-runtime: EXERCISE, ASSIGNMENT and EXPIRY settle through underly
 
 test("TC-US-1405-runtime: lifecycle validation, isolation and audit boundaries reject unsafe input", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -299,7 +299,7 @@ test("TC-US-1405-runtime: lifecycle validation, isolation and audit boundaries r
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-lifecycle-guard-${suffix}@example.test`, display_name: "Synthetic Lifecycle Guard" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 300 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 300 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Guard ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const account = await create("/api/v1/accounts", { portfolio_id: portfolio.id, name: "Synthetic Brokerage", account_type: "BROKERAGE", tracking_mode: "HOLDINGS", base_currency_code: "EUR" }, auth);
@@ -317,7 +317,7 @@ test("TC-US-1405-runtime: lifecycle validation, isolation and audit boundaries r
   await create("/api/v1/option-lifecycle-events", { ...common, event_type: "OPEN", quantity: 1, premium: "5", external_id: `guard-open-${suffix}` }, auth);
 
   const outsider = await create("/api/v1/users", { email: `synthetic-lifecycle-outsider-${suffix}@example.test`, display_name: "Synthetic Lifecycle Outsider" });
-  const outsiderSession = await create("/api/v1/test-fixtures/sessions", { email: outsider.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const outsiderSession = await create("/api/v1/test-fixtures/sessions", { email: outsider.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": fixtureKey() });
   const outsiderAuth = { authorization: `Bearer ${outsiderSession.token}` };
   const forbidden = await fetch(`${base}/api/v1/option-lifecycle-events`, { method: "POST", headers: { "content-type": "application/json", ...outsiderAuth }, body: JSON.stringify({ ...common, event_type: "CLOSE", quantity: 1, premium: "6" }) });
   assert.equal(forbidden.status, 403);

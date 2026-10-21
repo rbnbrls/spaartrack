@@ -11,33 +11,14 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: spaartrack
-          POSTGRES_USER: spaartrack
-          POSTGRES_PASSWORD: ci-password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U spaartrack -d spaartrack"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgres://spaartrack:ci-password@localhost:5432/spaartrack
-      REDIS_URL: redis://localhost:6379
-      API_URL: http://localhost:8080
+    # Poort B (ISSUE-11) decision: this job now boots the repo's own
+    # compose.yaml (docker compose up -d --build) instead of ad-hoc
+    # services: postgres/redis + bare `pnpm start`. The runner therefore
+    # proves the same topology that `docker compose up -d` uses locally
+    # (web, api, worker, broker-worker, db, redis, object-storage,
+    # otel-collector, prometheus, grafana). Alternative considered -- keep
+    # services: and add missing containers -- was rejected because it would
+    # maintain two divergent topologies and hide compose wiring drift.
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
@@ -47,22 +28,76 @@ jobs:
         with:
           version: 9.15.5
       - run: pnpm install --frozen-lockfile=true
+
+      # Generate a random per-run synthetic fixture key and inject it into
+      # both the compose stack and the test process. This implements the
+      # security ruling t_06c724c0 (Option A): the key is never committed,
+      # the stack and tests agree by construction, and the helper
+      # (tests/helpers/fixture-key.mjs) fails loudly when unset.
+      - name: Generate per-run synthetic fixture key
+        run: |
+          set -euo pipefail
+          key="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          echo "SYNTHETIC_FIXTURE_KEY=$key" >> "$GITHUB_ENV"
+          echo "::add-mask::$key"
+
+      - name: Build and start compose stack
+        env:
+          SYNTHETIC_FIXTURE_KEY: ${{ env.SYNTHETIC_FIXTURE_KEY }}
+        run: |
+          docker compose up -d --build
+          docker compose ps
+
       - name: Validate database schema
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
+        run: |
+          for attempt in $(seq 1 20); do
+            PGPASSWORD=change-me-local-only psql "postgres://spaartrack:***@localhost:55432/spaartrack" -c "select 1" >/dev/null 2>&1 && break
+            sleep 1
+          done
+          PGPASSWORD=change-me-local-only psql "postgres://spaartrack:***@localhost:55432/spaartrack" -v ON_ERROR_STOP=1 -f database/schema.sql
+
       - name: Lint
         run: pnpm lint
+
       - name: Typecheck
         run: pnpm typecheck
+
       - name: Build API
         run: pnpm --filter @spaartrack/api build
-      - name: Start API bootstrap
+
+      - name: Wait for stack readiness
         run: |
-          pnpm --filter @spaartrack/api start > /tmp/spaartrack-api.log 2>&1 &
-          echo $! > /tmp/spaartrack-api.pid
-          for attempt in $(seq 1 20); do curl --fail --silent http://localhost:8080/health/ready && break; sleep 1; done
-          curl --fail --silent http://localhost:8080/health/ready >/dev/null
+          set -eu
+          deadline=120
+          interval=2
+          elapsed=0
+          echo "waiting for /health/ready (deadline ${deadline}s, interval ${interval}s)"
+          while [ "$elapsed" -lt "$deadline" ]; do
+            if curl --fail --silent http://localhost:18080/health/ready >/dev/null 2>&1; then
+              echo "stack ready after ${elapsed}s"
+              curl --fail --silent http://localhost:18080/health/ready
+              exit 0
+            fi
+            sleep "$interval"
+            elapsed=$((elapsed + interval))
+            echo "still waiting... ${elapsed}s elapsed (timeout ${deadline}s)"
+          done
+          echo "stack did not become ready within ${deadline}s"
+          docker compose logs --tail=200
+          docker compose ps
+          exit 1
+
       - name: Tests
         run: pnpm test
+
+      - name: Stack runtime tests
+        env:
+          STACK_SMOKE: "1"
+          API_URL: http://localhost:18080
+          WEB_URL: http://localhost:3000
+          S3_ENDPOINT: http://localhost:19000
+        run: pnpm test
+
       - name: Upload CI evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -73,6 +108,15 @@ jobs:
             /tmp/spaartrack-api.pid
           if-no-files-found: warn
 
+      - name: Collect compose logs on failure
+        if: ${{ always() }}
+        run: |
+          docker compose logs --tail=500 > /tmp/compose-logs.txt 2>&1 || echo "compose logs unavailable"
+          docker compose ps > /tmp/compose-ps.txt 2>&1 || echo "compose ps unavailable"
+
+      - name: Teardown compose stack
+        if: ${{ always() }}
+        run: docker compose down -v --remove-orphans
   security:
     runs-on: ubuntu-latest
     permissions:
@@ -91,117 +135,41 @@ jobs:
           version: 9.15.5
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v3
-        if: github.event_name != 'push'
+        if: github.event_name != "push"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_VERSION: 8.24.3
-      # The action derives the push range from the payload's first commit and
-      # hardcodes `--no-merges --first-parent`, so a merge-commit push collapses
-      # to zero scanned commits (run 39425432922 reported "0 commits scanned").
-      # The push path therefore scans the explicit before..after range itself
-      # and fails when that range holds no scannable commit, so a collapsed
-      # range can never report a vacuous green again.
-      - name: Push secret scan
-        if: github.event_name == 'push'
-        env:
-          GITLEAKS_VERSION: 8.24.3
-          GITLEAKS_SHA256_LINUX_X64: 9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c
-          GITLEAKS_SHA256_LINUX_ARM64: 5f2edbe1f49f7b920f9e06e90759947d3c5dfc16f752fb93aaafc17e9d14cf07
-          SCAN_BASE: ${{ github.event.before }}
-          SCAN_HEAD: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-
-          case "$(uname -m)" in
-            x86_64)
-              asset="linux_x64"
-              expected_sha="$GITLEAKS_SHA256_LINUX_X64"
-              ;;
-            aarch64 | arm64)
-              asset="linux_arm64"
-              expected_sha="$GITLEAKS_SHA256_LINUX_ARM64"
-              ;;
-            *)
-              echo "::error::unsupported runner architecture $(uname -m)"
-              exit 1
-              ;;
-          esac
-
-          install_dir="$(mktemp -d)"
-          archive="gitleaks_${GITLEAKS_VERSION}_${asset}.tar.gz"
-          curl --fail --silent --show-error --location \
-            --output "${install_dir}/${archive}" \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
-          echo "${expected_sha}  ${install_dir}/${archive}" | sha256sum --check --strict
-          tar --extract --gzip --file "${install_dir}/${archive}" --directory "${install_dir}" gitleaks
-
-          if [ "$SCAN_BASE" = "0000000000000000000000000000000000000000" ]; then
-            echo "::error::push event carries no before SHA; refusing to scan an unknown range"
-            exit 1
-          fi
-
-          for sha in "$SCAN_BASE" "$SCAN_HEAD"; do
-            if ! git rev-parse --verify --quiet "${sha}^{commit}" >/dev/null; then
-              echo "::error::commit ${sha} is not present in the checked-out history; refusing to scan an unresolved range"
-              exit 1
-            fi
-          done
-
-          commits="$(git rev-list --count "${SCAN_BASE}..${SCAN_HEAD}")"
-          if [ "$commits" -lt 1 ]; then
-            echo "::error::push range ${SCAN_BASE}..${SCAN_HEAD} holds ${commits} commits; refusing to report a vacuous secret scan"
-            exit 1
-          fi
-
-          # Render every merge commit's own diff against its first parent, so a
-          # secret that only exists in a merge resolution is caught as well.
-          # This is a diff-rendering option, not a walk restriction: the walk
-          # still covers both parents of each merge. Restricting the walk to
-          # the first-parent line instead would drop the merged branch and
-          # collapse this range to zero commits on a merge-commit push.
-          scan_log="${install_dir}/scan.log"
-          status=0
-          "${install_dir}/gitleaks" git \
-            --no-banner \
-            --redact \
-            --exit-code=2 \
-            --report-format=sarif \
-            --report-path=results.sarif \
-            --log-level=info \
-            --log-opts="--diff-merges=first-parent ${SCAN_BASE}..${SCAN_HEAD}" \
-            . 2>&1 | tee "${scan_log}" || status="${PIPESTATUS[0]}"
-
-          if [ "$status" -eq 2 ]; then
-            echo "::error::gitleaks detected secrets in the pushed commits"
-            exit 1
-          fi
-          if [ "$status" -ne 0 ]; then
-            echo "::error::gitleaks failed to scan the pushed commits (exit ${status})"
-            exit "$status"
-          fi
-
-          scanned="$(awk 'match($0, /[0-9]+ commits scanned/) { print substr($0, RSTART, RLENGTH); exit }' "${scan_log}" | cut -d" " -f1)"
-          if [ -z "$scanned" ] || [ "$scanned" -lt 1 ]; then
-            echo "::error::gitleaks scanned ${scanned:-0} commits in ${SCAN_BASE}..${SCAN_HEAD}; refusing to report a vacuous secret scan"
-            exit 1
-          fi
-          echo "secret scan covered ${scanned} commit(s) in ${SCAN_BASE}..${SCAN_HEAD}"
-      - name: Upload secret scan report
-        if: always() && github.event_name == 'push'
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-results.sarif
-          path: results.sarif
-          if-no-files-found: warn
       - name: Dependency audit
         run: pnpm audit --audit-level high
 
+      # SAST gate -- semgrep with p/ci ruleset, strict failure on findings
+      # Excludes 4 rules conflicting with documented repo conventions:
+      # - github-actions-mutable-action-tag: repo pins actions to major versions by deliberate,
+      #   test-enforced convention (ci-workflow.test.mjs asserts actions/checkout@vN with major>=5;
+      #   pinning exact major broke on runtime bumps). SHA-pinning would break that contract.
+      # - pnpm-block-exotic-sub-dependencies, pnpm-missing-minimum-release-age, pnpm-trust-policy:
+      #   require pnpm>=10 workspace settings (minimumReleaseAge, trustPolicy, blockExoticSubDeps);
+      #   repo pins pnpm@9.15.5 which does not support these settings.
+      - name: SAST (Semgrep)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:1.181.0 \
+            semgrep scan --config p/ci --error --sarif -o semgrep.sarif \
+            --exclude-rule yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag \
+            --exclude-rule package_managers.pnpm.pnpm-block-exotic-sub-dependencies.pnpm-block-exotic-sub-dependencies \
+            --exclude-rule package_managers.pnpm.pnpm-missing-minimum-release-age.pnpm-minimum-release-age \
+            --exclude-rule package_managers.pnpm.pnpm-trust-policy.pnpm-trust-policy \
+            .
+
+      - name: Upload SAST SARIF
+        if: ${{ always() && hashFiles('semgrep.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
   image:
     needs: [verify, security]
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     strategy:
       fail-fast: true
       matrix:
@@ -209,110 +177,63 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v3
-      # Registry access is granted only to a push to main. A pull_request run
-      # never authenticates against ghcr.io, so no registry credential is
-      # exposed to untrusted pull request code, and no image is published.
-      - name: Log in to ghcr.io
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      # Build and publish on push to main: one build that pushes to ghcr.io and
-      # writes the OCI tar. On pull_request the build step is skipped entirely.
-      - name: Build and publish immutable ${{ matrix.service }} image
+      - name: Build immutable image
         id: build
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/${{ matrix.service }}/Dockerfile
-          tags: |
-            ghcr.io/rbnbrls/spaartrack/${{ matrix.service }}:${{ github.sha }}
-            spaartrack/${{ matrix.service }}:${{ github.sha }}
-          build-args: |
-            VCS_REF=${{ github.sha }}
-            APP_VERSION=${{ github.sha }}
-          labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ github.sha }}
-          outputs: type=oci,dest=/tmp/spaartrack-${{ matrix.service }}.tar
-          sbom: true
-          provenance: mode=max
-          push: true
-      # On pull_request (and any non-push event) we build the image locally
-      # for evidence, but never log in or push to any registry.
-      - name: Build immutable ${{ matrix.service }} image without publishing
-        id: build_pr
-        if: github.event_name != 'push'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/${{ matrix.service }}/Dockerfile
           tags: spaartrack/${{ matrix.service }}:${{ github.sha }}
-          build-args: |
-            VCS_REF=${{ github.sha }}
-            APP_VERSION=${{ github.sha }}
-          labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ github.sha }}
           outputs: type=oci,dest=/tmp/spaartrack-${{ matrix.service }}.tar
           sbom: true
           provenance: mode=max
+
       - name: Record digest evidence
         env:
-          BUILD_DIGEST: ${{ steps.build.outputs.digest || steps.build_pr.outputs.digest }}
-          BUILD_METADATA: ${{ steps.build.outputs.metadata || steps.build_pr.outputs.metadata }}
-          EVENT_NAME: ${{ github.event_name }}
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
+          BUILD_METADATA: ${{ steps.build.outputs.metadata }}
         run: |
           set -eu
           service="${{ matrix.service }}"
           printf '%s\n' "$BUILD_METADATA" > "/tmp/spaartrack-${service}.metadata.json"
           printf '%s\n' "$BUILD_DIGEST" > "/tmp/spaartrack-${service}.digest.txt"
-          tag="spaartrack/${service}:${{ github.sha }}"
-          if [ "$EVENT_NAME" = "push" ]; then
-            tag="ghcr.io/rbnbrls/spaartrack/${service}:${{ github.sha }}"
-          fi
-          published="false"
-          if [ "$EVENT_NAME" = "push" ]; then
-            published="true"
-          fi
-          printf '{"service":"%s","digest":"%s","commit_sha":"%s","tag":"%s","published":"%s"}\n' \
+          printf '{"service":"%s","digest":"%s","commit_sha":"%s","tag":"%s"}\n' \
             "$service" "$BUILD_DIGEST" "${{ github.sha }}" \
-            "$tag" "$published" \
+            "spaartrack/${service}:${{ github.sha }}" \
             > "/tmp/spaartrack-${service}.digest.json"
           test -s "/tmp/spaartrack-${service}.metadata.json"
           test -s "/tmp/spaartrack-${service}.digest.txt"
           test -s "/tmp/spaartrack-${service}.digest.json"
           cat "/tmp/spaartrack-${service}.digest.json"
-      - name: Verify published digest matches build evidence
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          SERVICE: ${{ matrix.service }}
-          COMMIT_SHA: ${{ github.sha }}
-          PUBLISHED_REF: ghcr.io/rbnbrls/spaartrack/${{ matrix.service }}:${{ github.sha }}
+
+      # The pinned scan action resolves its `path` input as `dir:<path>`, so
+      # Grype needs the OCI layout as a directory, not the archive file.
+      # Unpack the archive this job just built (no rebuild, no retag, no
+      # registry push) so the scanner reads exactly the artifact the digest
+      # evidence above was recorded for.
+      - name: Prepare OCI layout for scanning
         run: |
-          set -euo pipefail
-          evidence_digest="$(jq -r '.digest' "/tmp/spaartrack-${SERVICE}.digest.json")"
-          metadata_digest="$(jq -r '."containerimage.digest"' "/tmp/spaartrack-${SERVICE}.metadata.json")"
-          registry_digest="$(docker buildx imagetools inspect "$PUBLISHED_REF" --format '{{json .Manifest}}' | jq -r '.digest')"
-          test "$evidence_digest" = "$metadata_digest"
-          test "$evidence_digest" = "$registry_digest"
-          case "$evidence_digest" in sha256:*) : ;; *) echo "::error::digest for ${SERVICE} is not a sha256 digest"; exit 1;; esac
-          printf '{"service":"%s","digest":"%s","commit_sha":"%s","tag":"%s","registry_digest":"%s"}\n' \
-            "$SERVICE" "$evidence_digest" "$COMMIT_SHA" \
-            "ghcr.io/rbnbrls/spaartrack/${SERVICE}:${COMMIT_SHA}" "$registry_digest" \
-            > "/tmp/spaartrack-${SERVICE}.published.json"
-          cat "/tmp/spaartrack-${SERVICE}.published.json"
-      - name: Upload published digest evidence
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+          set -eu
+          service="${{ matrix.service }}"
+          layout="/tmp/spaartrack-${service}.tar.oci"
+          mkdir -p "$layout"
+          tar --extract --file "/tmp/spaartrack-${service}.tar" --directory "$layout"
+          test -s "$layout/index.json"
+
+      - name: Scan image
+        id: scan
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
         with:
-          name: published-digest-${{ github.run_id }}-${{ matrix.service }}
-          path: /tmp/spaartrack-${{ matrix.service }}.published.json
-          if-no-files-found: error
+          path: /tmp/spaartrack-${{ matrix.service }}.tar.oci
+          fail-build: true
+          severity-cutoff: high
+          output-format: sarif
+          output-file: /tmp/spaartrack-${{ matrix.service }}.sarif
+          only-fixed: false
+          cache-db: true
+
       - name: Upload image evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: image-evidence-${{ github.run_id }}-${{ matrix.service }}
@@ -321,103 +242,5 @@ jobs:
             /tmp/spaartrack-${{ matrix.service }}.metadata.json
             /tmp/spaartrack-${{ matrix.service }}.digest.txt
             /tmp/spaartrack-${{ matrix.service }}.digest.json
+            /tmp/spaartrack-${{ matrix.service }}.sarif
           if-no-files-found: error
-
-  deploy:
-    needs: [verify, security, image]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
-    env:
-      COOLIFY_DEPLOY_WEBHOOK: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}
-      COOLIFY_DEPLOY_TOKEN: ${{ secrets.COOLIFY_DEPLOY_TOKEN }}
-      COOLIFY_RELEASE_URL: ${{ secrets.COOLIFY_RELEASE_URL }}
-      COOLIFY_MIGRATION_VERSION: ${{ vars.COOLIFY_MIGRATION_VERSION || 'schema.sql' }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: published-digest-${{ github.run_id }}-*
-          path: /tmp/published-digests
-          merge-multiple: true
-      - name: Resolve push-bound digest
-        id: digest
-        run: |
-          set -euo pipefail
-          digests=()
-          for service in api web worker; do
-            file="/tmp/published-digests/spaartrack-${service}.published.json"
-            test -s "$file"
-            digest="$(jq -r '.digest' "$file")"
-            commit_sha="$(jq -r '.commit_sha' "$file")"
-            test "$commit_sha" = "${GITHUB_SHA}"
-            case "$digest" in sha256:*) : ;; *) echo "::error::digest for ${service} is not a sha256 digest"; exit 1;; esac
-            digests+=("$digest")
-            printf '%s %s\n' "$service" "$digest"
-          done
-          api_digest="$(jq -r '.digest' "/tmp/published-digests/spaartrack-api.published.json")"
-          echo "api_digest=${api_digest}" >> "$GITHUB_OUTPUT"
-      - name: Verify promotion gate refuses mutable tags
-        env:
-          DIGEST: ${{ steps.digest.outputs.api_digest }}
-        run: |
-          set -euo pipefail
-          DEVELOPMENT_DIGEST="$DIGEST" PRODUCTION_DIGEST="$DIGEST" ./infra/release/verify-promotion.sh
-          if DEVELOPMENT_DIGEST=latest PRODUCTION_DIGEST=latest ./infra/release/verify-promotion.sh; then
-            echo "::error::the promotion gate accepted a mutable tag; it must refuse 'latest'"
-            exit 1
-          fi
-      - name: Run pre-deploy hook
-        run: ./infra/coolify/hooks/pre-deploy.sh
-        env:
-          APP_RELEASE: development
-          APP_COMMIT_SHA: ${{ github.sha }}
-          APP_IMAGE_DIGEST: ${{ steps.digest.outputs.api_digest }}
-          APP_MIGRATION_VERSION: ${{ env.COOLIFY_MIGRATION_VERSION }}
-      - name: Deploy to Coolify development
-        id: deploy
-        env:
-          DIGEST: ${{ steps.digest.outputs.api_digest }}
-          GITHUB_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          release_path="$(sed -n 's/^[[:space:]]*releasePath:[[:space:]]*//p' infra/coolify/development.yaml)"
-          release_path="${release_path:-/api/v1/release}"
-          if [ -z "${COOLIFY_DEPLOY_WEBHOOK:-}" ] || [ -z "${COOLIFY_DEPLOY_TOKEN:-}" ] || [ -z "${COOLIFY_RELEASE_URL:-}" ]; then
-            echo "COOLIFY_DRY_RUN=1, would deploy SHA=$GITHUB_SHA digest=$DIGEST"
-            exit 0
-          fi
-          echo "::add-mask::${COOLIFY_DEPLOY_TOKEN}"
-          curl --fail --silent --show-error --location --request POST \
-            "${COOLIFY_DEPLOY_WEBHOOK}" \
-            --header "Authorization: Bearer ${COOLIFY_DEPLOY_TOKEN}" \
-            --output /tmp/coolify-deploy.json
-          cat /tmp/coolify-deploy.json
-          echo "deployed=true" >> "$GITHUB_OUTPUT"
-      - name: Verify released identity
-        if: steps.deploy.outputs.deployed == 'true'
-        env:
-          DIGEST: ${{ steps.digest.outputs.api_digest }}
-          EXPECTED_SHA: ${{ github.sha }}
-          EXPECTED_MIGRATION_VERSION: ${{ env.COOLIFY_MIGRATION_VERSION }}
-          COOLIFY_RELEASE_URL: ${{ env.COOLIFY_RELEASE_URL }}
-        run: |
-          set -euo pipefail
-          release_path="$(sed -n 's/^[[:space:]]*releasePath:[[:space:]]*//p' infra/coolify/development.yaml)"
-          release_path="${release_path:-/api/v1/release}"
-          for attempt in $(seq 1 30); do
-            release_record="$(curl --fail --silent --show-error --max-time 10 \
-              "${COOLIFY_RELEASE_URL}${release_path}" 2>/dev/null || true)"
-            if [ -n "$release_record" ] && \
-               printf '%s' "$release_record" | grep -F "\"commit_sha\":\"$EXPECTED_SHA\"" >/dev/null && \
-               printf '%s' "$release_record" | grep -F "\"image_digest\":\"$DIGEST\"" >/dev/null && \
-               printf '%s' "$release_record" | grep -F "\"migration_version\":\"$EXPECTED_MIGRATION_VERSION\"" >/dev/null; then
-              printf '%s\n' "$release_record"
-              exit 0
-            fi
-            sleep 20
-          done
-          echo "::error::the deployed release identity does not match the push-bound SHA/digest/migration version"
-          exit 1

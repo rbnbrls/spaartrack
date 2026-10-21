@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -18,13 +18,13 @@ test("TC-US-1301: tax lots have acquisition and holding-period evidence", () => 
 test("TC-US-1301-runtime: tax lots are read from the canonical ledger", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const create = async (path, body, auth = {}) => {
-    const response = await fetch(`${apiUrl}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
+    const response = await fetch(`${process.env.API_URL || "http://localhost:18080"}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
     assert.equal(response.status, 201, `${path}: ${raw}`);
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-tax-lots-${suffix}@example.test`, display_name: "Synthetic Tax Lots" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Tax Lots ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const account = await create("/api/v1/accounts", { portfolio_id: portfolio.id, name: "Synthetic Brokerage", account_type: "BROKERAGE", tracking_mode: "HOLDINGS", base_currency_code: "EUR" }, auth);
@@ -33,7 +33,7 @@ test("TC-US-1301-runtime: tax lots are read from the canonical ledger", { skip: 
   await post("BUY", "2025-01-10", 100, 10, 2);
   await post("BUY", "2026-02-01", 70, 5, 1);
   await post("SELL", "2026-03-01", 240, 12, 3);
-  const response = await fetch(`${apiUrl}/api/v1/tax-lots?portfolio_id=${portfolio.id}&instrument_id=${instrument.id}&as_of=2026-10-18`, { headers: auth });
+  const response = await fetch(`${process.env.API_URL || "http://localhost:18080"}/api/v1/tax-lots?portfolio_id=${portfolio.id}&instrument_id=${instrument.id}&as_of=2026-10-18`, { headers: auth });
   assert.equal(response.status, 200);
   const result = await response.json();
   assert.equal(result.source, "canonical-ledger");
@@ -56,13 +56,13 @@ test("TC-US-1302: tax lot method comparison is versioned and read-only", () => {
 test("TC-US-1302-runtime: API compares methods without mutating the ledger", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const create = async (path, body, auth = {}) => {
-    const response = await fetch(`${apiUrl}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
+    const response = await fetch(`${process.env.API_URL || "http://localhost:18080"}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
     assert.equal(response.status, 201, `${path}: ${raw}`);
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-tax-methods-${suffix}@example.test`, display_name: "Synthetic Tax Methods" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Tax Methods ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const account = await create("/api/v1/accounts", { portfolio_id: portfolio.id, name: "Synthetic Brokerage", account_type: "BROKERAGE", tracking_mode: "HOLDINGS", base_currency_code: "EUR" }, auth);
@@ -71,7 +71,7 @@ test("TC-US-1302-runtime: API compares methods without mutating the ledger", { s
   await post("BUY", "2025-01-10", 100, 10, 2);
   await post("BUY", "2026-02-01", 70, 5, 1);
   await post("SELL", "2026-03-01", 120, 6, 3);
-  const response = await fetch(`${apiUrl}/api/v1/tax-lot-methods?portfolio_id=${portfolio.id}&instrument_id=${instrument.id}&as_of=2026-10-18`, { headers: auth });
+  const response = await fetch(`${process.env.API_URL || "http://localhost:18080"}/api/v1/tax-lot-methods?portfolio_id=${portfolio.id}&instrument_id=${instrument.id}&as_of=2026-10-18`, { headers: auth });
   assert.equal(response.status, 200);
   const result = await response.json();
   assert.equal(result.calculation_version, "tax-lot-methods-v1");

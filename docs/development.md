@@ -3,11 +3,27 @@
 ## Bootstrap
 
     cp .env.example .env
-    scripts/dev/compose.sh up -d --build
-    scripts/dev/compose.sh ps
+    docker compose up -d --build
+    docker compose ps
 
 De standaardopdracht start de volledige lokale Poort A-basis: web, API, worker,
 PostgreSQL, Redis en object storage. Er zijn geen cloudcredentials nodig.
+
+### Fixture-sleutel voor runtime-tests
+
+De lokale fixture-session route is fail-closed. `docker compose` leest de
+sleutel uit `.env`, terwijl het testproces die niet automatisch inleest. Exporteer
+daarom dezelfde lokale waarde in beide processen:
+
+    cp .env.example .env
+    set -a; . ./.env; set +a
+    docker compose up -d --build
+    pnpm test
+
+De tests gebruiken `tests/helpers/fixture-key.mjs`; er is geen hardcoded
+fallback. CI gebruikt per run een willekeurige synthetische sleutel en geeft
+die expliciet door aan zowel Compose als het testproces. Deel de waarde uit
+`.env.example` niet met een gedeelde stack; roteer gedeelde stack-sleutels.
 
 De database wordt bij een lege PostgreSQL-volume geïnitialiseerd vanuit database/schema.sql. Voor een schone lokale reset mag alleen de lokale Compose-volume worden verwijderd nadat de fixturedata is veiliggesteld.
 

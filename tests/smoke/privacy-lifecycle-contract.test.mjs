@@ -1,5 +1,4 @@
-import { databaseUrl as resolvedDatabaseUrl } from "../support/local-endpoints.mjs";
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 // TC-US-0206 runtime contract: the privacy export and deletion lifecycle.
 //
 // This is the failing test the B-003 remediation was supposed to have. It
@@ -26,8 +25,11 @@ import { PRIVACY_EXPORT_SECTION_NAMES } from "../../apps/api/src/privacy-export.
 const require = createRequire(import.meta.url);
 const { Pool } = require("../../apps/api/node_modules/pg");
 
-const api = apiUrl;
-const databaseUrl = resolvedDatabaseUrl;
+const api = process.env.API_URL || "http://localhost:18080";
+const databaseUrl =
+  process.env.PRIVACY_TEST_DATABASE_URL ||
+  process.env.DATABASE_URL ||
+  "postgres://spaartrack:change-me-local-only@localhost:55432/spaartrack";
 
 const jsonHeaders = { "content-type": "application/json" };
 const bearer = (token) => ({ authorization: `Bearer ${token}` });
@@ -53,7 +55,7 @@ async function createUser(label) {
 async function issueSession(email) {
   const response = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { ...jsonHeaders, "x-synthetic-fixture-key": "local-test-fixture-only" },
+    headers: { ...jsonHeaders, "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 300 })
   });
   assert.equal(response.status, 201, `fixture session failed: ${response.status}`);
@@ -322,7 +324,7 @@ test("TC-US-0206-B-runtime: deletion revokes connections and credential referenc
   // live user too, and would therefore prove nothing.
   const loginAfterDelete = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
     method: "POST",
-    headers: { ...jsonHeaders, "x-synthetic-fixture-key": "local-test-fixture-only" },
+    headers: { ...jsonHeaders, "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email: owner.email, ttl_seconds: 120 })
   });
   assert.equal(loginAfterDelete.status, 401, "a deleted user must not be able to log in again");

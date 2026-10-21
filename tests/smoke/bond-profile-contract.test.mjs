@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -26,7 +26,7 @@ test("TC-US-1401: bond profile contract is read-only, traceable and human-accept
 });
 
 test("TC-US-1401-runtime: bond profile endpoint is authenticated", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const response = await fetch(`${base}/api/v1/bond-profiles`);
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error, "UNAUTHENTICATED");
@@ -34,7 +34,7 @@ test("TC-US-1401-runtime: bond profile endpoint is authenticated", { skip: proce
 
 test("TC-US-1401-runtime: synthetic bond profile is registered and resolvable with duplicate and validation failures", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -42,7 +42,7 @@ test("TC-US-1401-runtime: synthetic bond profile is registered and resolvable wi
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-bond-${suffix}@example.test`, display_name: "Synthetic Bond User" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Bonds ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const instrument = await create("/api/v1/instruments", { ...fixture.bond.instrument, ticker: `BN${String(Date.now()).slice(-6)}` }, auth);
@@ -75,7 +75,7 @@ test("TC-US-1401-runtime: synthetic bond profile is registered and resolvable wi
 
 test("TC-US-1401-runtime: bond cashflow schedule is dated, idempotent and ledger-neutral", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -83,7 +83,7 @@ test("TC-US-1401-runtime: bond cashflow schedule is dated, idempotent and ledger
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-bond-cash-${suffix}@example.test`, display_name: "Synthetic Bond Cash" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Bond Cash ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const instrument = await create("/api/v1/instruments", { ...fixture.bond.instrument, ticker: `BC${String(Date.now()).slice(-6)}` }, auth);
@@ -126,7 +126,7 @@ test("TC-US-1401-runtime: bond cashflow schedule is dated, idempotent and ledger
 
 test("TC-US-1401-runtime: bond schedule without profile gives a clear error", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -134,7 +134,7 @@ test("TC-US-1401-runtime: bond schedule without profile gives a clear error", { 
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-bond-empty-${suffix}@example.test`, display_name: "Synthetic Bond Empty" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const instrument = await create("/api/v1/instruments", { ...fixture.bond.instrument, ticker: `BE${String(Date.now()).slice(-6)}` }, auth);
   const response = await fetch(`${base}/api/v1/bond-profiles/${instrument.id}/cashflows`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify({}) });
@@ -144,7 +144,7 @@ test("TC-US-1401-runtime: bond schedule without profile gives a clear error", { 
 
 test("TC-US-1401-runtime: bond profile creation outside portfolio gives a clear error", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -152,13 +152,13 @@ test("TC-US-1401-runtime: bond profile creation outside portfolio gives a clear 
     return JSON.parse(raw);
   };
   const owner = await create("/api/v1/users", { email: `synthetic-bond-owner-${suffix}@example.test`, display_name: "Synthetic Bond Owner" });
-  const ownerSession = await create("/api/v1/test-fixtures/sessions", { email: owner.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const ownerSession = await create("/api/v1/test-fixtures/sessions", { email: owner.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": fixtureKey() });
   const ownerAuth = { authorization: `Bearer ${ownerSession.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Bond Isolated ${suffix}`, reporting_currency_code: "EUR" }, ownerAuth);
   const instrument = await create("/api/v1/instruments", { ...fixture.bond.instrument, ticker: `BI${String(Date.now()).slice(-6)}` }, ownerAuth);
 
   const outsider = await create("/api/v1/users", { email: `synthetic-bond-outsider-${suffix}@example.test`, display_name: "Synthetic Bond Outsider" });
-  const outsiderSession = await create("/api/v1/test-fixtures/sessions", { email: outsider.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const outsiderSession = await create("/api/v1/test-fixtures/sessions", { email: outsider.email, ttl_seconds: 120 }, { "x-synthetic-fixture-key": fixtureKey() });
   const outsiderAuth = { authorization: `Bearer ${outsiderSession.token}` };
   const response = await fetch(`${base}/api/v1/bond-profiles`, { method: "POST", headers: { "content-type": "application/json", ...outsiderAuth }, body: JSON.stringify({ portfolio_id: portfolio.id, instrument_id: instrument.id, ...fixture.bond.profile }) });
   assert.equal(response.status, 403);

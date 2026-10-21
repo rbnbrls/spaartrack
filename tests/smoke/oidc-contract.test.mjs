@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -7,7 +7,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const migrationSource = readFileSync(new URL("database/migrations/0003-oidc-login-state.sql", root), "utf8");
-const api = apiUrl;
+const api = process.env.API_URL || "http://localhost:18080";
 
 test("TC-US-0203-B: OIDC state is single-use and identity mapping is persisted", () => {
   for (const value of ["/api/v1/oidc/start", "/api/v1/oidc/callback", "consumed_at", "auth_identity", "sha256"]) {
@@ -99,7 +99,7 @@ test("TC-US-0203-B-TOTP-runtime: synthetic OIDC callback cannot issue a session 
   const user = await created.json();
 
   const bootstrap = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" },
+    method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() },
     body: JSON.stringify({ email, ttl_seconds: 120 })
   });
   assert.equal(bootstrap.status, 201);

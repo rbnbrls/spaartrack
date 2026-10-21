@@ -1,11 +1,11 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
 import { readWebSource } from "../helpers/web-source.mjs";
 
 const skipRuntime = !process.env.STACK_SMOKE;
-const api = apiUrl;
+const api = process.env.API_URL ?? "http://localhost:18080";
 
 describe("TC-US-1605 agent scopes contract", () => {
   it("statisch: kernel, route en GUI-panel bestaan", () => {
@@ -21,7 +21,7 @@ describe("TC-US-1605 agent scopes contract", () => {
     const email = `synthetic-scopes-${suffix}@example.test`;
     let r = await fetch(`${api}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Scopes" }) });
     assert.equal(r.status, 201);
-    r = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
+    r = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
     assert.equal(r.status, 201);
     const { token } = await r.json();
     r = await fetch(`${api}/api/v1/agent-scopes`, { headers: { authorization: `Bearer ${token}`, "x-trace-id": "trace-scopes-1605", "x-correlation-id": "corr-scopes-1605" } });

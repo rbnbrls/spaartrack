@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -10,7 +10,7 @@ const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const contractsSource = readFileSync(new URL("packages/integration-contracts/src/index.ts", root), "utf8");
 const webSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
 const fixture = readFileSync(new URL("fixtures/PROVIDER-001-degiro.csv", root), "utf8");
-const api = apiUrl;
+const api = process.env.API_URL || "http://localhost:18080";
 
 test("TC-US-0804: DEGIRO CSV contract exposes versioned layout, canonical candidates and reconciliation", () => {
   for (const value of [
@@ -30,7 +30,7 @@ test("TC-US-0804-runtime: synthetic DEGIRO preview normalizes rows and reports r
   const headers = { "content-type": "application/json" };
   const email = `synthetic-degiro-0804-${suffix}@example.test`;
   assert.equal((await fetch(`${api}/api/v1/users`, { method: "POST", headers, body: JSON.stringify({ email, display_name: "Synthetic DEGIRO owner" }) })).status, 201);
-  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
+  const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { ...headers, "x-synthetic-fixture-key": fixtureKey() }, body: JSON.stringify({ email, ttl_seconds: 120 }) });
   assert.equal(login.status, 201);
   const auth = { authorization: `Bearer ${(await login.json()).token}`, ...headers };
   const portfolio = await (await fetch(`${api}/api/v1/portfolios`, { method: "POST", headers: auth, body: JSON.stringify({ name: `Synthetic DEGIRO ${suffix}`, reporting_currency_code: "EUR", privacy_scope: "PRIVATE" }) })).json();

@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -21,7 +21,7 @@ test("TC-US-1402: bond metrics boundary is authenticated, traceable and human-ac
 });
 
 test("TC-US-1402-runtime: bond metrics endpoint is authenticated", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const response = await fetch(`${base}/api/v1/bond-metrics?instrument_id=00000000-0000-0000-0000-000000000000`);
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error, "UNAUTHENTICATED");
@@ -29,7 +29,7 @@ test("TC-US-1402-runtime: bond metrics endpoint is authenticated", { skip: proce
 
 test("TC-US-1402-A runtime: yield mode prices the synthetic bond with versioned output", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -37,7 +37,7 @@ test("TC-US-1402-A runtime: yield mode prices the synthetic bond with versioned 
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-bond-metrics-${suffix}@example.test`, display_name: "Synthetic Bond Metrics" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Bond Metrics ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const instrument = await create("/api/v1/instruments", { ...fixture.bond.instrument, ticker: `BM${String(Date.now()).slice(-6)}` }, auth);
@@ -71,7 +71,7 @@ test("TC-US-1402-A runtime: yield mode prices the synthetic bond with versioned 
 
 test("TC-US-1402-B runtime: price mode solves YTM and validation failures are explicit", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -79,7 +79,7 @@ test("TC-US-1402-B runtime: price mode solves YTM and validation failures are ex
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-bond-solver-${suffix}@example.test`, display_name: "Synthetic Bond Solver" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const portfolio = await create("/api/v1/portfolios", { name: `Synthetic Bond Solver ${suffix}`, reporting_currency_code: "EUR" }, auth);
   const instrument = await create("/api/v1/instruments", { ...fixture.bond.instrument, ticker: `BS${String(Date.now()).slice(-6)}` }, auth);

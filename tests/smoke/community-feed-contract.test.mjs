@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -19,11 +19,11 @@ test("TC-US-1608: public/private boundary, moderation and deletion/export are ex
 });
 
 test("TC-US-1608 runtime: authenticated owner can create, moderate, delete and export synthetic content", { skip: !process.env.STACK_SMOKE }, async () => {
-  const base = (apiUrl).replace(/\/$/, "");
+  const base = (process.env.API_URL || "http://localhost:18080").replace(/\/$/, "");
   const email = `synthetic-community-${Date.now()}@example.test`;
   const userRes = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Community" }) });
   assert.equal(userRes.status, 201);
-  const sessionRes = await fetch(`${base}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": "local-test-fixture-only" }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
+  const sessionRes = await fetch(`${base}/api/v1/test-fixtures/sessions`, { method: "POST", headers: { "content-type": "application/json", "x-synthetic-fixture-key": fixtureKey() }, body: JSON.stringify({ email, ttl_seconds: 900 }) });
   assert.equal(sessionRes.status, 201);
   const session = await sessionRes.json();
   const auth = { "content-type": "application/json", authorization: `Bearer ${session.token}`, "x-trace-id": "trace-community-1608", "x-correlation-id": "corr-community-1608" };

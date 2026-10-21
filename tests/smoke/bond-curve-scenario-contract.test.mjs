@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -17,7 +17,7 @@ test("TC-US-1403: curve observations and parallel shifts are versioned and read-
 });
 
 test("TC-US-1403-runtime: curve scenario endpoint is authenticated", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const response = await fetch(`${base}/api/v1/bond-curve-scenarios`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ curve: [] }) });
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error, "UNAUTHENTICATED");
@@ -25,7 +25,7 @@ test("TC-US-1403-runtime: curve scenario endpoint is authenticated", { skip: pro
 
 test("TC-US-1403-runtime: synthetic parallel shift returns reproducible scenario output", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const base = apiUrl;
+  const base = process.env.API_URL || "http://localhost:18080";
   const create = async (path, body, auth = {}) => {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify(body) });
     const raw = await response.text();
@@ -33,7 +33,7 @@ test("TC-US-1403-runtime: synthetic parallel shift returns reproducible scenario
     return JSON.parse(raw);
   };
   const user = await create("/api/v1/users", { email: `synthetic-curve-${suffix}@example.test`, display_name: "Synthetic Curve Scenario" });
-  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": "local-test-fixture-only" });
+  const session = await create("/api/v1/test-fixtures/sessions", { email: user.email, ttl_seconds: 180 }, { "x-synthetic-fixture-key": fixtureKey() });
   const auth = { authorization: `Bearer ${session.token}` };
   const body = {
     as_of_date: "2026-10-18",

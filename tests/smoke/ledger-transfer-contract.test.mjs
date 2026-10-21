@@ -1,4 +1,4 @@
-import { apiUrl } from "../support/local-endpoints.mjs";
+import { fixtureKey } from "../helpers/fixture-key.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -7,7 +7,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const adrSource = readFileSync(new URL("docs/adr/0002-canonical-ledger.md", root), "utf8");
-const api = apiUrl;
+const api = process.env.API_URL || "http://localhost:18080";
 
 test("TC-US-0307: paired transfers are contractual and contribution-neutral", () => {
   for (const value of ["TRANSFER_IN", "TRANSFER_OUT", "paired_transaction_id", "destination_financial_account_id", "is_external_flow"]) {
@@ -29,7 +29,7 @@ test("TC-US-0307-runtime: transfer creates paired source/destination activities 
     assert.equal(created.status, 201);
     const user = await created.json();
     const login = await fetch(`${api}/api/v1/test-fixtures/sessions`, {
-      method: "POST", headers: { "x-synthetic-fixture-key": "local-test-fixture-only", "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
+      method: "POST", headers: { "x-synthetic-fixture-key": fixtureKey(), "content-type": "application/json" }, body: JSON.stringify({ email, ttl_seconds: 120 })
     });
     assert.equal(login.status, 201);
     const session = await login.json();
