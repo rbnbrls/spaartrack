@@ -20,7 +20,7 @@ jobs:
     # services: and add missing containers -- was rejected because it would
     # maintain two divergent topologies and hide compose wiring drift.
     env:
-      DATABASE_URL: postgres://spaartrack:***@localhost:55432/spaartrack
+      DATABASE_URL: postgres://spaartrack:change-me-local-only@localhost:55432/spaartrack
       REDIS_URL: redis://localhost:6379
       API_URL: http://localhost:18080
       SYNTHETIC_FIXTURE_KEY: local-test-fixture-only
@@ -71,6 +71,9 @@ jobs:
           exit 1
 
       - name: Tests
+        env:
+          TRACE_ID: ci-${{ github.run_id }}
+          CORRELATION_ID: ci-${{ github.run_id }}
         run: pnpm test
 
       - name: Stack runtime tests
@@ -79,6 +82,8 @@ jobs:
           API_URL: http://localhost:18080
           WEB_URL: http://localhost:3000
           S3_ENDPOINT: http://localhost:19000
+          TRACE_ID: ci-${{ github.run_id }}
+          CORRELATION_ID: ci-${{ github.run_id }}
         run: pnpm test
 
       - name: Upload CI evidence
