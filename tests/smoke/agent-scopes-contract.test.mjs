@@ -1,10 +1,11 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
 import { readWebSource } from "../helpers/web-source.mjs";
 
 const skipRuntime = !process.env.STACK_SMOKE;
-const api = process.env.API_URL ?? "http://localhost:18080";
+const api = apiUrl;
 
 describe("TC-US-1605 agent scopes contract", () => {
   it("statisch: kernel, route en GUI-panel bestaan", () => {

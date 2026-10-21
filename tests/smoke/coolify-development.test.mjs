@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -8,7 +9,7 @@ const root = new URL("../..", import.meta.url);
 const rootPath = fileURLToPath(root);
 const manifest = readFileSync(new URL("infra/coolify/development.yaml", root), "utf8");
 const rehearsal = readFileSync(new URL("infra/coolify/rehearse-development.sh", root), "utf8");
-const releaseUrl = process.env.API_URL || "http://localhost:18080";
+const releaseUrl = apiUrl;
 
 test("TC-US-0102-A: Coolify development destination is versioned", () => {
   assert.match(manifest, /kind:\s+CoolifyDevelopment/);

@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -6,7 +7,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const adrSource = readFileSync(new URL("docs/adr/0002-canonical-ledger.md", root), "utf8");
-const api = process.env.API_URL || "http://localhost:18080";
+const api = apiUrl;
 
 test("TC-US-0301: portfolio contract exposes owner, status, privacy scope and reporting currency", () => {
   for (const value of ["/api/v1/portfolios", "owner_user_id", "reporting_currency_code", "privacy_scope", "ACTIVE", "PRIVATE"]) {

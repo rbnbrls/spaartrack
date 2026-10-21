@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -18,7 +19,7 @@ test("TC-US-1608: public/private boundary, moderation and deletion/export are ex
 });
 
 test("TC-US-1608 runtime: authenticated owner can create, moderate, delete and export synthetic content", { skip: !process.env.STACK_SMOKE }, async () => {
-  const base = (process.env.API_URL || "http://localhost:18080").replace(/\/$/, "");
+  const base = (apiUrl).replace(/\/$/, "");
   const email = `synthetic-community-${Date.now()}@example.test`;
   const userRes = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Community" }) });
   assert.equal(userRes.status, 201);

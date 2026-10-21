@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -35,7 +36,7 @@ const GATE = (over = {}) => ({
 });
 
 test("TC-US-1707 runtime: approved combination rolls back; unapproved or coupled restore blocks", { skip: !process.env.STACK_SMOKE }, async () => {
-  const base = (process.env.API_URL || "http://localhost:18080").replace(/\/$/, "");
+  const base = (apiUrl).replace(/\/$/, "");
   const email = `synthetic-rollback-${Date.now()}@example.test`;
   const userRes = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Rollback" }) });
   assert.equal(userRes.status, 201);

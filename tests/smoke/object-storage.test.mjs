@@ -1,9 +1,10 @@
+import { s3Endpoint } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 
 const enabled = process.env.STACK_SMOKE === "1";
-const endpoint = process.env.S3_ENDPOINT || "http://localhost:19000";
+const endpoint = s3Endpoint;
 const accessKey = process.env.S3_ACCESS_KEY || "spaartrack";
 const secretKey = process.env.S3_SECRET_KEY || "change-me-local-only";
 const bucket = process.env.S3_BUCKET || "spaartrack-local";
