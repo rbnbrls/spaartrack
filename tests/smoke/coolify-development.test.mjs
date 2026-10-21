@@ -40,6 +40,49 @@ test("TC-US-0102-B/C: release page exposes deploy and migration identity", { ski
     /^(?:sha256:[0-9a-f]{64}|local)$/i,
     "image_digest must be a sha256 digest or the documented local-dev unbound marker",
   );
+  // Explicit bound/unbound observability: the flags must be present and
+  // truthfully reflect the reported values. An unbound fallback must never
+  // masquerade as a bound identity. (US-0102, finding G11)
+  assert.equal(typeof body.commit_sha_bound, "boolean", "commit_sha_bound must be reported");
+  assert.equal(typeof body.image_digest_bound, "boolean", "image_digest_bound must be reported");
+  assert.equal(typeof body.identity_bound, "boolean", "identity_bound must be reported");
+  const commitShaPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
+  const imageDigestPattern = /^sha256:[0-9a-f]{64}$/i;
+  assert.equal(
+    body.commit_sha_bound,
+    commitShaPattern.test(body.commit_sha),
+    "commit_sha_bound must truthfully reflect the reported commit_sha"
+  );
+  assert.equal(
+    body.image_digest_bound,
+    /^sha256:[0-9a-f]{64}$/i.test(body.image_digest),
+    "image_digest_bound must truthfully reflect the reported image_digest"
+  );
+  assert.equal(
+    body.identity_bound,
+    body.commit_sha_bound && body.image_digest_bound,
+    "identity_bound must combine both bound flags"
+  );
+  // The bound case: on a tree with git metadata the running stack must report
+  // a bound identity. An unbound identity here is a failure of the bound case,
+  // not a valid local-dev convenience state. (US-0102, finding G11)
+  assert.equal(body.commit_sha_bound, true, "a bound stack must report a bound commit SHA");
+  assert.equal(body.commit_sha, expectedCommitSha, "commit_sha must identify the tree under test");
+  assert.match(
+    body.image_digest,
+    /^(?:sha256:[0-9a-f]{64}|local)$/i,
+    "image_digest must be a sha256 digest or the documented local-dev unbound marker"
+  );
+  assert.equal(
+    body.image_digest_bound,
+    /^sha256:[0-9a-f]{64}$/i.test(body.image_digest),
+    "image_digest_bound must truthfully reflect the reported image_digest"
+  );
+  assert.equal(
+    body.identity_bound,
+    body.commit_sha_bound && body.image_digest_bound,
+    "identity_bound must combine both bound flags"
+  );
 });
 
 // ISSUE-05 traceability: child TC-ids covered by the US-0102 contract tests above.
