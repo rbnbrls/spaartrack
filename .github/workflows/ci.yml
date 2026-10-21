@@ -230,7 +230,6 @@ jobs:
           file: apps/${{ matrix.service }}/Dockerfile
           tags: |
             ghcr.io/rbnbrls/spaartrack/${{ matrix.service }}:${{ github.sha }}
-            spaartrack/${{ matrix.service }}:${{ github.sha }}
           build-args: |
             VCS_REF=${{ github.sha }}
             APP_VERSION=${{ github.sha }}
