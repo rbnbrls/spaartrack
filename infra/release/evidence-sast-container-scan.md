@@ -6,7 +6,7 @@ Status: local contract evidence for the CI gates. No production credentials or p
 
 The repository main tip used as the base for this evidence is:
 
-    4a1619332e05342f2b8b2f96f274dea1147b62b5
+    c615afb003a9c2fca095ac434b546962fd034973
 
 Verified with:
 
