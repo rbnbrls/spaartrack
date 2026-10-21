@@ -34,6 +34,11 @@ jobs:
           version: 9.15.5
       - run: pnpm install --frozen-lockfile=true
 
+      - name: Build and start compose stack
+        run: |
+          docker compose up -d --build
+          docker compose ps
+
       - name: Validate database schema
         run: |
           for attempt in $(seq 1 20); do
@@ -50,11 +55,6 @@ jobs:
 
       - name: Build API
         run: pnpm --filter @spaartrack/api build
-
-      - name: Build and start compose stack
-        run: |
-          docker compose up -d --build
-          docker compose ps
 
       - name: Wait for stack readiness
         run: |
