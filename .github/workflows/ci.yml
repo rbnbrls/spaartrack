@@ -11,33 +11,14 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: spaartrack
-          POSTGRES_USER: spaartrack
-          POSTGRES_PASSWORD: ci-password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U spaartrack -d spaartrack"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgres://spaartrack:ci-password@localhost:5432/spaartrack
-      REDIS_URL: redis://localhost:6379
-      API_URL: http://localhost:8080
+    # Poort B (ISSUE-11) decision: this job now boots the repo's own
+    # compose.yaml (docker compose up -d --build) instead of ad-hoc
+    # services: postgres/redis + bare `pnpm start`. The runner therefore
+    # proves the same topology that `docker compose up -d` uses locally
+    # (web, api, worker, broker-worker, db, redis, object-storage,
+    # otel-collector, prometheus, grafana). Alternative considered -- keep
+    # services: and add missing containers -- was rejected because it would
+    # maintain two divergent topologies and hide compose wiring drift.
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
@@ -47,22 +28,76 @@ jobs:
         with:
           version: 9.15.5
       - run: pnpm install --frozen-lockfile=true
+
+      # Generate a random per-run synthetic fixture key and inject it into
+      # both the compose stack and the test process. This implements the
+      # security ruling t_06c724c0 (Option A): the key is never committed,
+      # the stack and tests agree by construction, and the helper
+      # (tests/helpers/fixture-key.mjs) fails loudly when unset.
+      - name: Generate per-run synthetic fixture key
+        run: |
+          set -euo pipefail
+          key="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          echo "SYNTHETIC_FIXTURE_KEY=$key" >> "$GITHUB_ENV"
+          echo "::add-mask::$key"
+
+      - name: Build and start compose stack
+        env:
+          SYNTHETIC_FIXTURE_KEY: ${{ env.SYNTHETIC_FIXTURE_KEY }}
+        run: |
+          docker compose up -d --build
+          docker compose ps
+
       - name: Validate database schema
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
+        run: |
+          for attempt in $(seq 1 20); do
+            PGPASSWORD=change-me-local-only psql "postgres://spaartrack:***@localhost:55432/spaartrack" -c "select 1" >/dev/null 2>&1 && break
+            sleep 1
+          done
+          PGPASSWORD=change-me-local-only psql "postgres://spaartrack:***@localhost:55432/spaartrack" -v ON_ERROR_STOP=1 -f database/schema.sql
+
       - name: Lint
         run: pnpm lint
+
       - name: Typecheck
         run: pnpm typecheck
+
       - name: Build API
         run: pnpm --filter @spaartrack/api build
-      - name: Start API bootstrap
+
+      - name: Wait for stack readiness
         run: |
-          pnpm --filter @spaartrack/api start > /tmp/spaartrack-api.log 2>&1 &
-          echo $! > /tmp/spaartrack-api.pid
-          for attempt in $(seq 1 20); do curl --fail --silent http://localhost:8080/health/ready && break; sleep 1; done
-          curl --fail --silent http://localhost:8080/health/ready >/dev/null
+          set -eu
+          deadline=120
+          interval=2
+          elapsed=0
+          echo "waiting for /health/ready (deadline ${deadline}s, interval ${interval}s)"
+          while [ "$elapsed" -lt "$deadline" ]; do
+            if curl --fail --silent http://localhost:18080/health/ready >/dev/null 2>&1; then
+              echo "stack ready after ${elapsed}s"
+              curl --fail --silent http://localhost:18080/health/ready
+              exit 0
+            fi
+            sleep "$interval"
+            elapsed=$((elapsed + interval))
+            echo "still waiting... ${elapsed}s elapsed (timeout ${deadline}s)"
+          done
+          echo "stack did not become ready within ${deadline}s"
+          docker compose logs --tail=200
+          docker compose ps
+          exit 1
+
       - name: Tests
         run: pnpm test
+
+      - name: Stack runtime tests
+        env:
+          STACK_SMOKE: "1"
+          API_URL: http://localhost:18080
+          WEB_URL: http://localhost:3000
+          S3_ENDPOINT: http://localhost:19000
+        run: pnpm test
+
       - name: Upload CI evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -72,6 +107,16 @@ jobs:
             /tmp/spaartrack-api.log
             /tmp/spaartrack-api.pid
           if-no-files-found: warn
+
+      - name: Collect compose logs on failure
+        if: ${{ always() }}
+        run: |
+          docker compose logs --tail=500 > /tmp/compose-logs.txt 2>&1 || echo "compose logs unavailable"
+          docker compose ps > /tmp/compose-ps.txt 2>&1 || echo "compose ps unavailable"
+
+      - name: Teardown compose stack
+        if: ${{ always() }}
+        run: docker compose down -v --remove-orphans
 
   security:
     runs-on: ubuntu-latest
@@ -141,7 +186,7 @@ jobs:
           fi
 
           for sha in "$SCAN_BASE" "$SCAN_HEAD"; do
-            if ! git rev-parse --verify --quiet "${sha}^{commit}" >/dev/null; then
+            if ! git rev-parse --verify --quiet "${sha}^{commit}" >/dev/null; do
               echo "::error::commit ${sha} is not present in the checked-out history; refusing to scan an unresolved range"
               exit 1
             fi
@@ -186,6 +231,7 @@ jobs:
             exit 1
           fi
           echo "secret scan covered ${scanned} commit(s) in ${SCAN_BASE}..${SCAN_HEAD}"
+
       - name: Upload secret scan report
         if: always() && github.event_name == 'push'
         uses: actions/upload-artifact@v4
@@ -193,8 +239,35 @@ jobs:
           name: gitleaks-results.sarif
           path: results.sarif
           if-no-files-found: warn
+
       - name: Dependency audit
         run: pnpm audit --audit-level high
+
+      # SAST gate -- semgrep with p/ci ruleset, strict failure on findings
+      # Excludes 4 rules conflicting with documented repo conventions:
+      # - github-actions-mutable-action-tag: repo pins actions to major versions by deliberate,
+      #   test-enforced convention (ci-workflow.test.mjs asserts actions/checkout@vN with major>=5;
+      #   pinning exact major broke on runtime bumps). SHA-pinning would break that contract.
+      # - pnpm-block-exotic-sub-dependencies, pnpm-missing-minimum-release-age, pnpm-trust-policy:
+      #   require pnpm>=10 workspace settings (minimumReleaseAge, trustPolicy, blockExoticSubDeps);
+      #   repo pins pnpm@9.15.5 which does not support these settings.
+      - name: SAST (Semgrep)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:1.181.0 \
+            semgrep scan --config p/ci --error --sarif -o semgrep.sarif \
+            --exclude-rule yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag \
+            --exclude-rule package_managers.pnpm.pnpm-block-exotic-sub-dependencies.pnpm-block-exotic-sub-dependencies \
+            --exclude-rule package_managers.pnpm.pnpm-missing-minimum-release-age.pnpm-minimum-release-age \
+            --exclude-rule package_managers.pnpm.pnpm-trust-policy.pnpm-trust-policy \
+            .
+
+      - name: Upload SAST SARIF
+        if: ${{ always() && hashFiles('semgrep.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
 
   image:
     needs: [verify, security]
@@ -248,4 +321,43 @@ jobs:
             /tmp/spaartrack-${{ matrix.service }}.metadata.json
             /tmp/spaartrack-${{ matrix.service }}.digest.txt
             /tmp/spaartrack-${{ matrix.service }}.digest.json
+          if-no-files-found: error
+
+      # The pinned scan action resolves its `path` input as `dir:<path>`, so
+      # Grype needs the OCI layout as a directory, not the archive file.
+      # Unpack the archive this job just built (no rebuild, no retag, no
+      # registry push) so the scanner reads exactly the artifact the digest
+      # evidence above was recorded for.
+      - name: Prepare OCI layout for scanning
+        run: |
+          set -eu
+          service="${{ matrix.service }}"
+          layout="/tmp/spaartrack-${service}.tar.oci"
+          mkdir -p "$layout"
+          tar --extract --file "/tmp/spaartrack-${service}.tar" --directory "$layout"
+          test -s "$layout/index.json"
+
+      - name: Scan image
+        id: scan
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          path: /tmp/spaartrack-${{ matrix.service }}.tar.oci
+          fail-build: true
+          severity-cutoff: high
+          output-format: sarif
+          output-file: /tmp/spaartrack-${{ matrix.service }}.sarif
+          only-fixed: false
+          cache-db: true
+
+      - name: Upload image evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-evidence-${{ github.run_id }}-${{ matrix.service }}
+          path: |
+            /tmp/spaartrack-${{ matrix.service }}.tar
+            /tmp/spaartrack-${{ matrix.service }}.metadata.json
+            /tmp/spaartrack-${{ matrix.service }}.digest.txt
+            /tmp/spaartrack-${{ matrix.service }}.digest.json
+            /tmp/spaartrack-${{ matrix.service }}.sarif
           if-no-files-found: error

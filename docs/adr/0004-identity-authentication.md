@@ -23,3 +23,19 @@ Production authentication must be provided by a validated OIDC adapter that maps
 
 ## Non-goals
 This ADR does not claim a production OIDC provider, recovery ceremony, hardware-key support, or approval to deploy Poort C. Those remain release blockers until independently validated.
+
+## Synthetic fixture credential plumbing (security ruling)
+
+The security ruling recorded in ADR-0006 selects Option A. The Compose default
+remains fail-closed: `SYNTHETIC_FIXTURE_KEY: ${SYNTHETIC_FIXTURE_KEY:-}`. The
+test suite resolves the same variable through
+`tests/helpers/fixture-key.mjs`, with no published fallback; an unset value
+fails loudly and documents `cp .env.example .env` plus shell export. CI creates
+a random per-run synthetic value and injects it into both Compose and the test
+process, so the two sides agree by construction rather than convention.
+
+The local-only value in `.env.example` is permitted only for the isolated local
+synthetic adapter. It must not be restored as a Compose fallback, used in a
+non-local environment, or reused on a shared stack. The residual risk is a
+misconfigured local/synthetic deployment that provisions a key; the empty
+default and the local-only API guard remain the defence-in-depth boundary.

@@ -8,8 +8,13 @@ const coolify = readFileSync(new URL("../smoke/coolify-development.test.mjs", im
 const health = readFileSync(new URL("../smoke/health.test.mjs", import.meta.url), "utf8");
 
 test("TC-US-0103 ISSUE-01: CI verify job provides Redis for readiness bootstrap", () => {
-  assert.match(workflow, /redis:/);
-  assert.match(workflow, /REDIS_URL|redis:6379/);
+  // ISSUE-01 originally asserted services: redis + REDIS_URL. After Poort B
+  // the stack is provided via compose.yaml — redis is still present via the
+  // compose redis service. Accept either shape.
+  const usesComposeStack = workflow.includes("docker compose up");
+  const composeHasRedis = usesComposeStack && readFileSync(new URL("../../compose.yaml", import.meta.url), "utf8").includes("  redis:");
+  assert.ok(workflow.includes("redis:") || composeHasRedis, "CI must provide redis (via services: or compose.yaml)");
+  assert.ok(workflow.includes("REDIS_URL") || workflow.includes("redis:6379") || composeHasRedis, "CI must wire REDIS_URL or prove redis via compose stack");
 });
 
 test("TC-US-0105 ISSUE-01: stack-dependent smoke tests are gated behind STACK_SMOKE", () => {
