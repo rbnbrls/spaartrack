@@ -16,7 +16,7 @@ test("local endpoint resolver uses documented defaults", () => {
   assert.equal(resolveEndpoint("api", environmentIndependentDefaults).url, "http://localhost:18080");
   assert.equal(resolveEndpoint("web", environmentIndependentDefaults).url, "http://localhost:3000");
   assert.equal(resolveEndpoint("s3", environmentIndependentDefaults).url, "http://localhost:19000");
-  assert.equal(resolveEndpoint("database", environmentIndependentDefaults).url, "postgres://spaartrack:***@localhost:55432/spaartrack");
+  assert.equal(resolveEndpoint("database", environmentIndependentDefaults).url, "postgres://spaartrack:change-me-local-only@localhost:55432/spaartrack");
 });
 
 test("local endpoint resolver exposes the override variable for each endpoint", () => {

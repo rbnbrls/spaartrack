@@ -8,7 +8,7 @@ const DEFAULTS = {
   database: {
     name: "SQL database",
     variable: "DATABASE_URL",
-    value: "postgres://spaartrack:***@localhost:55432/spaartrack",
+    value: "postgres://spaartrack:change-me-local-only@localhost:55432/spaartrack",
   },
 };
 
