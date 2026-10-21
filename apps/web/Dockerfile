@@ -1,4 +1,4 @@
-FROM nginx:1.31.7-alpine3.24
+FROM nginx:1.31.7-alpine3.24-slim
 RUN apk upgrade --no-cache
 ARG VCS_REF=local
 ARG APP_VERSION=local

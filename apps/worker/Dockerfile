@@ -10,7 +10,7 @@ RUN pnpm --filter @spaartrack/worker build
 FROM node:22.23.3-alpine3.24
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apk upgrade --no-cache && npm install --global npm@latest
+RUN apk upgrade --no-cache && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 ARG VCS_REF=local
 ARG APP_VERSION=local
 LABEL org.opencontainers.image.revision="$VCS_REF" \
