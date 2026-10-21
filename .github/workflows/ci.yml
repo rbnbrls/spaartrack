@@ -162,7 +162,7 @@ jobs:
             .
 
       - name: Upload SAST SARIF
-        if: ${{ always() && hashFiles('semgrep.sarif') != '' }}
+        if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
