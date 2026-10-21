@@ -12,23 +12,23 @@ const DEFAULTS = {
   },
 };
 
-function configured(key) {
+export function resolveEndpoint(key, environment = process.env) {
   const definition = DEFAULTS[key];
   if (!definition) throw new Error(`Unknown local endpoint: ${key}`);
   return {
     name: definition.name,
-    url: process.env[definition.variable] || definition.value,
+    url: environment[definition.variable] || definition.value,
     override: definition.variable,
   };
 }
 
-export const apiUrl = configured("api").url;
-export const webUrl = configured("web").url;
-export const s3Endpoint = configured("s3").url;
-export const databaseUrl = process.env.PRIVACY_TEST_DATABASE_URL || configured("database").url;
+export const apiUrl = resolveEndpoint("api").url;
+export const webUrl = resolveEndpoint("web").url;
+export const s3Endpoint = resolveEndpoint("s3").url;
+export const databaseUrl = process.env.PRIVACY_TEST_DATABASE_URL || resolveEndpoint("database").url;
 
 export function endpointConfiguration(key) {
-  return configured(key);
+  return resolveEndpoint(key);
 }
 
 function composeListeners() {
