@@ -32,6 +32,11 @@ test("TC-US-0102/TC-US-0104: CI promotion and deployment are push-to-main only",
 
   assert.ok(login, "image job must log in to the registry in a dedicated step");
   assert.ok(isPushToMainGate(login), "registry login must be gated to push events on main");
+  assert.ok(login.includes("registry: ghcr.io"), "registry login must target GHCR");
+  assert.ok(login.includes("username: ${{ github.actor }}"),
+    "registry login must use the GitHub actor");
+  assert.ok(login.includes("password: ${{ secrets.GITHUB_TOKEN }}"),
+    "registry login must use the scoped GitHub token");
   assert.ok(pushes.length > 0, "image job must contain an explicit image push step");
   for (const push of pushes) {
     assert.ok(isPushToMainGate(push), "every image push must be gated to push events on main");
