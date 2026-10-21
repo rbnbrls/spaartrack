@@ -142,7 +142,22 @@ function redactedLog(fields: Record<string, unknown>): string {
   return JSON.stringify(fields)
     .replace(/(\"(?:token|secret|api_key|api-key|account_number|account-number|transaction_description|transaction-description|description)\"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
     .replace(/(token|secret|api_key|api-key|account_number|account-number)=?[^,}" ]+/gi, "$1=[REDACTED]");
-}function json(res: ServerResponse, status: number, body: unknown): void {
+}
+
+function redactedRequestPath(requestUrl?: string): string {
+  if (!requestUrl) return "/";
+  const queryIndex = requestUrl.indexOf("?");
+  if (queryIndex === -1) return requestUrl;
+  const path = requestUrl.slice(0, queryIndex);
+  const query = requestUrl.slice(queryIndex + 1);
+  const redactedQuery = query.split("&").map((parameter) => {
+    const separatorIndex = parameter.indexOf("=");
+    return separatorIndex === -1 ? "[REDACTED]" : `${parameter.slice(0, separatorIndex)}=[REDACTED]`;
+  }).join("&");
+  return `${path}?${redactedQuery}`;
+}
+
+function json(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
@@ -8635,7 +8650,7 @@ const server = createServer((req, res) => {
     correlation_id: id,
     operation: "request_received",
     method: req.method,
-    path: req.url?.startsWith("/api/v1/oidc/callback") ? "/api/v1/oidc/callback" : req.url
+    path: redactedRequestPath(req.url)
   }));
 
   if (req.method === "OPTIONS") {
