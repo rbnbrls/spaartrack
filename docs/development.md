@@ -3,11 +3,19 @@
 ## Bootstrap
 
     cp .env.example .env
-    docker compose up -d --build
-    docker compose ps
+    scripts/dev/stack.sh up
+    scripts/dev/stack.sh ps
 
 De standaardopdracht start de volledige lokale Poort A-basis: web, API, worker,
 PostgreSQL, Redis en object storage. Er zijn geen cloudcredentials nodig.
+
+`scripts/dev/stack.sh` is de veilige lifecycle-helper voor lokale Compose-stacks.
+In de primaire checkout gebruikt hij project `spaartrack` en de standaardpoorten.
+In een git-worktree maakt hij een eigen projectnaam en vaste, checkout-afgeleide
+poorten, zodat `up`, `down`, `ps` en `reset` nooit de primaire stack overnemen.
+Na `up` worden `API_URL`, `DATABASE_URL`, `REDIS_URL` en `WEB_URL` geprint.
+Gebruik `scripts/dev/stack.sh config` om de endpoints te tonen zonder Docker te
+wijzigen. Gebruik `docker compose` direct niet vanuit een worktree.
 
 De database wordt bij een lege PostgreSQL-volume geïnitialiseerd vanuit database/schema.sql. Voor een schone lokale reset mag alleen de lokale Compose-volume worden verwijderd nadat de fixturedata is veiliggesteld.
 
