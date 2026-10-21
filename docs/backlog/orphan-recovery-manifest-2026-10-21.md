@@ -78,4 +78,4 @@ Verification record
 
 Handoff
 
-Recovery children may use this file as authoritative scope. They must preserve exact source versions where selected, report any competing revision choice, avoid rows marked OWNER-EXTERNAL/OWNED-BY-F1ED17DC/SUPERSEDED/SCRATCH, and attach their own landed SHA plus focused-test evidence. The current manifest itself has no landed SHA and makes no VERIFIED transition claim.
+Recovery children may use this file as authoritative scope. They must preserve exact source versions where selected, report any competing revision choice, avoid rows marked OWNER-EXTERNAL/OWNED-BY-F1ED17DC/SUPERSEDED/SCRATCH, and attach their own landed SHA plus focused-test evidence. This documentation recovery landed the approved records in commit `c17eb65` on branch `recovery/t_6b1b9941-docs-2` and PR #15; the commit makes no VERIFIED transition claim. Test and release-gate artifacts remain with their designated owners.
