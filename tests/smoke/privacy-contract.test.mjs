@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -6,7 +7,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const migrationSource = readFileSync(new URL("database/migrations/0004-privacy-grant-revoke.sql", root), "utf8");
-const api = process.env.API_URL || "http://localhost:18080";
+const api = apiUrl;
 
 test("TC-US-0206: privacy export and deletion use soft-delete and revoke boundaries", () => {
   for (const value of ["/api/v1/users/export", "/api/v1/users/me", "DELETED", "revoked_at", "portfolio_member"]) {

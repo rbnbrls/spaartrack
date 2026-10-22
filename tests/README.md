@@ -19,6 +19,7 @@ staan achter `STACK_SMOKE=1` en worden zonder die variabele overgeslagen.
 - `tests/smoke/` — provider-, API-, addon- en golden-contracten plus de stack-tests;
 - `tests/runtime/` — executable runtime tests die een gebouwde image en Docker benodigen;
 - `tests/helpers/` — gedeelde testhelpers (bijvoorbeeld `tests/helpers/web-source.mjs`);
+- `tests/support/` — gedeelde lokale-stack endpoint-resolutie en preflight helpers;
 - `tests/fixtures/` — synthetische hulpmiddelen voor de smoke-tests (bijvoorbeeld de
   Trading212 GUI-harness);
 - `tests/contract-freeze/` — de financiële invariantencontracten van Wave 0

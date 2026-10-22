@@ -1,10 +1,47 @@
+> **HISTORICAL SNAPSHOT — superseded on 20 October 2026. Do not read the claims
+> below as a live release gate.**
+>
+> This document is a point-in-time snapshot taken on the branch
+> `fix/US-0103-ci-bootstrap-and-gitleaks-depth` at `04756c0`. It is **not** the
+> current gate status; the roadmap (`roadmap.md`) is the single source of truth
+> for gate status.
+>
+> What has changed since this snapshot was written:
+>
+> - **PR #2 is merged.** The pull request referenced above
+>   (`https://github.com/rbnbrls/spaartrack/pull/2`) landed on `main` as
+>   `c6620cf`. The document is no longer describing an open change.
+> - **The digests quoted below belong to `pull_request` merge commits**, not to
+>   a promotable branch-bound artifact. A `refs/pull/2/merge` commit is
+>   ephemeral and is regenerated on every push; it is not the commit that
+>   `main` points at. The digests are therefore **not** promotable to any
+>   environment. The only branch-bound digest is the one produced by the
+>   `push` run on `origin/main` (`c6620cf`), which is the digest that a
+>   promotion must carry.
+> - **`main` was, at the time of writing, unprotected** ("no branch protection"
+>   in the header below). That is no longer true: since 20 October 2026 `main`
+>   is protected and requires the five status checks `verify`, `security`,
+>   `image (api)`, `image (web)` and `image (worker)`, with linear history and
+>   stale-review dismissal. See `infra/policies/release-policy.yaml`.
+> - **"Poort B is PROVEN" is too strong and has been withdrawn.** The
+>   independent platform audit of 20 October 2026
+>   (`audit-poort-b-platform-gate-2026-10-20.md`, card `t_a6ed1c6a`) found
+>   that the platform gate is **NOT PROVEN**: SAST and container-scan are
+>   unimplemented, there is no migration runner, no registry push and no
+>   deploy step in CI, no rollback rehearsal, and the PR-bound digest was
+>   vacuous on push. The claim in this document predates those gaps and must
+>   not be cited as proof.
+>
+> Retained unchanged below as the historical record of what was measured on
+> 20 October 2026.
+
 # Poort B — platform gate evidence (SHA-bound CI → digest → release identity)
 
 Date: 2026-10-20
 Owner: `platform` (card B-001 — Coolify development deployment evidence)
-Repository: `rbnbrls/spaartrack` (public, default branch `main`, **no branch protection**)
+Repository: `rbnbrls/spaartrack` (public, default branch `main`, **no branch protection** — *historical: `main` was unprotected when this was written; protection was enabled later the same day*)
 Branch: `fix/US-0103-ci-bootstrap-and-gitleaks-depth`
-Pull request: https://github.com/rbnbrls/spaartrack/pull/2
+Pull request: https://github.com/rbnbrls/spaartrack/pull/2 (*merged as `c6620cf`; the digests below are `pull_request` merge-commit digests and are not promotable*)
 
 **Exact platform gate: Poort B is PROVEN up to (and including) the SHA-bound CI +
 immutable digest + release-identity chain. The Coolify development deployment itself,

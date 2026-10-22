@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -7,7 +8,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const webSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
-const api = process.env.API_URL || "http://localhost:18080";
+const api = apiUrl;
 
 test("TC-US-0707: benchmark comparison keeps observation and cashflow-matched variants distinct", () => {
   for (const value of ["/api/v1/benchmarks", "/api/v1/benchmark-observations", "/api/v1/performance-benchmark", "benchmark_observation", "cashflow_matched", "benchmark_return_pct", "currency_code", "benchmark-comparison-v1"]) {

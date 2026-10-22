@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -8,7 +9,7 @@ const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const webSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
 const adrSource = readFileSync(new URL("docs/adr/0002-canonical-ledger.md", root), "utf8");
-const api = process.env.API_URL || "http://localhost:18080";
+const api = apiUrl;
 
 test("TC-US-0706: performance comparison exposes TWR, MWRR/IRR and Modified Dietz contracts", () => {
   for (const value of ["/api/v1/performance-comparison", "performanceComparisonRoute", "TWR", "MWRR", "IRR", "MODIFIED_DIETZ", "formula_version", "limitations", "net_cash_flow", "cashflows"]) {

@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -7,7 +8,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const webSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
-const api = process.env.API_URL || "http://localhost:18080";
+const api = apiUrl;
 
 test("TC-US-1702: evidence bundle contract is redacted, traceable and linked to operations context", () => {
   for (const value of ["incidentEvidenceRoute", "/api/v1/incidents/", "/evidence", "incident-evidence-v1", "pii_redacted", "migration_result", "image_digest", "redacted_exemplars"]) {

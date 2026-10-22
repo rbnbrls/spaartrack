@@ -1,3 +1,4 @@
+import { webUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -30,7 +31,7 @@ test("TC-US-1504-B: import review controls work without horizontal overflow", ()
 });
 
 test("TC-US-1504 runtime: web serves manifest and mobile viewport serves UI", { skip: !process.env.STACK_SMOKE }, async () => {
-  const base = (process.env.WEB_URL || "http://localhost:3000").replace(/\/$/, "");
+  const base = (webUrl).replace(/\/$/, "");
   const res = await fetch(`${base}/`, { headers: { "User-Agent": "synthetic-mobile" } });
   assert.equal(res.status, 200);
   const html = await res.text();

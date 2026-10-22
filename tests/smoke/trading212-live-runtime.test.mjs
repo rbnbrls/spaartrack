@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { databaseUrl } from '../support/local-endpoints.mjs';
 // Runs against a disposable synthetic database and the compiled image, never against a real broker.
 test('TC-US-0803-live-runtime: owner isolation, queue, retry, dedupe, cancellation, revoke, audit and ledger invariance', {skip:process.env.BROKER_RUNTIME_TEST!=='1'},async()=>{
  const {default:pg}=await import('/app/node_modules/pg/lib/index.js');
  const {createBrokerRoute}=await import('/app/dist/apps/api/src/broker-route.js');
  const {processBrokerJob}=await import('/app/dist/apps/api/src/broker-sync.js');
  const {Trading212Adapter}=await import('/app/dist/packages/integration-contracts/src/trading212.js');
- const pool=new pg.Pool({connectionString:process.env.DATABASE_URL});
+ const pool=new pg.Pool({connectionString:databaseUrl});
  const json=(res,status,body)=>{res.writeHead(status,{'content-type':'application/json'});res.end(JSON.stringify(body));};
  const readJson=async req=>{let text='';for await(const chunk of req)text+=chunk;return JSON.parse(text||'{}');};
  const route=createBrokerRoute({pool,json,readJson});

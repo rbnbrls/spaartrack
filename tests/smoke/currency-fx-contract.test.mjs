@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -6,7 +7,7 @@ const root = new URL("../..", import.meta.url);
 const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const migrationSource = readFileSync(new URL("database/migrations/0006-fx-source-version.sql", root), "utf8");
-const api = process.env.API_URL || "http://localhost:18080";
+const api = apiUrl;
 
 test("TC-US-0401: currency registry and FX-rate contract are explicit", () => {
   for (const value of ["/api/v1/currencies", "/api/v1/fx/rates", "base_currency_code", "quote_currency_code", "rate_at", "source", "source_version", "FX_RATE_NOT_FOUND"]) {

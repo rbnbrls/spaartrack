@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -18,6 +19,6 @@ test("TC-US-0507: historical timetravel uses an as-of snapshot and preserves rea
 });
 
 test("TC-US-0507-runtime: historical snapshot access is authenticated", { skip: process.env.STACK_SMOKE !== "1" }, async () => {
-  const response = await fetch(`${process.env.API_URL || "http://localhost:18080"}/api/v1/portfolio-snapshots?portfolio_id=00000000-0000-0000-0000-000000000000`);
+  const response = await fetch(`${apiUrl}/api/v1/portfolio-snapshots?portfolio_id=00000000-0000-0000-0000-000000000000`);
   assert.equal(response.status, 401);
 });

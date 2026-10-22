@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -8,7 +9,7 @@ const apiSource = readFileSync(new URL("apps/api/src/index.ts", root), "utf8");
 const schemaSource = readFileSync(new URL("database/schema.sql", root), "utf8");
 const webSource = readFileSync(new URL("apps/web/index.html", root), "utf8");
 const fixture = JSON.parse(readFileSync(new URL("fixtures/PERF-001.json", root), "utf8"));
-const api = process.env.API_URL || "http://localhost:18080";
+const api = apiUrl;
 
 test("TC-US-0701: income events separate received dividends from expected dividends by status", () => {
   for (const value of [

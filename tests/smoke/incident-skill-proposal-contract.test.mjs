@@ -1,3 +1,4 @@
+import { apiUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -34,7 +35,7 @@ const PROPOSAL = (over = {}) => ({
 });
 
 test("TC-US-1709 runtime: gated proposal activates; failed gates block", { skip: !process.env.STACK_SMOKE }, async () => {
-  const base = (process.env.API_URL || "http://localhost:18080").replace(/\/$/, "");
+  const base = (apiUrl).replace(/\/$/, "");
   const email = `synthetic-skill-${Date.now()}@example.test`;
   const userRes = await fetch(`${base}/api/v1/users`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, display_name: "Synthetic Skill" }) });
   assert.equal(userRes.status, 201);

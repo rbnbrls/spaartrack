@@ -1,3 +1,4 @@
+import { webUrl } from "../support/local-endpoints.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -17,7 +18,7 @@ test("TC-US-1505: offline cache is encrypted, scoped and marks stale data", () =
 });
 
 test("TC-US-1505 runtime: web serves offline cache panel with stale indicator", { skip: !process.env.STACK_SMOKE }, async () => {
-  const base = (process.env.WEB_URL || "http://localhost:3000").replace(/\/$/, "");
+  const base = (webUrl).replace(/\/$/, "");
   const res = await fetch(`${base}/`, { headers: { "User-Agent": "synthetic-offline" } });
   assert.equal(res.status, 200);
   const html = await res.text();
