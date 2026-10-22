@@ -13,7 +13,7 @@
     "compose:down": "scripts/dev/compose.sh down"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
+    "@types/node": "^22.20.5",
     "typescript": "5.7"
   }
 }

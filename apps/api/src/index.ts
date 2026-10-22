@@ -8832,6 +8832,462 @@ async function ledgerStateRoute(req: IncomingMessage, res: ServerResponse): Prom
 
 async function identityRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   if (environment !== "local") return false;
+  
+  // POST /api/v1/auth/register - User registration with email verification (US-0201)
+  if (req.method === "POST" && req.url === "/api/v1/auth/register") {
+    if (authMode !== "synthetic") {
+      json(res, 503, { error: "IDENTITY_PROVIDER_REQUIRED" });
+      return true;
+    }
+    try {
+      const body = await readJson(req);
+      const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      const displayName = typeof body.display_name === "string" ? body.display_name.trim() : "";
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !displayName) {
+        json(res, 400, { error: "INVALID_USER_INPUT" });
+        return true;
+      }
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query(
+          `INSERT INTO spaartrack.app_user (email, display_name, status)
+           VALUES ($1, $2, 'INVITED')
+           ON CONFLICT DO NOTHING
+           RETURNING id, email, display_name, status, locale, timezone, default_currency_code, created_at, updated_at, deleted_at`,
+          [email, displayName]
+        );
+        if (!result.rowCount) {
+          await client.query("ROLLBACK");
+          json(res, 409, { error: "EMAIL_ALREADY_EXISTS" });
+          return true;
+        }
+        const userId = result.rows[0].id;
+        // Create email verification token
+        const token = randomBytes(32).toString("base64url");
+        const tokenHash = createHash("sha256").update(token).digest("hex");
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
+        await client.query(
+          `INSERT INTO spaartrack.email_verification_token (user_id, token_hash, email, expires_at)
+           VALUES ($1, $2, $3, $4)`,
+          [userId, tokenHash, email, expiresAt]
+        );
+        await client.query("COMMIT");
+        // In production, send email with token. In synthetic mode, return token for testing.
+        json(res, 201, { 
+          user: userResponse(result.rows[0]),
+          verification_token: environment === "local" ? token : undefined,
+          message: "Registration successful. Please verify your email."
+        });
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") {
+        json(res, 409, { error: "EMAIL_ALREADY_EXISTS" });
+      } else {
+        json(res, 500, { error: "IDENTITY_STORE_UNAVAILABLE" });
+      }
+    }
+    return true;
+  }
+
+  // POST /api/v1/auth/verify-email - Verify email with token (US-0201)
+  if (req.method === "POST" && req.url === "/api/v1/auth/verify-email") {
+    try {
+      const body = await readJson(req);
+      const token = typeof body.token === "string" ? body.token : "";
+      if (!token) {
+        json(res, 400, { error: "VERIFICATION_TOKEN_REQUIRED" });
+        return true;
+      }
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+      const result = await databasePool.query(
+        `UPDATE spaartrack.email_verification_token
+           SET consumed_at = now()
+           WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > now()
+           RETURNING user_id`,
+        [tokenHash]
+      );
+      if (!result.rowCount) {
+        json(res, 401, { error: "VERIFICATION_TOKEN_INVALID_OR_EXPIRED" });
+        return true;
+      }
+      const userId = result.rows[0].user_id;
+      await databasePool.query(
+        `UPDATE spaartrack.app_user SET status = 'ACTIVE' WHERE id = $1 AND status = 'INVITED'`,
+        [userId]
+      );
+      await auditEvent(req, res, userId, "PERMISSION_CHANGE", "USER", userId, { status: "ACTIVE", reason: "email_verified" });
+      json(res, 200, { verified: true, message: "Email verified successfully." });
+    } catch {
+      json(res, 500, { error: "VERIFICATION_FAILED" });
+    }
+    return true;
+  }
+
+  // POST /api/v1/auth/login - Session login with optional TOTP (US-0202)
+  if (req.method === "POST" && req.url === "/api/v1/auth/login") {
+    if (authMode !== "synthetic") {
+      json(res, 503, { error: "IDENTITY_PROVIDER_REQUIRED" });
+      return true;
+    }
+    try {
+      const body = await readJson(req);
+      const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      const code = typeof body.code === "string" ? body.code : "";
+      const requestedTtl = typeof body.ttl_seconds === "number" ? body.ttl_seconds : 3600;
+      const ttlSeconds = Math.max(1, Math.min(86400, Math.floor(requestedTtl)));
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const users = await client.query(
+          `SELECT id FROM spaartrack.app_user
+           WHERE lower(email) = $1 AND status = 'ACTIVE' AND deleted_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM spaartrack.broker_owner bo WHERE bo.user_id=app_user.id)
+           FOR UPDATE`,
+          [email]
+        );
+        if (!users.rowCount) {
+          await client.query("ROLLBACK");
+          json(res, 401, { error: "INVALID_LOGIN" });
+          return true;
+        }
+        const userId = String(users.rows[0].id);
+        const factors = await client.query(
+          `SELECT id, secret_ciphertext, secret_iv, secret_tag, last_used_counter, failed_attempts, locked_until
+           FROM spaartrack.user_totp_factor WHERE user_id = $1 AND revoked_at IS NULL FOR UPDATE`,
+          [userId]
+        );
+        if (factors.rowCount) {
+          const factor = factors.rows[0];
+          if (factor.locked_until && new Date(String(factor.locked_until)).getTime() > Date.now()) {
+            await client.query("ROLLBACK");
+            json(res, 429, { error: "TOTP_ATTEMPTS_LOCKED" });
+            return true;
+          }
+          if (!/^\d{6}$/.test(code)) {
+            await client.query(
+              `UPDATE spaartrack.user_totp_factor
+               SET failed_attempts = failed_attempts + 1,
+                   locked_until = CASE WHEN failed_attempts + 1 >= 5 THEN now() + interval '5 minutes' ELSE NULL END
+               WHERE id = $1`,
+              [factor.id]
+            );
+            await client.query("COMMIT");
+            json(res, 401, { error: "TOTP_REQUIRED" });
+            return true;
+          }
+          const matchedCounter = matchingTotpCounter(decryptTotpSecret(factor), code);
+          if (matchedCounter === undefined) {
+            await client.query(
+              `UPDATE spaartrack.user_totp_factor
+               SET failed_attempts = failed_attempts + 1,
+                   locked_until = CASE WHEN failed_attempts + 1 >= 5 THEN now() + interval '5 minutes' ELSE NULL END
+               WHERE id = $1`,
+              [factor.id]
+            );
+            const attempts = await client.query("SELECT failed_attempts FROM spaartrack.user_totp_factor WHERE id = $1", [factor.id]);
+            const locked = Number(attempts.rows[0]?.failed_attempts) >= 5;
+            await client.query("COMMIT");
+            json(res, locked ? 429 : 401, { error: locked ? "TOTP_ATTEMPTS_LOCKED" : "TOTP_INVALID" });
+            return true;
+          }
+          const consumed = await client.query(
+            `UPDATE spaartrack.user_totp_factor
+             SET last_used_counter = $2, failed_attempts = 0, locked_until = NULL
+             WHERE id = $1 AND (last_used_counter IS NULL OR last_used_counter < $2)
+               AND (locked_until IS NULL OR locked_until <= now())
+             RETURNING id`,
+            [factor.id, matchedCounter]
+          );
+          if (!consumed.rowCount) {
+            await client.query("ROLLBACK");
+            json(res, 401, { error: "TOTP_INVALID_OR_REPLAYED" });
+            return true;
+          }
+        } else if (!factors.rowCount && code) {
+          await client.query("ROLLBACK");
+          json(res, 401, { error: "TOTP_NOT_ENROLLED" });
+          return true;
+        }
+        const accessToken = randomBytes(32).toString("base64url");
+        const refreshToken = randomBytes(32).toString("base64url");
+        const accessHash = sessionHash(accessToken);
+        const refreshHash = sessionHash(refreshToken);
+        const accessExpiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+        const refreshExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+        const result = await client.query(
+          `INSERT INTO spaartrack.user_session (user_id, token_hash, refresh_token_hash, expires_at, refresh_expires_at)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING user_id, expires_at`,
+          [userId, accessHash, refreshHash, accessExpiresAt, refreshExpiresAt]
+        );
+        await client.query("COMMIT");
+        await auditEvent(req, res, userId, "LOGIN", "USER", userId, { factor: factors.rowCount ? "TOTP" : "SYNTHETIC_LOCAL" });
+        json(res, 201, { 
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          ...sessionResponse(result.rows[0]),
+          refresh_expires_at: refreshExpiresAt
+        });
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch {
+      json(res, 400, { error: "INVALID_LOGIN_REQUEST" });
+    }
+    return true;
+  }
+
+  // POST /api/v1/auth/refresh - Refresh access token (US-0202)
+  if (req.method === "POST" && req.url === "/api/v1/auth/refresh") {
+    try {
+      const body = await readJson(req);
+      const refreshToken = typeof body.refresh_token === "string" ? body.refresh_token : "";
+      if (!refreshToken) {
+        json(res, 400, { error: "REFRESH_TOKEN_REQUIRED" });
+        return true;
+      }
+      const refreshHash = sessionHash(refreshToken);
+      const result = await databasePool.query(
+        `SELECT s.user_id, s.expires_at, s.refresh_expires_at, u.status, u.deleted_at
+         FROM spaartrack.user_session s
+         JOIN spaartrack.app_user u ON u.id = s.user_id
+         WHERE s.refresh_token_hash = $1 AND s.revoked_at IS NULL AND s.refresh_expires_at > now()
+           AND u.status = 'ACTIVE' AND u.deleted_at IS NULL`,
+        [refreshHash]
+      );
+      if (!result.rowCount) {
+        json(res, 401, { error: "REFRESH_TOKEN_INVALID_OR_EXPIRED" });
+        return true;
+      }
+      const userId = String(result.rows[0].user_id);
+      const newAccessToken = randomBytes(32).toString("base64url");
+      const newAccessHash = sessionHash(newAccessToken);
+      const ttlSeconds = 3600;
+      const accessExpiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+      await databasePool.query(
+        `UPDATE spaartrack.user_session
+           SET token_hash = $1, expires_at = $2
+           WHERE refresh_token_hash = $3`,
+        [newAccessHash, accessExpiresAt, refreshHash]
+      );
+      await auditEvent(req, res, userId, "LOGIN", "USER", userId, { factor: "REFRESH" });
+      json(res, 200, { access_token: newAccessToken, expires_at: accessExpiresAt });
+    } catch {
+      json(res, 400, { error: "INVALID_REFRESH_REQUEST" });
+    }
+    return true;
+  }
+
+  // POST /api/v1/auth/logout - Revoke current session (US-0202)
+  if (req.method === "POST" && req.url === "/api/v1/auth/logout") {
+    const token = authorizationToken(req);
+    if (!token) {
+      json(res, 401, { error: "UNAUTHENTICATED" });
+      return true;
+    }
+    const tokenHash = sessionHash(token);
+    const result = await databasePool.query(
+      `UPDATE spaartrack.user_session SET revoked_at = now()
+       WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
+       RETURNING user_id`,
+      [tokenHash]
+    );
+    if (!result.rowCount) {
+      json(res, 401, { error: "SESSION_INVALID_OR_EXPIRED" });
+    } else {
+      await auditEvent(req, res, String(result.rows[0].user_id), "REVOKE", "SESSION", String(result.rows[0].user_id));
+      json(res, 200, { revoked: true, user_id: result.rows[0].user_id });
+    }
+    return true;
+  }
+
+  // POST /api/v1/auth/2fa/backup-codes - Generate TOTP backup codes (US-0203)
+  if (req.method === "POST" && req.url === "/api/v1/auth/2fa/backup-codes") {
+    const userId = await authenticatedUserId(req);
+    if (!userId) {
+      json(res, 401, { error: "UNAUTHENTICATED" });
+      return true;
+    }
+    const factor = await databasePool.query(
+      `SELECT id FROM spaartrack.user_totp_factor WHERE user_id = $1 AND revoked_at IS NULL`,
+      [userId]
+    );
+    if (!factor.rowCount) {
+      json(res, 404, { error: "TOTP_NOT_ENROLLED" });
+      return true;
+    }
+    const codes: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const code = randomBytes(4).toString("hex").toUpperCase();
+      const codeHash = createHash("sha256").update(code).digest("hex");
+      await databasePool.query(
+        `INSERT INTO spaartrack.user_backup_codes (user_id, code_hash) VALUES ($1, $2)`,
+        [userId, codeHash]
+      );
+      codes.push(code);
+    }
+    await auditEvent(req, res, userId, "SECRET_ACCESS", "BACKUP_CODES", factor.rows[0].id, { count: 10 });
+    json(res, 201, { backup_codes: codes, message: "Store these codes securely. They are shown only once." });
+    return true;
+  }
+
+  // POST /api/v1/auth/2fa/backup-codes/verify - Verify a backup code (US-0203)
+  if (req.method === "POST" && req.url === "/api/v1/auth/2fa/backup-codes/verify") {
+    const userId = await authenticatedUserId(req);
+    if (!userId) {
+      json(res, 401, { error: "UNAUTHENTICATED" });
+      return true;
+    }
+    const body = await readJson(req);
+    const code = typeof body.code === "string" ? body.code.toUpperCase() : "";
+    if (!code) {
+      json(res, 400, { error: "BACKUP_CODE_REQUIRED" });
+      return true;
+    }
+    const codeHash = createHash("sha256").update(code).digest("hex");
+    const result = await databasePool.query(
+      `UPDATE spaartrack.user_backup_codes SET used_at = now()
+       WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+       RETURNING id`,
+      [userId, codeHash]
+    );
+    if (!result.rowCount) {
+      json(res, 401, { error: "BACKUP_CODE_INVALID_OR_USED" });
+      return true;
+    }
+    await auditEvent(req, res, userId, "LOGIN", "BACKUP_CODE", result.rows[0].id);
+    json(res, 200, { verified: true });
+    return true;
+  }
+
+  // GET /api/v1/auth/oidc/providers - List configured OIDC providers (US-0204)
+  if (req.method === "GET" && req.url === "/api/v1/auth/oidc/providers") {
+    const result = await databasePool.query(
+      `SELECT id, slug, name, issuer_url, scopes, pkce_enabled, status, created_at, updated_at
+       FROM spaartrack.oidc_provider WHERE status = 'ACTIVE' ORDER BY name`
+    );
+    json(res, 200, { providers: result.rows });
+    return true;
+  }
+
+  // GET /api/v1/auth/oidc/:provider/login - Start OIDC login for a provider (US-0204)
+  const oidcLoginMatch = req.url?.match(/^\/api\/v1\/auth\/oidc\/([a-z0-9-]+)\/login$/i);
+  if (req.method === "GET" && oidcLoginMatch) {
+    const providerSlug = oidcLoginMatch[1];
+    const provider = await databasePool.query(
+      `SELECT id, slug, name, issuer_url, client_id, client_secret_ref, scopes, pkce_enabled
+       FROM spaartrack.oidc_provider WHERE slug = $1 AND status = 'ACTIVE'`,
+      [providerSlug]
+    );
+    if (!provider.rowCount) {
+      json(res, 404, { error: "OIDC_PROVIDER_NOT_FOUND" });
+      return true;
+    }
+    const p = provider.rows[0];
+    const state = randomBytes(24).toString("base64url");
+    const codeVerifier = randomBytes(32).toString("base64url");
+    const codeChallenge = p.pkce_enabled
+      ? createHash("sha256").update(codeVerifier).digest("base64url")
+      : null;
+    const baseUrl = process.env.OIDC_BASE_URL || `http://${req.headers.host || "localhost:18080"}`;
+    const redirectUri = `${baseUrl}/api/v1/auth/oidc/callback`;
+    await databasePool.query(
+      `INSERT INTO spaartrack.oidc_login_state (user_id, provider, state_hash, code_hash, redirect_uri, expires_at)
+       SELECT $1, $2, $3, $4, $5, now() + interval '5 minutes'
+       FROM spaartrack.app_user WHERE id = $1`,
+      [req.headers["x-forwarded-user"] || "00000000-0000-0000-0000-000000000000", p.slug, sessionHash(state), sessionHash(codeVerifier), redirectUri]
+    );
+    const authUrl = new URL(p.issuer_url);
+    authUrl.searchParams.set("client_id", p.client_id);
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("scope", p.scopes.join(" "));
+    authUrl.searchParams.set("state", state);
+    if (codeChallenge) {
+      authUrl.searchParams.set("code_challenge", codeChallenge);
+      authUrl.searchParams.set("code_challenge_method", "S256");
+    }
+    json(res, 200, { provider: p.slug, authorization_url: authUrl.toString(), state, expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() });
+    return true;
+  }
+
+  // GET /api/v1/auth/oidc/callback - OIDC callback handler (US-0204)
+  if (req.method === "GET" && req.url?.startsWith("/api/v1/auth/oidc/callback")) {
+    const callbackUrl = new URL(req.url, `http://${req.headers.host || "localhost:18080"}`);
+    const code = callbackUrl.searchParams.get("code") || "";
+    const state = callbackUrl.searchParams.get("state") || "";
+    const provider = callbackUrl.searchParams.get("provider") || "";
+    if (!code || !state || !provider) {
+      json(res, 400, { error: "INVALID_OIDC_CALLBACK" });
+      return true;
+    }
+    const stateHash = sessionHash(state);
+    const pending = await databasePool.query(
+      `SELECT s.id, s.user_id, s.code_hash, s.provider
+       FROM spaartrack.oidc_login_state s
+       JOIN spaartrack.app_user u ON u.id = s.user_id
+       WHERE s.state_hash = $1 AND s.consumed_at IS NULL AND s.expires_at > now()
+         AND u.status = 'ACTIVE' AND u.deleted_at IS NULL`,
+      [stateHash]
+    );
+    if (!pending.rowCount) {
+      const stateExists = await databasePool.query(`SELECT 1 FROM spaartrack.oidc_login_state WHERE state_hash = $1`, [stateHash]);
+      json(res, 401, { error: stateExists.rowCount ? "OIDC_STATE_REPLAYED" : "OIDC_STATE_INVALID_OR_EXPIRED" });
+      return true;
+    }
+    const pendingRow = pending.rows[0];
+    if (pendingRow.provider !== provider) {
+      json(res, 401, { error: "OIDC_PROVIDER_MISMATCH" });
+      return true;
+    }
+    // In synthetic mode, we accept any code; in production, exchange code for tokens at token endpoint
+    if (authMode !== "synthetic") {
+      json(res, 503, { error: "IDENTITY_PROVIDER_REQUIRED" });
+      return true;
+    }
+    const consumed = await databasePool.query(
+      `UPDATE spaartrack.oidc_login_state s SET consumed_at = now()
+       FROM spaartrack.app_user u
+       WHERE s.id = $1 AND s.consumed_at IS NULL AND u.id = s.user_id
+         AND u.status = 'ACTIVE' AND u.deleted_at IS NULL
+       RETURNING s.user_id`,
+      [pendingRow.id]
+    );
+    if (!consumed.rowCount) {
+      json(res, 401, { error: "OIDC_STATE_REPLAYED" });
+      return true;
+    }
+    const userId = String(consumed.rows[0].user_id);
+    const identity = await databasePool.query(
+      `INSERT INTO spaartrack.auth_identity (user_id, provider, subject, email)
+       SELECT id, $1, 'oidc:' || id::text, email
+       FROM spaartrack.app_user WHERE id = $2
+       ON CONFLICT (provider, subject) DO UPDATE SET email = EXCLUDED.email
+       RETURNING id`,
+      [provider, userId]
+    );
+    const session = await createSessionForUser(userId);
+    await auditEvent(req, res, userId, "LOGIN", "USER", userId, { provider: `oidc:${provider}` });
+    json(res, 200, {
+      provider: `oidc:${provider}`,
+      user_id: userId,
+      identity_id: identity.rows[0].id,
+      token: session.token,
+      expires_at: session.expiresAt
+    });
+    return true;
+  }
+
+  // GET /api/v1/users/me - Current user profile
   if (req.method === "GET" && req.url === "/api/v1/users/me") {
     const userId = await authenticatedUserId(req);
     if (!userId) {
