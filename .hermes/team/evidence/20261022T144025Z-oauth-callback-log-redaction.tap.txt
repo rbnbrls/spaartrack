@@ -1,0 +1,60 @@
+# Evidence — oauth-callback-log-redaction pre-existing failure
+# Timestamp: 2026-10-22T14:40:25Z
+# Branch: w0-2-ledger-app-services-v3 (PR #47 head 2d8a84d)
+# Commands:
+#   node --experimental-strip-types --test tests/smoke/oauth-callback-log-redaction-contract.test.mjs
+#   node --experimental-strip-types --test tests/contract-freeze/oauth-callback-log-redaction-contract.test.mjs
+#   pnpm test:contract-freeze (with both financial-invariant + oauth redaction in contract-freeze)
+# Exit: 1 for all three (fail 1 / pass 0 / skipped 1; contract-freeze aggregate: pass 6 fail 1 skipped 1)
+
+# --- tests/smoke/oauth-callback-log-redaction-contract.test.mjs ---
+TAP version 13
+# Subtest: TC-US-0106-C / TC-US-0203-B / TC-X-005: callback query secrets are redacted at request logging boundary
+ok 1 - TC-US-0106-C / TC-US-0203-B / TC-X-005: callback query secrets are redacted at request logging boundary # SKIP
+# Subtest: request logging sanitizes OAuth query values without suppressing route or trace context
+not ok 2 - request logging sanitizes OAuth query values without suppressing route or trace context
+  ---
+  duration_ms: 0.461334
+  failureType: 'testCodeFailure'
+  error: |-
+    AssertionError [ERR_ASSERTION]: request logging uses the redaction boundary
+        at TestContext.<anonymous> (file:///Users/ruben/spaartrack/tests/smoke/oauth-callback-log-redaction-contract.test.mjs:93:10)
+  code: 'ERR_ASSERTION'
+  actual: false
+  expected: true
+  operator: '=='
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 1
+# skipped 1
+# duration_ms 44.12325
+
+# --- tests/contract-freeze/oauth-callback-log-redaction-contract.test.mjs (identical source, same failure) ---
+# Subtest: request logging sanitizes OAuth query values without suppressing route or trace context
+not ok 2 - request logging sanitizes OAuth query values without suppressing route or trace context
+  error: AssertionError [ERR_ASSERTION]: request logging uses the redaction boundary
+      at TestContext.<anonymous> (file:///Users/ruben/spaartrack/tests/contract-freeze/oauth-callback-log-redaction-contract.test.mjs:93:10)
+# tests 2 / pass 0 / fail 1 / skipped 1 / duration_ms 44.476834
+
+# --- pnpm test:contract-freeze aggregate on w0-2 branch ---
+# ✔ TC-US-0002-A: cash-sign and quantity cases are executable and traceable to their owners
+# ✔ TC-US-0002-A: the decided D-SHORT-01 policy is enforced by the implementation (RED until W0-3)
+# ✔ TC-US-0002-B: partial sale, fee/tax and price-vs-FX outputs are executable golden values
+# ✔ TC-US-0002-C: transfer, idempotency, VOID, replay and restore expectations are executable contracts
+# ✔ TC-US-0002 decision inventory names unresolved owner choices instead of hiding policy
+# ✔ TC-US-0002 executable contract starts RED until the owner decisions are approved
+# ﹣ TC-US-0106-C / TC-US-0203-B / TC-X-005: callback query secrets are redacted at request logging boundary # SKIP
+# ✖ request logging sanitizes OAuth query values without suppressing route or trace context
+# tests 8 / pass 6 / fail 1 / skipped 1 — ELIFECYCLE Command failed with exit code 1
+# After restoring contract-freeze to financial-invariant only (matching main), pnpm test:contract-freeze -> 6/6 pass
+
+# Assertion logic (both files line 91-94):
+#   const requestLoggingSource = apiSource.slice(apiSource.indexOf("const server = createServer"));
+#   assert.ok(requestLoggingSource.includes("redactedRequestPath"), "request logging uses the redaction boundary");
+#   assert.ok(requestLoggingSource.includes("path: redactedRequestPath(req.url)"), "request log retains a redacted route");
+# Actual apps/api/src/index.ts: contains 0 occurrences of "redactedRequestPath", 0 of "redactedRequestPath(req.url)"
+# Runtime leg (STACK_SMOKE=1) additionally asserts OAuth callback query values (code, state, code_verifier, requisition_id) are "[REDACTED]" in operation:"request_received" log; skipped without STACK_SMOKE.
+# Scope: Pre-existing OAuth callback concern; request logging redaction boundary (different scope than QA expected)

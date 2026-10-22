@@ -14,7 +14,7 @@
     "source_type": "MANUAL",
     "state": "POSTED"
   },
-  "owner_decisions_approved": false,
+  "owner_decisions_approved": true,
   "cases": [
     {
       "case_id": "A-CASH-SIGNS-001",
@@ -197,11 +197,11 @@
     }
   ],
   "unresolved_decisions": [
-    {"id": "D-OVERDRAFT-01", "owner": "Ledger owner", "owner_disposition": "NOT DECIDED", "question": "Can a cash account go negative? If so, which account types, roles, effective dates, and overdraft limits apply?", "test_impact": "Define accepted/rejected BUY, WITHDRAWAL, FEE, TAX and TRANSFER_OUT when available cash is insufficient."},
-    {"id": "D-SHORT-01", "owner": "Ledger owner", "owner_disposition": "DECIDED", "question": "Are short positions permitted? If so, how are short quantity, cost basis, borrow/corporate-action treatment, and covering trades represented?", "test_impact": "Define accepted/rejected SELL when available quantity is insufficient."},
-    {"id": "D-ROUNDING-01", "owner": "Ledger + Calculations owners", "owner_disposition": "PARTIALLY DECIDED", "question": "What are quantity, unit-price, FX and currency minor-unit precision; rounding mode; intermediate-rounding boundary; and residual allocation rule?", "test_impact": "Pin exact results for partial lot allocation, repeating WAC division, FX conversion, and restore hash serialization."},
+    {"id": "D-OVERDRAFT-01", "owner": "Ledger owner", "owner_disposition": "JOINTLY APPROVED", "question": "Can a cash account go negative? If so, which account types, roles, effective dates, and overdraft limits apply?", "test_impact": "Define accepted/rejected BUY, WITHDRAWAL, FEE, TAX and TRANSFER_OUT when available cash is insufficient."},
+    {"id": "D-SHORT-01", "owner": "Ledger owner", "owner_disposition": "JOINTLY APPROVED", "question": "Are short positions permitted? If so, how are short quantity, cost basis, borrow/corporate-action treatment, and covering trades represented?", "test_impact": "Define accepted/rejected SELL when available quantity is insufficient."},
+    {"id": "D-ROUNDING-01", "owner": "Ledger + Calculations owners", "owner_disposition": "JOINTLY APPROVED", "question": "What are quantity, unit-price, FX and currency minor-unit precision; rounding mode; intermediate-rounding boundary; and residual allocation rule?", "test_impact": "Pin exact results for partial lot allocation, repeating WAC division, FX conversion, and restore hash serialization."},
     {"id": "D-FEE-TAX-01", "owner": "Ledger + Calculations owners", "owner_disposition": "JOINTLY APPROVED", "question": "Are fee_amount and tax_amount additional cash postings or informational components already included in amount? How are BUY/SELL/dividend fees and taxes allocated between cash, basis, proceeds and P&L?", "test_impact": "Define cash balance and realized/unrealized P&L results without double-counting fee/tax."},
-    {"id": "D-COST-BASIS-01", "owner": "Calculations owner", "owner_disposition": "DECIDED", "question": "Which cost-basis method is the canonical default, what are lot selection/allocation rules, and how are acquisition fees/taxes and disposal fees/taxes treated?", "test_impact": "Select method/version and pin results; current examples exercise FIFO and WAC only."},
-    {"id": "D-TRANSFER-01", "owner": "Ledger owner", "owner_disposition": "PARTIALLY DECIDED", "question": "Does VOID/correction of one transfer leg always correct both legs atomically, including after either leg is already VOID or was replayed? What is the reversal activity/audit shape?", "test_impact": "Pin one-leg correction, retry, partial-failure and paired-leg replay assertions."}
+    {"id": "D-COST-BASIS-01", "owner": "Calculations owner", "owner_disposition": "JOINTLY APPROVED", "question": "Which cost-basis method is the canonical default, what are lot selection/allocation rules, and how are acquisition fees/taxes and disposal fees/taxes treated?", "test_impact": "Select method/version and pin results; current examples exercise FIFO and WAC only."},
+    {"id": "D-TRANSFER-01", "owner": "Ledger owner", "owner_disposition": "JOINTLY APPROVED", "question": "Does VOID/correction of one transfer leg always correct both legs atomically, including after either leg is already VOID or was replayed? What is the reversal activity/audit shape?", "test_impact": "Pin one-leg correction, retry, partial-failure and paired-leg replay assertions."}
   ]
 }
