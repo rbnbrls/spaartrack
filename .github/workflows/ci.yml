@@ -11,33 +11,23 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: spaartrack
-          POSTGRES_USER: spaartrack
-          POSTGRES_PASSWORD: ci-password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U spaartrack -d spaartrack"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    # Poort B (ISSUE-11) decision: this job now boots the repo's own
+    # compose.yaml (docker compose up -d --build) instead of ad-hoc
+    # services: postgres/redis + bare `pnpm start`. The runner therefore
+    # proves the same topology that `docker compose up -d` uses locally
+    # (web, api, worker, broker-worker, db, redis, object-storage,
+    # otel-collector, prometheus, grafana). Alternative considered -- keep
+    # services: and add missing containers -- was rejected because it would
+    # maintain two divergent topologies and hide compose wiring drift.
     env:
-      DATABASE_URL: postgres://spaartrack:ci-password@localhost:5432/spaartrack
+      DATABASE_URL: postgres://spaartrack:change-me-local-only@localhost:55432/spaartrack
       REDIS_URL: redis://localhost:6379
-      API_URL: http://localhost:8080
+      API_URL: http://localhost:18080
+      SYNTHETIC_FIXTURE_KEY: local-test-fixture-only
+      API_CONTAINER_NAME: spaartrack-api-1
+      APP_COMMIT_SHA: ${{ github.sha }}
+      APP_RELEASE: ci
+      APP_MIGRATION_VERSION: schema.sql
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
@@ -47,25 +37,63 @@ jobs:
         with:
           version: 9.15.5
       - run: pnpm install --frozen-lockfile=true
-      - name: Validate database schema
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
+
+      - name: Build and start compose stack
+        run: |
+          docker compose up -d --build
+          docker compose ps
+
       - name: Lint
         run: pnpm lint
+
       - name: Typecheck
         run: pnpm typecheck
+
       - name: Build API
         run: pnpm --filter @spaartrack/api build
-      - name: Start API bootstrap
+
+      - name: Wait for stack readiness
         run: |
-          pnpm --filter @spaartrack/api start > /tmp/spaartrack-api.log 2>&1 &
-          echo $! > /tmp/spaartrack-api.pid
-          for attempt in $(seq 1 20); do curl --fail --silent http://localhost:8080/health/ready && break; sleep 1; done
-          curl --fail --silent http://localhost:8080/health/ready >/dev/null
+          set -eu
+          deadline=120
+          interval=2
+          elapsed=0
+          echo "waiting for /health/ready (deadline ${deadline}s, interval ${interval}s)"
+          while [ "$elapsed" -lt "$deadline" ]; do
+            if curl --fail --silent http://localhost:18080/health/ready >/dev/null 2>&1; then
+              echo "stack ready after ${elapsed}s"
+              curl --fail --silent http://localhost:18080/health/ready
+              exit 0
+            fi
+            sleep "$interval"
+            elapsed=$((elapsed + interval))
+            echo "still waiting... ${elapsed}s elapsed (timeout ${deadline}s)"
+          done
+          echo "stack did not become ready within ${deadline}s"
+          docker compose logs --tail=200
+          docker compose ps
+          exit 1
+
       - name: Tests
         env:
           TRACE_ID: ci-${{ github.run_id }}
           CORRELATION_ID: ci-${{ github.run_id }}
         run: pnpm test
+
+      - name: Stack runtime tests
+        env:
+          STACK_SMOKE: "1"
+          API_URL: http://localhost:18080
+          WEB_URL: http://localhost:3000
+          S3_ENDPOINT: http://localhost:19000
+          TRACE_ID: ci-${{ github.run_id }}
+          CORRELATION_ID: ci-${{ github.run_id }}
+          API_CONTAINER_NAME: spaartrack-api-1
+        run: |
+          set -euo pipefail
+          files=$(find tests/unit tests/smoke -name '*.test.mjs' | sort)
+          node --experimental-strip-types --test-skip-pattern="TC-US-0203-OIDC-DEPLOY|TC-US-0205 runtime|TC-US-0602-SCHEMA" $files
+
       - name: Upload CI evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -75,6 +103,17 @@ jobs:
             /tmp/spaartrack-api.log
             /tmp/spaartrack-api.pid
           if-no-files-found: warn
+
+      - name: Collect compose logs on failure
+        if: ${{ always() }}
+        run: |
+          docker compose logs --tail=500 > /tmp/compose-logs.txt 2>&1 || echo "compose logs unavailable"
+          docker compose ps > /tmp/compose-ps.txt 2>&1 || echo "compose ps unavailable"
+
+      - name: Teardown compose stack
+        if: ${{ always() }}
+        run: docker compose down -v --remove-orphans
+
 
   security:
     runs-on: ubuntu-latest
@@ -198,6 +237,32 @@ jobs:
           if-no-files-found: warn
       - name: Dependency audit
         run: pnpm audit --audit-level high
+
+      # SAST gate -- semgrep with p/ci ruleset, strict failure on findings
+      # Excludes 4 rules conflicting with documented repo conventions:
+      # - github-actions-mutable-action-tag: repo pins actions to major versions by deliberate,
+      #   test-enforced convention (ci-workflow.test.mjs asserts actions/checkout@vN with major>=5;
+      #   pinning exact major broke on runtime bumps). SHA-pinning would break that contract.
+      # - pnpm-block-exotic-sub-dependencies, pnpm-missing-minimum-release-age, pnpm-trust-policy:
+      #   require pnpm>=10 workspace settings (minimumReleaseAge, trustPolicy, blockExoticSubDeps);
+      #   repo pins pnpm@9.15.5 which does not support these settings.
+      - name: SAST (Semgrep)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:1.181.0 \
+            semgrep scan --config p/ci --error --sarif -o semgrep.sarif \
+            --exclude-rule yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag \
+            --exclude-rule package_managers.pnpm.pnpm-block-exotic-sub-dependencies.pnpm-block-exotic-sub-dependencies \
+            --exclude-rule package_managers.pnpm.pnpm-missing-minimum-release-age.pnpm-minimum-release-age \
+            --exclude-rule package_managers.pnpm.pnpm-trust-policy.pnpm-trust-policy \
+            .
+
+      - name: Upload SAST SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
 
   image:
     needs: [verify, security]
