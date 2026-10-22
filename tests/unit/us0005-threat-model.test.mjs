@@ -30,10 +30,11 @@ test("TC-US-0005 behavioural: every asset and trust boundary is versioned", () =
     assert.match(versioned, new RegExp(asset.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), `asset missing: ${asset}`);
   }
   for (const boundary of [
-    "web → API",
-    "application service → ledger",
-    "adapter → provider",
-    "AI/addon → data",
+    "Internet/browser → web/API",
+    "API transport → application service",
+    "User/portfolio → tenant-owned data",
+    "API/worker → provider/network",
+    "Future AI/addon/action → application services",
   ]) {
     assert.ok(versioned.includes(boundary), `trust boundary missing: ${boundary}`);
   }

@@ -25,6 +25,12 @@ function runLedgerScenario() {
   const audit = [];
   const credited = [];
   const debited = [];
+  // Opening balances from the fixture accounts (usd-brokerage funds the BUY leg)
+  for (const account of LEDGER.accounts) {
+    if (account.opening_balance !== undefined) {
+      cashByCurrency.set(account.currency_code, Number(account.opening_balance));
+    }
+  }
   function credit(currencyCode, amount) {
     credited.push({ currency_code: currencyCode, amount });
     cashByCurrency.set(currencyCode, (cashByCurrency.get(currencyCode) ?? 0) + amount);
