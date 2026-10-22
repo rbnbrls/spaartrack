@@ -60,7 +60,12 @@ jobs:
           elapsed=0
           echo "waiting for /health/ready (deadline ${deadline}s, interval ${interval}s)"
           while [ "$elapsed" -lt "$deadline" ]; do
-            if curl --fail --silent http://localhost:18080/health/ready >/dev/null 2>&1; then
+            service_status="$(docker compose ps --all --format '{{.Service}}\t{{.State}}\t{{.Health}}')"
+            expected_services="$(docker compose config --services | sort)"
+            actual_services="$(printf '%s\n' "$service_status" | awk -F '\t' 'NF { print $1 }' | sort)"
+            if [ "$actual_services" = "$expected_services" ] \
+              && printf '%s\n' "$service_status" | awk -F '\t' 'NF && ($2 != "running" || ($3 != "" && $3 != "healthy")) { bad=1 } END { exit bad }' \
+              && curl --fail --silent http://localhost:18080/health/ready >/dev/null 2>&1; then
               echo "stack ready after ${elapsed}s"
               curl --fail --silent http://localhost:18080/health/ready
               exit 0
@@ -92,7 +97,13 @@ jobs:
         run: |
           set -euo pipefail
           files=$(find tests/unit tests/smoke -name '*.test.mjs' | sort)
-          node --experimental-strip-types --test-skip-pattern="TC-US-0203-OIDC-DEPLOY|TC-US-0205 runtime|TC-US-0602-SCHEMA" $files
+          node --experimental-strip-types --test-skip-pattern="TC-US-0203-OIDC-DEPLOY|TC-US-0205 runtime" $files
+
+      - name: Collect compose logs on failure
+        if: ${{ always() }}
+        run: |
+          docker compose logs --tail=500 > /tmp/compose-logs.txt 2>&1 || echo "compose logs unavailable"
+          docker compose ps > /tmp/compose-ps.txt 2>&1 || echo "compose ps unavailable"
 
       - name: Upload CI evidence
         if: ${{ always() }}
@@ -100,15 +111,9 @@ jobs:
         with:
           name: ci-evidence-${{ github.run_id }}
           path: |
-            /tmp/spaartrack-api.log
-            /tmp/spaartrack-api.pid
+            /tmp/compose-logs.txt
+            /tmp/compose-ps.txt
           if-no-files-found: warn
-
-      - name: Collect compose logs on failure
-        if: ${{ always() }}
-        run: |
-          docker compose logs --tail=500 > /tmp/compose-logs.txt 2>&1 || echo "compose logs unavailable"
-          docker compose ps > /tmp/compose-ps.txt 2>&1 || echo "compose ps unavailable"
 
       - name: Teardown compose stack
         if: ${{ always() }}
