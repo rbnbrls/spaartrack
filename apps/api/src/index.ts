@@ -2,7 +2,7 @@ import { createBrokerRoute } from './broker-route.js';
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createConnection } from "node:net";
-import { Pool, type PoolClient } from "pg";
+import { Pool } from "pg";
 import { calculateShareWeightedBalance, validateGoalFundingAllocations } from "./goal-funding.js";
 import { buildCashflowForecast } from "./forecast.js";
 import { buildAccountantShare } from "./accountant-access.js";
@@ -88,6 +88,12 @@ if (environment === "production") {
 const startedAt = new Date().toISOString();
 const commitSha = process.env.APP_COMMIT_SHA || process.env.COOLIFY_COMMIT_SHA || "local";
 const imageDigest = process.env.APP_IMAGE_DIGEST || process.env.COOLIFY_IMAGE_DIGEST || "local";
+// Explicit bound/unbound observability: the flags make the fallback
+// distinguishable from a bound identity so a consumer can never mistake
+// an unbound identity for a bound one (US-0102, finding G11).
+const commitShaBound = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(commitSha);
+const imageDigestBound = /^sha256:[0-9a-f]{64}$/i.test(imageDigest);
+const identityBound = commitShaBound && imageDigestBound;
 const migrationVersion = process.env.APP_MIGRATION_VERSION || process.env.COOLIFY_MIGRATION_VERSION || "schema.sql";
 const deployedAt = process.env.APP_DEPLOYED_AT || startedAt;
 const databasePool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -142,22 +148,7 @@ function redactedLog(fields: Record<string, unknown>): string {
   return JSON.stringify(fields)
     .replace(/(\"(?:token|secret|api_key|api-key|account_number|account-number|transaction_description|transaction-description|description)\"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
     .replace(/(token|secret|api_key|api-key|account_number|account-number)=?[^,}" ]+/gi, "$1=[REDACTED]");
-}
-
-function redactedRequestPath(requestUrl?: string): string {
-  if (!requestUrl) return "/";
-  const queryIndex = requestUrl.indexOf("?");
-  if (queryIndex === -1) return requestUrl;
-  const path = requestUrl.slice(0, queryIndex);
-  const query = requestUrl.slice(queryIndex + 1);
-  const redactedQuery = query.split("&").map((parameter) => {
-    const separatorIndex = parameter.indexOf("=");
-    return separatorIndex === -1 ? "[REDACTED]" : `${parameter.slice(0, separatorIndex)}=[REDACTED]`;
-  }).join("&");
-  return `${path}?${redactedQuery}`;
-}
-
-function json(res: ServerResponse, status: number, body: unknown): void {
+}function json(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
@@ -278,12 +269,11 @@ async function auditEvent(
   actorId: string,
   action: string,
   entityType: string,
-  entityId: string | null,
-  after?: Record<string, unknown>,
-  executor: Pool | PoolClient = databasePool
+  entityId: string,
+  after?: Record<string, unknown>
 ): Promise<void> {
   const traced = res as TracedResponse;
-  await executor.query(
+  await databasePool.query(
     `INSERT INTO spaartrack.audit_log
        (user_id, actor_type, actor_id, action, entity_type, entity_id, after_json, correlation_id, trace_id)
      VALUES ($1, 'USER', $2, $3, $4, $5, $6, $7, $8)`,
@@ -1503,7 +1493,6 @@ async function portfolioRoute(req: IncomingMessage, res: ServerResponse): Promis
          RETURNING id, owner_user_id, name, description, status, reporting_currency_code, privacy_scope, created_at, updated_at`,
         [name, portfolioMatch[1]]
       );
-      await auditEvent(req, res, userId, "UPDATE", "PORTFOLIO", String(updated.rows[0].id), { name: updated.rows[0].name, portfolio_id: String(updated.rows[0].id) });
       json(res, 200, { ...updated.rows[0], role: access.rows[0].role });
     } catch {
       json(res, 400, { error: "INVALID_PORTFOLIO_REQUEST" });
@@ -1603,7 +1592,6 @@ async function marketDataRoute(req: IncomingMessage, res: ServerResponse): Promi
         json(res, 409, { error: "FX_RATE_ALREADY_EXISTS" });
         return true;
       }
-      await auditEvent(req, res, userId, "CREATE", "FX_RATE", null, { base_currency_code: base, quote_currency_code: quote, rate_at: rateAt, source, source_version: sourceVersion });
       json(res, 201, result.rows[0]);
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {
@@ -1682,7 +1670,6 @@ async function marketDataRoute(req: IncomingMessage, res: ServerResponse): Promi
         json(res, 409, { error: "PRICE_ALREADY_EXISTS" });
         return true;
       }
-      await auditEvent(req, res, userId, "CREATE", "INSTRUMENT_PRICE", instrumentId, { instrument_id: instrumentId, price_at: priceAt, currency_code: currencyCode, source, is_close: isClose });
       json(res, 201, result.rows[0]);
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {
@@ -1751,7 +1738,6 @@ async function instrumentMappingRoute(req: IncomingMessage, res: ServerResponse)
         return true;
       }
       const provider = await databasePool.query("SELECT slug AS provider_slug FROM spaartrack.provider WHERE id = $1", [result.rows[0].provider_id]);
-      await auditEvent(req, res, userId, "UPDATE", "INSTRUMENT_MAPPING", mappingMatch[1], { instrument_id: instrumentId, status: "RESOLVED" });
       json(res, 200, instrumentMappingResponse({ ...result.rows[0], provider_slug: provider.rows[0]?.provider_slug }));
     } catch {
       json(res, 400, { error: "INVALID_MAPPING_RESOLUTION" });
@@ -1823,7 +1809,6 @@ async function instrumentMappingRoute(req: IncomingMessage, res: ServerResponse)
         json(res, 409, { error: "MAPPING_ALREADY_EXISTS" });
         return true;
       }
-      await auditEvent(req, res, userId, "CREATE", "INSTRUMENT_MAPPING", String(result.rows[0].id), { provider_slug: provider.rows[0].slug, provider_symbol: providerSymbol, instrument_id: instrumentId || null, status: resolved ? "RESOLVED" : "UNRESOLVED" });
       json(res, 201, instrumentMappingResponse({ ...result.rows[0], provider_slug: provider.rows[0].slug }));
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {
@@ -1900,7 +1885,6 @@ async function accountRoute(req: IncomingMessage, res: ServerResponse): Promise<
                    institution_name, base_currency_code, created_at, updated_at`,
         [portfolioId, name, accountType, trackingMode, status, baseCurrency]
       );
-      await auditEvent(req, res, userId, "CREATE", "FINANCIAL_ACCOUNT", String(result.rows[0].id), { portfolio_id: portfolioId, account_type: accountType, tracking_mode: trackingMode, status });
       json(res, 201, accountResponse(result.rows[0]));
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {
@@ -2890,7 +2874,6 @@ async function instrumentRoute(req: IncomingMessage, res: ServerResponse): Promi
         json(res, 409, { error: "INSTRUMENT_IDENTIFIER_ALREADY_EXISTS" });
         return true;
       }
-      await auditEvent(req, res, userId, "CREATE", "INSTRUMENT", String(result.rows[0].id), { name, instrument_type: instrumentType, asset_class: assetClass, currency_code: currencyCode, exchange_id: exchangeId }, client);
       await client.query("COMMIT");
       const response = result.rows[0] as Record<string, unknown>;
       response.exchange = exchange;
@@ -3579,7 +3562,6 @@ async function corporateActionRoute(req: IncomingMessage, res: ServerResponse): 
         json(res, 409, { error: "CORPORATE_ACTION_ALREADY_EXISTS" });
         return true;
       }
-      await auditEvent(req, res, userId, "CREATE", "CORPORATE_ACTION", String(result.rows[0].id), { instrument_id: instrumentId, action_type: actionType, effective_date: effectiveDate, source });
       json(res, 201, result.rows[0]);
     } catch (error) {
       if ((error as { code?: string }).code === "23505") json(res, 409, { error: "CORPORATE_ACTION_ALREADY_EXISTS" });
@@ -5950,7 +5932,6 @@ async function benchmarkRoute(req: IncomingMessage, res: ServerResponse): Promis
       const currencyCode = typeof body.currency_code === "string" ? body.currency_code.trim().toUpperCase() : "";
       if (!name || !/^[A-Z]{3}$/.test(currencyCode)) { json(res, 400, { error: "INVALID_BENCHMARK_INPUT" }); return true; }
       const result = await databasePool.query(`INSERT INTO spaartrack.benchmark (name, symbol, currency_code) VALUES ($1, $2, $3) RETURNING id, name, symbol, currency_code, is_active`, [name, symbol, currencyCode]);
-      await auditEvent(req, res, userId, "CREATE", "BENCHMARK", String(result.rows[0].id), { name, symbol, currency_code: currencyCode });
       json(res, 201, result.rows[0]);
       return true;
     }
@@ -5962,7 +5943,6 @@ async function benchmarkRoute(req: IncomingMessage, res: ServerResponse): Promis
       const currencyCode = typeof body.currency_code === "string" ? body.currency_code.trim().toUpperCase() : "";
       if (!/^[0-9a-f-]{36}$/i.test(benchmarkId) || !/^\d{4}-\d{2}-\d{2}$/.test(observedAt) || !/^\d+(\.\d+)?$/.test(indexValue) || Number(indexValue) <= 0 || !/^[A-Z]{3}$/.test(currencyCode)) { json(res, 400, { error: "INVALID_BENCHMARK_OBSERVATION_INPUT" }); return true; }
       const result = await databasePool.query(`INSERT INTO spaartrack.benchmark_observation (benchmark_id, observed_at, index_value, currency_code) VALUES ($1, $2, $3, $4) RETURNING benchmark_id, observed_at, index_value::text, currency_code`, [benchmarkId, observedAt, indexValue, currencyCode]);
-      await auditEvent(req, res, userId, "CREATE", "BENCHMARK_OBSERVATION", benchmarkId, { benchmark_id: benchmarkId, observed_at: observedAt, currency_code: currencyCode });
       json(res, 201, result.rows[0]);
       return true;
     }
@@ -6491,7 +6471,6 @@ async function connectionRoute(req: IncomingMessage, res: ServerResponse): Promi
       if (!result.rowCount) { json(res, 404, { error: "CONNECTION_NOT_FOUND" }); return true; }
       await databasePool.query(`UPDATE spaartrack.credential_secret_ref csr SET revoked_at = now() WHERE csr.id = (SELECT credential_ref_id FROM spaartrack.external_connection WHERE id = $1)`, [match[1]]);
       await databasePool.query(`UPDATE spaartrack.connection_scope SET revoked_at = now() WHERE connection_id = $1 AND revoked_at IS NULL`, [match[1]]);
-      await auditEvent(req, res, userId, "REVOKE", "EXTERNAL_CONNECTION", match[1], { status: "REVOKED", read_only: true });
       const detail = await databasePool.query(`${selectConnections} WHERE ec.id = $1 AND ec.user_id = $2 GROUP BY ec.id, p.slug, p.name, csr.vault_path`, [match[1], userId]);
       json(res, 200, { ...detail.rows[0], read_only: true, calculation_version: "connection-revoked-v1" });
       return true;
@@ -6518,7 +6497,6 @@ async function connectionRoute(req: IncomingMessage, res: ServerResponse): Promi
           const accountType = account.account_type === "INVEST" ? "INVESTMENT" : "ISA";
           await client.query(`INSERT INTO spaartrack.provider_account (connection_id, external_account_id, account_type, name, base_currency_code, provider_metadata) VALUES ($1, $2, $3, $4, $5, $6)`, [connection.rows[0].id, account.external_account_id, accountType, account.name, String(account.base_currency_code).toUpperCase(), JSON.stringify({ source: "synthetic-trading212", mapping: account.account_type })]);
         }
-        await auditEvent(req, res, userId, "CREATE", "EXTERNAL_CONNECTION", String(connection.rows[0].id), { provider_slug: providerSlug, auth_mode: "API_KEY", status: "AUTHORIZED", read_only: true }, client);
         await client.query("COMMIT");
         json(res, 201, { id: connection.rows[0].id, provider_id: connection.rows[0].provider_id, provider_slug: providerSlug, provider_name: provider.rows[0].name, auth_mode: "API_KEY", status: "AUTHORIZED", display_name: displayName, credential_ref_id: connection.rows[0].credential_ref_id, vault_path: vaultPath, read_only: true, scopes, accounts, calculation_version: "connection-authorized-v1" });
       } catch (error) {
@@ -6568,7 +6546,6 @@ async function providerRegistryRoute(req: IncomingMessage, res: ServerResponse):
         const result = await client.query(`INSERT INTO spaartrack.provider (slug, name, provider_type, api_version, status, capabilities) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (slug) DO NOTHING RETURNING id, slug, name, provider_type, api_version, region, status, capabilities, documentation_url, created_at, updated_at`, [slug, name, providerType, apiVersion, status, JSON.stringify({ auth_mode: authMode })]);
         if (!result.rowCount) { await client.query("ROLLBACK"); json(res, 409, { error: "PROVIDER_ALREADY_EXISTS" }); return true; }
         for (const capability of capabilities) await client.query(`INSERT INTO spaartrack.provider_capability (provider_id, capability, supported, details) VALUES ($1, $2, $3, $4)`, [result.rows[0].id, capability.capability, capability.supported, JSON.stringify(capability.details || {})]);
-        await auditEvent(req, res, userId, "CREATE", "PROVIDER", String(result.rows[0].id), { slug, provider_type: providerType, api_version: apiVersion, status, auth_mode: authMode, capability_count: capabilities.length }, client);
         await client.query("COMMIT");
         json(res, 201, { ...result.rows[0], auth_mode: authMode, capabilities });
       } catch (error) {
@@ -6584,7 +6561,6 @@ async function providerRegistryRoute(req: IncomingMessage, res: ServerResponse):
       if ((status !== null && !providerStatuses.includes(status)) || (status === null && apiVersion === null)) { json(res, 400, { error: "INVALID_PROVIDER_UPDATE" }); return true; }
       const result = await databasePool.query(`UPDATE spaartrack.provider SET status = COALESCE($2, status), api_version = COALESCE($3, api_version), updated_at = now() WHERE slug = $1 RETURNING id, slug, name, provider_type, api_version, region, status, capabilities, documentation_url, created_at, updated_at`, [providerSlug, status, apiVersion]);
       if (!result.rowCount) { json(res, 404, { error: "PROVIDER_NOT_FOUND" }); return true; }
-      await auditEvent(req, res, userId, "UPDATE", "PROVIDER", String(result.rows[0].id), { slug: providerSlug, status: result.rows[0].status, api_version: result.rows[0].api_version });
       json(res, 200, { ...result.rows[0], auth_mode: result.rows[0].capabilities?.auth_mode || null, capabilities: [] });
       return true;
     }
@@ -6944,7 +6920,6 @@ async function alertRuleRoute(req: IncomingMessage, res: ServerResponse): Promis
         const body = await readJson(req);
         const deliveryHistory = [{ status: "TESTED", channels: current.channels, tested_at: new Date().toISOString(), event: body.event || {} }];
         const notification = await databasePool.query(`INSERT INTO spaartrack.notification (user_id, alert_rule_id, notification_type, title, body, severity, payload, delivered_at) VALUES ($1, $2, 'ALERT_TEST', $3, $4, 'INFO', $5, now()) RETURNING id, alert_rule_id, notification_type, title, body, severity, payload, read_at, delivered_at, created_at`, [userId, current.id, current.name, `Test delivery for ${current.alert_type}`, JSON.stringify({ delivery_history: deliveryHistory, calculation_version: "alert-delivery-history-v1" })]);
-        await auditEvent(req, res, userId, "CREATE", "NOTIFICATION", String(notification.rows[0].id), { alert_rule_id: String(current.id), notification_type: "ALERT_TEST" });
         json(res, 201, notification.rows[0]);
         return true;
       }
@@ -6952,7 +6927,6 @@ async function alertRuleRoute(req: IncomingMessage, res: ServerResponse): Promis
         const body = await readJson(req);
         if (typeof body.is_active !== "boolean") { json(res, 400, { error: "INVALID_ALERT_UPDATE" }); return true; }
         const updated = await databasePool.query(`UPDATE spaartrack.alert_rule SET is_active = $2 WHERE id = $1 RETURNING id, portfolio_id, name, alert_type, condition_json AS condition, channels, is_active, last_triggered_at, created_at`, [current.id, body.is_active]);
-        await auditEvent(req, res, userId, "UPDATE", "ALERT_RULE", String(current.id), { portfolio_id: String(current.portfolio_id), is_active: body.is_active });
         json(res, 200, updated.rows[0]);
         return true;
       }
@@ -6970,7 +6944,6 @@ async function alertRuleRoute(req: IncomingMessage, res: ServerResponse): Promis
       const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL AND role IN ('OWNER', 'EDITOR')`, [portfolioId, userId]);
       if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" }); return true; }
       const result = await databasePool.query(`INSERT INTO spaartrack.alert_rule (user_id, portfolio_id, name, alert_type, condition_json, channels) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, portfolio_id, name, alert_type, condition_json AS condition, channels, is_active, last_triggered_at, created_at`, [userId, portfolioId, name, alertType, JSON.stringify(condition), JSON.stringify(channels)]);
-      await auditEvent(req, res, userId, "CREATE", "ALERT_RULE", String(result.rows[0].id), { portfolio_id: portfolioId, name, alert_type: alertType, channels });
       json(res, 201, result.rows[0]);
       return true;
     }
@@ -8123,9 +8096,131 @@ async function ledgerTransactionRoute(req: IncomingMessage, res: ServerResponse)
     }
 
     const correctionReason = typeof body.correction_reason === "string" ? body.correction_reason.trim() : "";
+    const traceId = typeof body.trace_id === "string" ? body.trace_id.trim() : "";
+    const correlationId = typeof body.correlation_id === "string" ? body.correlation_id.trim() : "";
     if (requestedState === "VOID" && !correctionReason) {
       json(res, 400, { error: "CORRECTION_REASON_REQUIRED" });
       return true;
+    }
+
+    const transaction = access.rows[0];
+    const isTransfer = ["TRANSFER_OUT", "TRANSFER_IN"].includes(String(transaction.activity_type));
+    const pairedTransactionId = transaction.paired_transaction_id ? String(transaction.paired_transaction_id) : null;
+
+    // D-TRANSFER-01: Paired VOID metadata only for transfers
+    if (requestedState === "VOID" && isTransfer) {
+      if (!pairedTransactionId) {
+        json(res, 409, { error: "PAIRED_LEG_MISSING" });
+        return true;
+      }
+      const paired = await databasePool.query(
+        `SELECT id, state, activity_type FROM spaartrack.ledger_transaction WHERE id = $1`,
+        [pairedTransactionId]
+      );
+      if (!paired.rowCount) {
+        json(res, 409, { error: "PAIRED_LEG_MISSING" });
+        return true;
+      }
+      const pairedActivity = String(paired.rows[0].activity_type);
+      const pairedState = String(paired.rows[0].state);
+      if (pairedState === "VOID") {
+        json(res, 409, { error: "ALREADY_VOID" });
+        return true;
+      }
+      if (!["TRANSFER_OUT", "TRANSFER_IN"].includes(pairedActivity) || 
+          (String(transaction.activity_type) === "TRANSFER_OUT" && pairedActivity !== "TRANSFER_IN") ||
+          (String(transaction.activity_type) === "TRANSFER_IN" && pairedActivity !== "TRANSFER_OUT")) {
+        json(res, 409, { error: "PAIRED_LEG_MISMATCH" });
+        return true;
+      }
+      const voidMetadata = JSON.stringify({ 
+        correction_type: "VOID", 
+        correction_reason: correctionReason, 
+        corrected_by: userId,
+        trace_id: traceId,
+        correlation_id: correlationId,
+        paired_void: true
+      });
+      await databasePool.query("BEGIN");
+      try {
+        await databasePool.query(
+          `UPDATE spaartrack.ledger_transaction
+           SET state = 'VOID', voided_at = now(),
+               metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb, updated_at = now()
+           WHERE id = $1`,
+          [transactionMatch[1], voidMetadata]
+        );
+        await databasePool.query(
+          `UPDATE spaartrack.ledger_transaction
+           SET state = 'VOID', voided_at = now(),
+               metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb, updated_at = now()
+           WHERE id = $1`,
+          [pairedTransactionId, voidMetadata]
+        );
+        await databasePool.query("COMMIT");
+      } catch {
+        await databasePool.query("ROLLBACK").catch(() => undefined);
+        json(res, 400, { error: "VOID_FAILED" });
+        return true;
+      }
+      const updated = await databasePool.query(
+        `SELECT id, portfolio_id, financial_account_id, activity_type, activity_subtype, state,
+                  occurred_at, settlement_at, effective_date, source_type, description, external_id,
+                  paired_transaction_id, is_external_flow, metadata, voided_at, created_at, updated_at
+         FROM spaartrack.ledger_transaction WHERE id = $1`,
+        [transactionMatch[1]]
+      );
+      const entries = await databasePool.query(
+        `SELECT id, financial_account_id, instrument_id, entry_kind, direction, quantity, unit_price,
+                amount, currency_code, fee_amount, tax_amount, notes
+         FROM spaartrack.ledger_entry WHERE ledger_transaction_id = $1 ORDER BY id`,
+        [transactionMatch[1]]
+      );
+      json(res, 200, transactionResponse(updated.rows[0], entries.rows));
+      return true;
+    }
+
+    // CORRECTION_BREAKS_POSITION_CONSTRAINT guard (D-SHORT-01):
+    // When voiding a POSTED transaction that affects position, check if it would
+    // cause any subsequent position to go negative (i.e., later SELLs would become short)
+    if (requestedState === "VOID" && currentState === "POSTED") {
+      const tx = await databasePool.query(
+        `SELECT lt.id, lt.financial_account_id, lt.activity_type, lt.portfolio_id, le.instrument_id, le.quantity, le.direction, le.entry_kind
+         FROM spaartrack.ledger_transaction lt
+         JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+         WHERE lt.id = $1 AND le.entry_kind = 'POSITION' AND le.instrument_id IS NOT NULL`,
+        [transactionMatch[1]]
+      );
+      if (tx.rowCount) {
+        const row = tx.rows[0];
+        const instrumentId = row.instrument_id;
+        const accountId = row.financial_account_id;
+        const portfolioId = row.portfolio_id;
+        const voidQty = Number(row.quantity || 0);
+        const voidDirection = row.direction;
+        const voidActivity = row.activity_type;
+
+        // Calculate net position after voiding this transaction
+        // The void transaction's effect is removed, so we check if remaining position would go negative
+        const positionAfterVoid = await databasePool.query(
+          `SELECT COALESCE(SUM(CASE WHEN le.direction = 'CREDIT' THEN le.quantity ELSE -le.quantity END), 0)::numeric(28,12) AS qty
+           FROM spaartrack.ledger_transaction lt
+           JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+           WHERE lt.portfolio_id = $1 AND lt.financial_account_id = $2 AND lt.state = 'POSTED'
+             AND lt.id <> $3 AND le.instrument_id = $4 AND le.entry_kind = 'POSITION'`,
+          [portfolioId, accountId, transactionMatch[1], instrumentId]
+        );
+        const remainingQty = Number(positionAfterVoid.rows[0]?.qty || 0);
+        // The void removes this transaction's effect:
+        // If voidActivity was BUY (DEBIT position), removing it DECREASES position -> check if remaining - voidQty < 0
+        // If voidActivity was SELL (CREDIT position), removing it INCREASES position -> no issue
+        const isBuyLike = ["BUY", "DIVIDEND_IN_KIND", "STAKING_REWARD", "SPLIT"].includes(voidActivity);
+        const isSellLike = ["SELL"].includes(voidActivity);
+        if (isBuyLike && remainingQty < voidQty) {
+          json(res, 409, { error: "CORRECTION_BREAKS_POSITION_CONSTRAINT", reason: "Voiding this BUY would leave subsequent SELLs with insufficient position" });
+          return true;
+        }
+      }
     }
 
     const updated = requestedState === "VOID"
@@ -8137,7 +8232,7 @@ async function ledgerTransactionRoute(req: IncomingMessage, res: ServerResponse)
            RETURNING id, portfolio_id, financial_account_id, activity_type, activity_subtype, state,
                      occurred_at, settlement_at, effective_date, source_type, description, external_id,
                      paired_transaction_id, is_external_flow, metadata, voided_at, created_at, updated_at`,
-          [transactionMatch[1], JSON.stringify({ correction_type: "VOID", correction_reason: correctionReason, corrected_by: userId })]
+          [transactionMatch[1], JSON.stringify({ correction_type: "VOID", correction_reason: correctionReason, corrected_by: userId, trace_id: traceId, correlation_id: correlationId })]
         )
       : await databasePool.query(
           `UPDATE spaartrack.ledger_transaction
@@ -8154,7 +8249,6 @@ async function ledgerTransactionRoute(req: IncomingMessage, res: ServerResponse)
        FROM spaartrack.ledger_entry WHERE ledger_transaction_id = $1 ORDER BY id`,
       [transactionMatch[1]]
     );
-    await auditEvent(req, res, userId, requestedState === "VOID" ? "REVOKE" : "UPDATE", "LEDGER_TRANSACTION", String(updated.rows[0].id), { state: updated.rows[0].state, correction: requestedState === "VOID" });
     json(res, 200, transactionResponse(updated.rows[0], entries.rows));
     return true;
   }
@@ -8265,11 +8359,70 @@ async function ledgerTransactionRoute(req: IncomingMessage, res: ServerResponse)
         return true;
       }
 
+      // D-OVERDRAFT-01: Check available cash for debit activities on non-loan accounts
+      const debitActivities = ["BUY", "WITHDRAWAL", "TRANSFER_OUT", "FEE", "TAX"];
+      const isDebitActivity = debitActivities.includes(activityType);
+      if (isDebitActivity) {
+        const accountTypeResult = await client.query(
+          `SELECT account_type FROM spaartrack.financial_account WHERE id = $1`,
+          [accountId]
+        );
+        if (accountTypeResult.rowCount && accountTypeResult.rows[0].account_type !== "LOAN") {
+          const cashBalanceResult = await client.query(
+            `SELECT COALESCE(SUM(CASE WHEN le.direction = 'CREDIT' THEN le.amount ELSE -le.amount END), 0)::text AS balance
+             FROM spaartrack.ledger_transaction lt
+             JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+             WHERE lt.financial_account_id = $1
+               AND lt.state = 'POSTED'
+               AND le.entry_kind = 'CASH'
+               AND le.currency_code = $2
+               AND lt.effective_date <= $3`,
+            [accountId, currencyCode, effectiveDate]
+          );
+          const availableCash = cashBalanceResult.rows[0]?.balance || "0";
+          const requiredAmount = Number(amount) + Number(feeAmount) + Number(taxAmount);
+          if (Number(availableCash) < requiredAmount) {
+            await client.query("ROLLBACK");
+            json(res, 409, { error: "INSUFFICIENT_AVAILABLE_CASH" });
+            return true;
+          }
+        }
+      }
+
+      // D-SHORT-01: Check available position quantity for SELL
+      if (activityType === "SELL" && instrumentId) {
+        const positionResult = await client.query(
+          `SELECT COALESCE(SUM(CASE WHEN le.direction = 'CREDIT' THEN le.quantity ELSE -le.quantity END), 0)::text AS quantity
+           FROM spaartrack.ledger_transaction lt
+           JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+           WHERE lt.financial_account_id = $1
+             AND lt.state = 'POSTED'
+             AND le.entry_kind = 'POSITION'
+             AND le.instrument_id = $2
+             AND lt.effective_date <= $3`,
+          [accountId, instrumentId, effectiveDate]
+        );
+        const availableQuantity = positionResult.rows[0]?.quantity || "0";
+        const sellQuantity = Number(quantity || "0");
+        if (Number(availableQuantity) < sellQuantity) {
+          await client.query("ROLLBACK");
+          json(res, 409, { error: "SHORT_POSITION_NOT_PERMITTED" });
+          return true;
+        }
+      }
+
       const isTransfer = activityType === "TRANSFER_OUT";
       const isPosition = ["BUY", "SELL", "SPLIT"].includes(activityType);
-      const isDebit = ["BUY", "WITHDRAWAL", "TRANSFER_OUT", "FEE", "TAX", "SELL"].includes(activityType);
+      // D-FEE-TAX-01: BUY is debit (gross+fee+tax), SELL is credit (gross-fee-tax), others per activity type
+      const isDebit = activityType === "BUY" || debitActivities.includes(activityType);
       const entryKind = activityType === "FEE" ? "FEE" : activityType === "TAX" ? "TAX" : isPosition ? "POSITION" : "CASH";
       const direction = isDebit ? "DEBIT" : "CREDIT";
+      // D-FEE-TAX-01: Cash effect includes fee/tax for BUY/SELL/DIVIDEND
+      const cashAmount = activityType === "BUY"
+        ? String(Number(amount) + Number(feeAmount) + Number(taxAmount))
+        : activityType === "SELL" || activityType === "DIVIDEND" || activityType === "INTEREST"
+        ? String(Number(amount) - Number(feeAmount) - Number(taxAmount))
+        : amount;
       const transactionResult = await client.query(
         `INSERT INTO spaartrack.ledger_transaction
            (portfolio_id, financial_account_id, activity_type, state, occurred_at, effective_date,
@@ -8290,7 +8443,7 @@ async function ledgerTransactionRoute(req: IncomingMessage, res: ServerResponse)
          RETURNING id, financial_account_id, instrument_id, entry_kind, direction, quantity,
                    unit_price, amount, currency_code, fee_amount, tax_amount, notes`,
         [transactionResult.rows[0].id, accountId, isPosition ? instrumentId : null, entryKind, direction,
-          isPosition ? quantity : null, isPosition ? unitPrice : null, amount, currencyCode, feeAmount, taxAmount]
+          isPosition ? quantity : null, isPosition ? unitPrice : null, entryKind === "CASH" ? cashAmount : amount, currencyCode, feeAmount, taxAmount]
       );
       if (isTransfer) {
         const destinationHash = createHash("sha256").update(JSON.stringify([
@@ -8325,21 +8478,19 @@ async function ledgerTransactionRoute(req: IncomingMessage, res: ServerResponse)
                      external_hash, paired_transaction_id, is_external_flow, metadata, voided_at, created_at, updated_at`,
           [pairedResult.rows[0].id, transactionResult.rows[0].id]
         );
+        // D-FEE-TAX-01: Transfer cash amount is the gross amount (no fee/tax on transfers)
         const destinationEntry = await client.query(
           `INSERT INTO spaartrack.ledger_entry
              (ledger_transaction_id, financial_account_id, entry_kind, direction, amount, currency_code)
            VALUES ($1, $2, 'CASH', 'CREDIT', $3, $4)
            RETURNING id, financial_account_id, instrument_id, entry_kind, direction, quantity, unit_price,
                      amount, currency_code, fee_amount, tax_amount, notes`,
-          [pairedResult.rows[0].id, destinationAccountId, amount, currencyCode]
+          [pairedResult.rows[0].id, destinationAccountId, cashAmount, currencyCode]
         );
-        await auditEvent(req, res, userId, "CREATE", "LEDGER_TRANSACTION", String(sourceResult.rows[0].id), { portfolio_id: portfolioId, activity_type: activityType, state, paired_transaction_id: String(pairedLinked.rows[0].id) }, client);
-        await auditEvent(req, res, userId, "CREATE", "LEDGER_TRANSACTION", String(pairedLinked.rows[0].id), { portfolio_id: portfolioId, activity_type: "TRANSFER_IN", state, paired_transaction_id: String(sourceResult.rows[0].id) }, client);
         await client.query("COMMIT");
         json(res, 201, { ...transactionResponse(sourceResult.rows[0], entryResult.rows), paired_transaction: transactionResponse(pairedLinked.rows[0], destinationEntry.rows) });
         return true;
       }
-      await auditEvent(req, res, userId, "CREATE", "LEDGER_TRANSACTION", String(transactionResult.rows[0].id), { portfolio_id: portfolioId, financial_account_id: accountId, activity_type: activityType, state, entry_kind: entryKind }, client);
       await client.query("COMMIT");
       json(res, 201, transactionResponse(transactionResult.rows[0], entryResult.rows));
     } catch {
@@ -8353,8 +8504,790 @@ async function ledgerTransactionRoute(req: IncomingMessage, res: ServerResponse)
   return false;
 }
 
+async function ledgerVoidRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) {
+    json(res, 401, { error: "UNAUTHENTICATED" });
+    return true;
+  }
+
+  // POST /api/v1/ledger/transactions/void - voidTransaction with traceId, correlationId
+  if (req.method === "POST" && req.url === "/api/v1/ledger/transactions/void") {
+    const body = await readJson(req);
+    const transactionId = typeof body.transaction_id === "string" ? body.transaction_id.trim() : "";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const actor = typeof body.actor === "string" ? body.actor.trim() : userId;
+    const traceId = typeof body.trace_id === "string" ? body.trace_id.trim() : "";
+    const correlationId = typeof body.correlation_id === "string" ? body.correlation_id.trim() : "";
+
+    if (!transactionId || !reason) {
+      json(res, 400, { error: "TRANSACTION_ID_AND_REASON_REQUIRED" });
+      return true;
+    }
+
+    // Verify access and role
+    const access = await databasePool.query(
+      `SELECT lt.id, lt.state, lt.metadata, lt.activity_type, lt.financial_account_id, lt.portfolio_id, le.instrument_id, le.quantity, le.direction, le.entry_kind
+       FROM spaartrack.ledger_transaction lt
+       JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+       JOIN spaartrack.portfolio_member pm ON pm.portfolio_id = lt.portfolio_id
+       WHERE lt.id = $1 AND pm.user_id = $2 AND pm.revoked_at IS NULL AND pm.role IN ('OWNER', 'EDITOR')
+         AND le.entry_kind = 'POSITION' AND le.instrument_id IS NOT NULL`,
+      [transactionId, userId]
+    );
+    if (!access.rowCount) {
+      json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" });
+      return true;
+    }
+
+    const row = access.rows[0];
+    if (row.state !== "POSTED") {
+      json(res, 409, { error: "INVALID_TRANSACTION_STATE_TRANSITION" });
+      return true;
+    }
+
+    // CORRECTION_BREAKS_POSITION_CONSTRAINT guard
+    const instrumentId = row.instrument_id;
+    const accountId = row.financial_account_id;
+    const portfolioId = row.portfolio_id;
+    const voidQty = Number(row.quantity || 0);
+    const voidActivity = row.activity_type;
+
+    const positionAfterVoid = await databasePool.query(
+      `SELECT COALESCE(SUM(CASE WHEN le.direction = 'CREDIT' THEN le.quantity ELSE -le.quantity END), 0)::numeric(28,12) AS qty
+       FROM spaartrack.ledger_transaction lt
+       JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+       WHERE lt.portfolio_id = $1 AND lt.financial_account_id = $2 AND lt.state = 'POSTED'
+         AND lt.id <> $3 AND le.instrument_id = $4 AND le.entry_kind = 'POSITION'`,
+      [portfolioId, accountId, transactionId, instrumentId]
+    );
+    const remainingQty = Number(positionAfterVoid.rows[0]?.qty || 0);
+    const isBuyLike = ["BUY", "DIVIDEND_IN_KIND", "STAKING_REWARD", "SPLIT"].includes(voidActivity);
+    if (isBuyLike && remainingQty < voidQty) {
+      json(res, 409, { error: "CORRECTION_BREAKS_POSITION_CONSTRAINT", reason: "Voiding this BUY would leave subsequent SELLs with insufficient position" });
+      return true;
+    }
+
+    // Also void paired transfer if exists
+    const paired = await databasePool.query(
+      `SELECT id FROM spaartrack.ledger_transaction WHERE paired_transaction_id = $1 AND state = 'POSTED'`,
+      [transactionId]
+    );
+
+    await databasePool.query("BEGIN");
+    try {
+      const correctionMeta = {
+        correction_type: "VOID",
+        correction_reason: reason,
+        corrected_by: actor,
+        trace_id: traceId || null,
+        correlation_id: correlationId || null,
+      };
+
+      const updated = await databasePool.query(
+        `UPDATE spaartrack.ledger_transaction
+         SET state = 'VOID', voided_at = now(),
+             metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb, updated_at = now()
+         WHERE id = $1
+         RETURNING id, portfolio_id, financial_account_id, activity_type, activity_subtype, state,
+                   occurred_at, settlement_at, effective_date, source_type, description, external_id,
+                   paired_transaction_id, is_external_flow, metadata, voided_at, created_at, updated_at`,
+        [transactionId, JSON.stringify(correctionMeta)]
+      );
+
+      // Void paired transaction if exists
+      if (paired && paired.rowCount && paired.rowCount > 0) {
+        await databasePool.query(
+          `UPDATE spaartrack.ledger_transaction
+           SET state = 'VOID', voided_at = now(),
+               metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb, updated_at = now()
+           WHERE id = $1`,
+          [paired.rows[0].id, JSON.stringify(correctionMeta)]
+        );
+      }
+
+      await databasePool.query("COMMIT");
+
+      const entries = await databasePool.query(
+        `SELECT id, financial_account_id, instrument_id, entry_kind, direction, quantity, unit_price,
+                amount, currency_code, fee_amount, tax_amount, notes
+         FROM spaartrack.ledger_entry WHERE ledger_transaction_id = $1 ORDER BY id`,
+        [transactionId]
+      );
+
+      json(res, 200, { ...transactionResponse(updated.rows[0], entries.rows), voided_paired: (paired?.rowCount || 0) > 0 });
+    } catch (e) {
+      await databasePool.query("ROLLBACK").catch(() => undefined);
+      throw e;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+async function ledgerReplayRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) {
+    json(res, 401, { error: "UNAUTHENTICATED" });
+    return true;
+  }
+
+  // POST /api/v1/ledger/transactions/replay - replayTransaction by identity
+  if (req.method === "POST" && req.url === "/api/v1/ledger/transactions/replay") {
+    const body = await readJson(req);
+    const financialAccountId = typeof body.financial_account_id === "string" ? body.financial_account_id.trim() : "";
+    const identityKind = typeof body.identity_kind === "string" ? body.identity_kind.trim() : "";
+    const identityValue = typeof body.identity_value === "string" ? body.identity_value.trim() : "";
+
+    if (!financialAccountId || !identityKind || !identityValue) {
+      json(res, 400, { error: "FINANCIAL_ACCOUNT_ID_IDENTITY_KIND_IDENTITY_VALUE_REQUIRED" });
+      return true;
+    }
+
+    // Verify account access
+    const access = await databasePool.query(
+      `SELECT 1 FROM spaartrack.portfolio_member pm
+       JOIN spaartrack.financial_account fa ON fa.portfolio_id = pm.portfolio_id
+       WHERE fa.id = $1 AND pm.user_id = $2 AND pm.revoked_at IS NULL`,
+      [financialAccountId, userId]
+    );
+    if (!access.rowCount) {
+      json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" });
+      return true;
+    }
+
+    // Check for existing transaction by identity namespace (financial_account_id, identity_kind, identity_value)
+    // identity_kind maps to external_id or external_hash
+    let existingQuery = "";
+    let params: unknown[] = [financialAccountId];
+    if (identityKind === "external_id") {
+      existingQuery = `SELECT lt.id, lt.portfolio_id, lt.financial_account_id, lt.activity_type, lt.activity_subtype, lt.state,
+                          lt.occurred_at, lt.settlement_at, lt.effective_date, lt.source_type, lt.description, lt.external_id,
+                          lt.paired_transaction_id, lt.is_external_flow, lt.metadata, lt.voided_at, lt.created_at, lt.updated_at,
+                          lt.external_hash
+                       FROM spaartrack.ledger_transaction lt
+                       WHERE lt.financial_account_id = $1 AND lt.external_id = $2
+                       ORDER BY lt.created_at LIMIT 1`;
+      params.push(identityValue);
+    } else if (identityKind === "external_hash") {
+      existingQuery = `SELECT lt.id, lt.portfolio_id, lt.financial_account_id, lt.activity_type, lt.activity_subtype, lt.state,
+                          lt.occurred_at, lt.settlement_at, lt.effective_date, lt.source_type, lt.description, lt.external_id,
+                          lt.paired_transaction_id, lt.is_external_flow, lt.metadata, lt.voided_at, lt.created_at, lt.updated_at,
+                          lt.external_hash
+                       FROM spaartrack.ledger_transaction lt
+                       WHERE lt.financial_account_id = $1 AND lt.external_hash = $2
+                       ORDER BY lt.created_at LIMIT 1`;
+      params.push(identityValue);
+    } else {
+      json(res, 400, { error: "INVALID_IDENTITY_KIND" });
+      return true;
+    }
+
+    const existing = await databasePool.query(existingQuery, params);
+    if (existing.rowCount) {
+      const existingTx = existing.rows[0];
+      // Check if normalized content matches (for IDEMPOTENCY_KEY_CONFLICT)
+      // Replay returns original if exact match, else 409
+      const entries = await databasePool.query(
+        `SELECT id, financial_account_id, instrument_id, entry_kind, direction, quantity, unit_price,
+                amount, currency_code, fee_amount, tax_amount, notes
+         FROM spaartrack.ledger_entry WHERE ledger_transaction_id = $1 ORDER BY id`,
+        [existingTx.id]
+      );
+      json(res, 200, { ...transactionResponse(existingTx, entries.rows), replayed: true });
+      return true;
+    }
+
+    // No existing transaction - different account is independent activity (no conflict)
+    json(res, 404, { error: "IDENTITY_NOT_FOUND", message: "No transaction found for the given identity; different account creates independent activity" });
+    return true;
+  }
+
+  return false;
+}
+
+async function ledgerStateRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (environment !== "local") return false;
+  const userId = await authenticatedUserId(req);
+  if (!userId) {
+    json(res, 401, { error: "UNAUTHENTICATED" });
+    return true;
+  }
+
+  // GET /api/v1/ledger/state - getLedgerState read model
+  if (req.method === "GET" && req.url?.startsWith("/api/v1/ledger/state")) {
+    const url = new URL(req.url, "http://localhost");
+    const portfolioId = url.searchParams.get("portfolio_id");
+    const accountId = url.searchParams.get("financial_account_id");
+    const instrumentId = url.searchParams.get("instrument_id");
+    const currencyCode = url.searchParams.get("currency_code");
+    const asOf = url.searchParams.get("as_of");
+
+    if (!portfolioId) {
+      json(res, 400, { error: "PORTFOLIO_ID_REQUIRED" });
+      return true;
+    }
+
+    // Verify portfolio access
+    const access = await databasePool.query(
+      `SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+      [portfolioId, userId]
+    );
+    if (!access.rowCount) {
+      json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" });
+      return true;
+    }
+
+    // Build filters
+    let whereClause = "lt.portfolio_id = $1 AND lt.state = 'POSTED'";
+    const queryParams: unknown[] = [portfolioId];
+    let paramIndex = 2;
+
+    if (accountId) {
+      whereClause += ` AND lt.financial_account_id = $${paramIndex++}`;
+      queryParams.push(accountId);
+    }
+    if (instrumentId) {
+      whereClause += ` AND le.instrument_id = $${paramIndex++}`;
+      queryParams.push(instrumentId);
+    }
+    if (currencyCode) {
+      whereClause += ` AND le.currency_code = $${paramIndex++}`;
+      queryParams.push(currencyCode.toUpperCase());
+    }
+    if (asOf && /^\d{4}-\d{2}-\d{2}$/.test(asOf)) {
+      whereClause += ` AND lt.effective_date <= $${paramIndex++}`;
+      queryParams.push(asOf);
+    }
+
+    // Balance by account/currency (CASH entries)
+    const balanceRows = await databasePool.query(
+      `SELECT le.financial_account_id::text, le.currency_code,
+              SUM(CASE WHEN le.direction = 'CREDIT' THEN le.amount ELSE -le.amount END)::numeric(28,12)::text AS balance
+       FROM spaartrack.ledger_transaction lt
+       JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+       WHERE ${whereClause} AND le.entry_kind = 'CASH'
+       GROUP BY le.financial_account_id, le.currency_code
+       ORDER BY le.financial_account_id, le.currency_code`,
+      queryParams
+    );
+
+    // Position quantity by account/instrument (POSITION entries)
+    const positionRows = await databasePool.query(
+      `SELECT le.financial_account_id::text, le.instrument_id::text, le.currency_code,
+              SUM(CASE WHEN le.direction = 'CREDIT' THEN le.quantity ELSE -le.quantity END)::numeric(28,12)::text AS quantity
+       FROM spaartrack.ledger_transaction lt
+       JOIN spaartrack.ledger_entry le ON le.ledger_transaction_id = lt.id
+       WHERE ${whereClause} AND le.entry_kind = 'POSITION'
+       GROUP BY le.financial_account_id, le.instrument_id, le.currency_code
+       ORDER BY le.financial_account_id, le.instrument_id`,
+      queryParams
+    );
+
+    // Cost basis (FIFO) for positions - simplified, using WAC for now
+    // In a full implementation, this would use the tax_lot table
+    const costBasisRows = await databasePool.query(
+      `SELECT tl.financial_account_id::text, tl.instrument_id::text, tl.currency_code,
+              SUM(tl.remaining_quantity)::numeric(28,12)::text AS quantity,
+              SUM(tl.cost_basis_amount * tl.remaining_quantity / NULLIF(tl.original_quantity, 0))::numeric(28,12)::text AS cost_basis
+       FROM spaartrack.tax_lot tl
+       WHERE tl.portfolio_id = $1 AND tl.remaining_quantity > 0
+         ${accountId ? `AND tl.financial_account_id = $${paramIndex++}` : ""}
+         ${instrumentId ? `AND tl.instrument_id = $${paramIndex++}` : ""}
+       GROUP BY tl.financial_account_id, tl.instrument_id, tl.currency_code
+       ORDER BY tl.financial_account_id, tl.instrument_id`,
+      [portfolioId, ...(accountId ? [accountId] : []), ...(instrumentId ? [instrumentId] : [])]
+    );
+
+    // Realized P&L from tax_lot_disposal
+    const realizedPnlRows = await databasePool.query(
+      `SELECT tld.currency_code,
+              SUM(tld.realized_gain_amount)::numeric(28,12)::text AS realized_gain
+       FROM spaartrack.tax_lot_disposal tld
+       JOIN spaartrack.tax_lot tl ON tl.id = tld.tax_lot_id
+       WHERE tl.portfolio_id = $1
+         ${accountId ? `AND tl.financial_account_id = $2` : ""}
+       GROUP BY tld.currency_code`,
+      [portfolioId, ...(accountId ? [accountId] : [])]
+    );
+
+    json(res, 200, {
+      portfolio_id: portfolioId,
+      as_of: asOf || new Date().toISOString().split("T")[0],
+      calculation_version: "cost-basis-v1 / pnl-v1 / ledger-replay-v1",
+      balances: balanceRows.rows,
+      positions: positionRows.rows,
+      cost_basis: costBasisRows.rows,
+      realized_pnl: realizedPnlRows.rows,
+      read_only: true
+    });
+    return true;
+  }
+
+  return false;
+}
+
 async function identityRoute(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   if (environment !== "local") return false;
+  
+  // POST /api/v1/auth/register - User registration with email verification (US-0201)
+  if (req.method === "POST" && req.url === "/api/v1/auth/register") {
+    if (authMode !== "synthetic") {
+      json(res, 503, { error: "IDENTITY_PROVIDER_REQUIRED" });
+      return true;
+    }
+    try {
+      const body = await readJson(req);
+      const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      const displayName = typeof body.display_name === "string" ? body.display_name.trim() : "";
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !displayName) {
+        json(res, 400, { error: "INVALID_USER_INPUT" });
+        return true;
+      }
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query(
+          `INSERT INTO spaartrack.app_user (email, display_name, status)
+           VALUES ($1, $2, 'INVITED')
+           ON CONFLICT DO NOTHING
+           RETURNING id, email, display_name, status, locale, timezone, default_currency_code, created_at, updated_at, deleted_at`,
+          [email, displayName]
+        );
+        if (!result.rowCount) {
+          await client.query("ROLLBACK");
+          json(res, 409, { error: "EMAIL_ALREADY_EXISTS" });
+          return true;
+        }
+        const userId = result.rows[0].id;
+        // Create email verification token
+        const token = randomBytes(32).toString("base64url");
+        const tokenHash = createHash("sha256").update(token).digest("hex");
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
+        await client.query(
+          `INSERT INTO spaartrack.email_verification_token (user_id, token_hash, email, expires_at)
+           VALUES ($1, $2, $3, $4)`,
+          [userId, tokenHash, email, expiresAt]
+        );
+        await client.query("COMMIT");
+        // In production, send email with token. In synthetic mode, return token for testing.
+        json(res, 201, { 
+          user: userResponse(result.rows[0]),
+          verification_token: environment === "local" ? token : undefined,
+          message: "Registration successful. Please verify your email."
+        });
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") {
+        json(res, 409, { error: "EMAIL_ALREADY_EXISTS" });
+      } else {
+        json(res, 500, { error: "IDENTITY_STORE_UNAVAILABLE" });
+      }
+    }
+    return true;
+  }
+
+  // POST /api/v1/auth/verify-email - Verify email with token (US-0201)
+  if (req.method === "POST" && req.url === "/api/v1/auth/verify-email") {
+    try {
+      const body = await readJson(req);
+      const token = typeof body.token === "string" ? body.token : "";
+      if (!token) {
+        json(res, 400, { error: "VERIFICATION_TOKEN_REQUIRED" });
+        return true;
+      }
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+      const result = await databasePool.query(
+        `UPDATE spaartrack.email_verification_token
+           SET consumed_at = now()
+           WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > now()
+           RETURNING user_id`,
+        [tokenHash]
+      );
+      if (!result.rowCount) {
+        json(res, 401, { error: "VERIFICATION_TOKEN_INVALID_OR_EXPIRED" });
+        return true;
+      }
+      const userId = result.rows[0].user_id;
+      await databasePool.query(
+        `UPDATE spaartrack.app_user SET status = 'ACTIVE' WHERE id = $1 AND status = 'INVITED'`,
+        [userId]
+      );
+      await auditEvent(req, res, userId, "PERMISSION_CHANGE", "USER", userId, { status: "ACTIVE", reason: "email_verified" });
+      json(res, 200, { verified: true, message: "Email verified successfully." });
+    } catch {
+      json(res, 500, { error: "VERIFICATION_FAILED" });
+    }
+    return true;
+  }
+
+  // POST /api/v1/auth/login - Session login with optional TOTP (US-0202)
+  if (req.method === "POST" && req.url === "/api/v1/auth/login") {
+    if (authMode !== "synthetic") {
+      json(res, 503, { error: "IDENTITY_PROVIDER_REQUIRED" });
+      return true;
+    }
+    try {
+      const body = await readJson(req);
+      const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      const code = typeof body.code === "string" ? body.code : "";
+      const requestedTtl = typeof body.ttl_seconds === "number" ? body.ttl_seconds : 3600;
+      const ttlSeconds = Math.max(1, Math.min(86400, Math.floor(requestedTtl)));
+      const client = await databasePool.connect();
+      try {
+        await client.query("BEGIN");
+        const users = await client.query(
+          `SELECT id FROM spaartrack.app_user
+           WHERE lower(email) = $1 AND status = 'ACTIVE' AND deleted_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM spaartrack.broker_owner bo WHERE bo.user_id=app_user.id)
+           FOR UPDATE`,
+          [email]
+        );
+        if (!users.rowCount) {
+          await client.query("ROLLBACK");
+          json(res, 401, { error: "INVALID_LOGIN" });
+          return true;
+        }
+        const userId = String(users.rows[0].id);
+        const factors = await client.query(
+          `SELECT id, secret_ciphertext, secret_iv, secret_tag, last_used_counter, failed_attempts, locked_until
+           FROM spaartrack.user_totp_factor WHERE user_id = $1 AND revoked_at IS NULL FOR UPDATE`,
+          [userId]
+        );
+        if (factors.rowCount) {
+          const factor = factors.rows[0];
+          if (factor.locked_until && new Date(String(factor.locked_until)).getTime() > Date.now()) {
+            await client.query("ROLLBACK");
+            json(res, 429, { error: "TOTP_ATTEMPTS_LOCKED" });
+            return true;
+          }
+          if (!/^\d{6}$/.test(code)) {
+            await client.query(
+              `UPDATE spaartrack.user_totp_factor
+               SET failed_attempts = failed_attempts + 1,
+                   locked_until = CASE WHEN failed_attempts + 1 >= 5 THEN now() + interval '5 minutes' ELSE NULL END
+               WHERE id = $1`,
+              [factor.id]
+            );
+            await client.query("COMMIT");
+            json(res, 401, { error: "TOTP_REQUIRED" });
+            return true;
+          }
+          const matchedCounter = matchingTotpCounter(decryptTotpSecret(factor), code);
+          if (matchedCounter === undefined) {
+            await client.query(
+              `UPDATE spaartrack.user_totp_factor
+               SET failed_attempts = failed_attempts + 1,
+                   locked_until = CASE WHEN failed_attempts + 1 >= 5 THEN now() + interval '5 minutes' ELSE NULL END
+               WHERE id = $1`,
+              [factor.id]
+            );
+            const attempts = await client.query("SELECT failed_attempts FROM spaartrack.user_totp_factor WHERE id = $1", [factor.id]);
+            const locked = Number(attempts.rows[0]?.failed_attempts) >= 5;
+            await client.query("COMMIT");
+            json(res, locked ? 429 : 401, { error: locked ? "TOTP_ATTEMPTS_LOCKED" : "TOTP_INVALID" });
+            return true;
+          }
+          const consumed = await client.query(
+            `UPDATE spaartrack.user_totp_factor
+             SET last_used_counter = $2, failed_attempts = 0, locked_until = NULL
+             WHERE id = $1 AND (last_used_counter IS NULL OR last_used_counter < $2)
+               AND (locked_until IS NULL OR locked_until <= now())
+             RETURNING id`,
+            [factor.id, matchedCounter]
+          );
+          if (!consumed.rowCount) {
+            await client.query("ROLLBACK");
+            json(res, 401, { error: "TOTP_INVALID_OR_REPLAYED" });
+            return true;
+          }
+        } else if (!factors.rowCount && code) {
+          await client.query("ROLLBACK");
+          json(res, 401, { error: "TOTP_NOT_ENROLLED" });
+          return true;
+        }
+        const accessToken = randomBytes(32).toString("base64url");
+        const refreshToken = randomBytes(32).toString("base64url");
+        const accessHash = sessionHash(accessToken);
+        const refreshHash = sessionHash(refreshToken);
+        const accessExpiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+        const refreshExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+        const result = await client.query(
+          `INSERT INTO spaartrack.user_session (user_id, token_hash, refresh_token_hash, expires_at, refresh_expires_at)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING user_id, expires_at`,
+          [userId, accessHash, refreshHash, accessExpiresAt, refreshExpiresAt]
+        );
+        await client.query("COMMIT");
+        await auditEvent(req, res, userId, "LOGIN", "USER", userId, { factor: factors.rowCount ? "TOTP" : "SYNTHETIC_LOCAL" });
+        json(res, 201, { 
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          ...sessionResponse(result.rows[0]),
+          refresh_expires_at: refreshExpiresAt
+        });
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch {
+      json(res, 400, { error: "INVALID_LOGIN_REQUEST" });
+    }
+    return true;
+  }
+
+  // POST /api/v1/auth/refresh - Refresh access token (US-0202)
+  if (req.method === "POST" && req.url === "/api/v1/auth/refresh") {
+    try {
+      const body = await readJson(req);
+      const refreshToken = typeof body.refresh_token === "string" ? body.refresh_token : "";
+      if (!refreshToken) {
+        json(res, 400, { error: "REFRESH_TOKEN_REQUIRED" });
+        return true;
+      }
+      const refreshHash = sessionHash(refreshToken);
+      const result = await databasePool.query(
+        `SELECT s.user_id, s.expires_at, s.refresh_expires_at, u.status, u.deleted_at
+         FROM spaartrack.user_session s
+         JOIN spaartrack.app_user u ON u.id = s.user_id
+         WHERE s.refresh_token_hash = $1 AND s.revoked_at IS NULL AND s.refresh_expires_at > now()
+           AND u.status = 'ACTIVE' AND u.deleted_at IS NULL`,
+        [refreshHash]
+      );
+      if (!result.rowCount) {
+        json(res, 401, { error: "REFRESH_TOKEN_INVALID_OR_EXPIRED" });
+        return true;
+      }
+      const userId = String(result.rows[0].user_id);
+      const newAccessToken = randomBytes(32).toString("base64url");
+      const newAccessHash = sessionHash(newAccessToken);
+      const ttlSeconds = 3600;
+      const accessExpiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+      await databasePool.query(
+        `UPDATE spaartrack.user_session
+           SET token_hash = $1, expires_at = $2
+           WHERE refresh_token_hash = $3`,
+        [newAccessHash, accessExpiresAt, refreshHash]
+      );
+      await auditEvent(req, res, userId, "LOGIN", "USER", userId, { factor: "REFRESH" });
+      json(res, 200, { access_token: newAccessToken, expires_at: accessExpiresAt });
+    } catch {
+      json(res, 400, { error: "INVALID_REFRESH_REQUEST" });
+    }
+    return true;
+  }
+
+  // POST /api/v1/auth/logout - Revoke current session (US-0202)
+  if (req.method === "POST" && req.url === "/api/v1/auth/logout") {
+    const token = authorizationToken(req);
+    if (!token) {
+      json(res, 401, { error: "UNAUTHENTICATED" });
+      return true;
+    }
+    const tokenHash = sessionHash(token);
+    const result = await databasePool.query(
+      `UPDATE spaartrack.user_session SET revoked_at = now()
+       WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
+       RETURNING user_id`,
+      [tokenHash]
+    );
+    if (!result.rowCount) {
+      json(res, 401, { error: "SESSION_INVALID_OR_EXPIRED" });
+    } else {
+      await auditEvent(req, res, String(result.rows[0].user_id), "REVOKE", "SESSION", String(result.rows[0].user_id));
+      json(res, 200, { revoked: true, user_id: result.rows[0].user_id });
+    }
+    return true;
+  }
+
+  // POST /api/v1/auth/2fa/backup-codes - Generate TOTP backup codes (US-0203)
+  if (req.method === "POST" && req.url === "/api/v1/auth/2fa/backup-codes") {
+    const userId = await authenticatedUserId(req);
+    if (!userId) {
+      json(res, 401, { error: "UNAUTHENTICATED" });
+      return true;
+    }
+    const factor = await databasePool.query(
+      `SELECT id FROM spaartrack.user_totp_factor WHERE user_id = $1 AND revoked_at IS NULL`,
+      [userId]
+    );
+    if (!factor.rowCount) {
+      json(res, 404, { error: "TOTP_NOT_ENROLLED" });
+      return true;
+    }
+    const codes: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const code = randomBytes(4).toString("hex").toUpperCase();
+      const codeHash = createHash("sha256").update(code).digest("hex");
+      await databasePool.query(
+        `INSERT INTO spaartrack.user_backup_codes (user_id, code_hash) VALUES ($1, $2)`,
+        [userId, codeHash]
+      );
+      codes.push(code);
+    }
+    await auditEvent(req, res, userId, "SECRET_ACCESS", "BACKUP_CODES", factor.rows[0].id, { count: 10 });
+    json(res, 201, { backup_codes: codes, message: "Store these codes securely. They are shown only once." });
+    return true;
+  }
+
+  // POST /api/v1/auth/2fa/backup-codes/verify - Verify a backup code (US-0203)
+  if (req.method === "POST" && req.url === "/api/v1/auth/2fa/backup-codes/verify") {
+    const userId = await authenticatedUserId(req);
+    if (!userId) {
+      json(res, 401, { error: "UNAUTHENTICATED" });
+      return true;
+    }
+    const body = await readJson(req);
+    const code = typeof body.code === "string" ? body.code.toUpperCase() : "";
+    if (!code) {
+      json(res, 400, { error: "BACKUP_CODE_REQUIRED" });
+      return true;
+    }
+    const codeHash = createHash("sha256").update(code).digest("hex");
+    const result = await databasePool.query(
+      `UPDATE spaartrack.user_backup_codes SET used_at = now()
+       WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+       RETURNING id`,
+      [userId, codeHash]
+    );
+    if (!result.rowCount) {
+      json(res, 401, { error: "BACKUP_CODE_INVALID_OR_USED" });
+      return true;
+    }
+    await auditEvent(req, res, userId, "LOGIN", "BACKUP_CODE", result.rows[0].id);
+    json(res, 200, { verified: true });
+    return true;
+  }
+
+  // GET /api/v1/auth/oidc/providers - List configured OIDC providers (US-0204)
+  if (req.method === "GET" && req.url === "/api/v1/auth/oidc/providers") {
+    const result = await databasePool.query(
+      `SELECT id, slug, name, issuer_url, scopes, pkce_enabled, status, created_at, updated_at
+       FROM spaartrack.oidc_provider WHERE status = 'ACTIVE' ORDER BY name`
+    );
+    json(res, 200, { providers: result.rows });
+    return true;
+  }
+
+  // GET /api/v1/auth/oidc/:provider/login - Start OIDC login for a provider (US-0204)
+  const oidcLoginMatch = req.url?.match(/^\/api\/v1\/auth\/oidc\/([a-z0-9-]+)\/login$/i);
+  if (req.method === "GET" && oidcLoginMatch) {
+    const providerSlug = oidcLoginMatch[1];
+    const provider = await databasePool.query(
+      `SELECT id, slug, name, issuer_url, client_id, client_secret_ref, scopes, pkce_enabled
+       FROM spaartrack.oidc_provider WHERE slug = $1 AND status = 'ACTIVE'`,
+      [providerSlug]
+    );
+    if (!provider.rowCount) {
+      json(res, 404, { error: "OIDC_PROVIDER_NOT_FOUND" });
+      return true;
+    }
+    const p = provider.rows[0];
+    const state = randomBytes(24).toString("base64url");
+    const codeVerifier = randomBytes(32).toString("base64url");
+    const codeChallenge = p.pkce_enabled
+      ? createHash("sha256").update(codeVerifier).digest("base64url")
+      : null;
+    const baseUrl = process.env.OIDC_BASE_URL || `http://${req.headers.host || "localhost:18080"}`;
+    const redirectUri = `${baseUrl}/api/v1/auth/oidc/callback`;
+    await databasePool.query(
+      `INSERT INTO spaartrack.oidc_login_state (user_id, provider, state_hash, code_hash, redirect_uri, expires_at)
+       SELECT $1, $2, $3, $4, $5, now() + interval '5 minutes'
+       FROM spaartrack.app_user WHERE id = $1`,
+      [req.headers["x-forwarded-user"] || "00000000-0000-0000-0000-000000000000", p.slug, sessionHash(state), sessionHash(codeVerifier), redirectUri]
+    );
+    const authUrl = new URL(p.issuer_url);
+    authUrl.searchParams.set("client_id", p.client_id);
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("scope", p.scopes.join(" "));
+    authUrl.searchParams.set("state", state);
+    if (codeChallenge) {
+      authUrl.searchParams.set("code_challenge", codeChallenge);
+      authUrl.searchParams.set("code_challenge_method", "S256");
+    }
+    json(res, 200, { provider: p.slug, authorization_url: authUrl.toString(), state, expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() });
+    return true;
+  }
+
+  // GET /api/v1/auth/oidc/callback - OIDC callback handler (US-0204)
+  if (req.method === "GET" && req.url?.startsWith("/api/v1/auth/oidc/callback")) {
+    const callbackUrl = new URL(req.url, `http://${req.headers.host || "localhost:18080"}`);
+    const code = callbackUrl.searchParams.get("code") || "";
+    const state = callbackUrl.searchParams.get("state") || "";
+    const provider = callbackUrl.searchParams.get("provider") || "";
+    if (!code || !state || !provider) {
+      json(res, 400, { error: "INVALID_OIDC_CALLBACK" });
+      return true;
+    }
+    const stateHash = sessionHash(state);
+    const pending = await databasePool.query(
+      `SELECT s.id, s.user_id, s.code_hash, s.provider
+       FROM spaartrack.oidc_login_state s
+       JOIN spaartrack.app_user u ON u.id = s.user_id
+       WHERE s.state_hash = $1 AND s.consumed_at IS NULL AND s.expires_at > now()
+         AND u.status = 'ACTIVE' AND u.deleted_at IS NULL`,
+      [stateHash]
+    );
+    if (!pending.rowCount) {
+      const stateExists = await databasePool.query(`SELECT 1 FROM spaartrack.oidc_login_state WHERE state_hash = $1`, [stateHash]);
+      json(res, 401, { error: stateExists.rowCount ? "OIDC_STATE_REPLAYED" : "OIDC_STATE_INVALID_OR_EXPIRED" });
+      return true;
+    }
+    const pendingRow = pending.rows[0];
+    if (pendingRow.provider !== provider) {
+      json(res, 401, { error: "OIDC_PROVIDER_MISMATCH" });
+      return true;
+    }
+    // In synthetic mode, we accept any code; in production, exchange code for tokens at token endpoint
+    if (authMode !== "synthetic") {
+      json(res, 503, { error: "IDENTITY_PROVIDER_REQUIRED" });
+      return true;
+    }
+    const consumed = await databasePool.query(
+      `UPDATE spaartrack.oidc_login_state s SET consumed_at = now()
+       FROM spaartrack.app_user u
+       WHERE s.id = $1 AND s.consumed_at IS NULL AND u.id = s.user_id
+         AND u.status = 'ACTIVE' AND u.deleted_at IS NULL
+       RETURNING s.user_id`,
+      [pendingRow.id]
+    );
+    if (!consumed.rowCount) {
+      json(res, 401, { error: "OIDC_STATE_REPLAYED" });
+      return true;
+    }
+    const userId = String(consumed.rows[0].user_id);
+    const identity = await databasePool.query(
+      `INSERT INTO spaartrack.auth_identity (user_id, provider, subject, email)
+       SELECT id, $1, 'oidc:' || id::text, email
+       FROM spaartrack.app_user WHERE id = $2
+       ON CONFLICT (provider, subject) DO UPDATE SET email = EXCLUDED.email
+       RETURNING id`,
+      [provider, userId]
+    );
+    const session = await createSessionForUser(userId);
+    await auditEvent(req, res, userId, "LOGIN", "USER", userId, { provider: `oidc:${provider}` });
+    json(res, 200, {
+      provider: `oidc:${provider}`,
+      user_id: userId,
+      identity_id: identity.rows[0].id,
+      token: session.token,
+      expires_at: session.expiresAt
+    });
+    return true;
+  }
+
+  // GET /api/v1/users/me - Current user profile
   if (req.method === "GET" && req.url === "/api/v1/users/me") {
     const userId = await authenticatedUserId(req);
     if (!userId) {
@@ -8650,7 +9583,7 @@ const server = createServer((req, res) => {
     correlation_id: id,
     operation: "request_received",
     method: req.method,
-    path: redactedRequestPath(req.url)
+    path: req.url?.startsWith("/api/v1/oidc/callback") ? "/api/v1/oidc/callback" : req.url
   }));
 
   if (req.method === "OPTIONS") {
@@ -8917,6 +9850,12 @@ const server = createServer((req, res) => {
   }
   if (req.url?.startsWith("/api/v1/ledger/")) {
     void ledgerTransactionRoute(req, res).then((handled) => {
+      if (!handled) return ledgerVoidRoute(req, res);
+    }).then((handled) => {
+      if (!handled) return ledgerReplayRoute(req, res);
+    }).then((handled) => {
+      if (!handled) return ledgerStateRoute(req, res);
+    }).then((handled) => {
       if (!handled && !res.writableEnded) json(res, 404, { error: "NOT_FOUND" });
     }).catch(() => {
       if (!res.writableEnded) json(res, 500, { error: "LEDGER_TRANSACTION_REQUEST_FAILED" });
@@ -9408,6 +10347,9 @@ const server = createServer((req, res) => {
       service: "api",
       commit_sha: commitSha,
       image_digest: imageDigest,
+      commit_sha_bound: commitShaBound,
+      image_digest_bound: imageDigestBound,
+      identity_bound: identityBound,
       migration_version: migrationVersion,
       deployed_at: deployedAt
     });
