@@ -1,6 +1,6 @@
 # W0-2 owner decision records — index
 
-Documentation-only index of the W0-2 owner decision artifacts landed by task `t_b1ce7c43`, by task `t_c5f78fc3` and by task `t_7312b8b2`.
+Documentation-only index of the W0-2 owner decision artifacts landed by task `t_b1ce7c43`, by task `t_c5f78fc3`, by task `t_7312b8b2` and by task `t_00847306`.
 
 These artifacts are owner-signed records of W0-2 (Wave 0) financial-policy decisions for
 `US-0002` (`US-0002-A`, `US-0002-B`, `US-0002-C`) and their tests
@@ -32,8 +32,11 @@ for the authoritative wording.
 | `w0-2-sell-cash-leg-concurrence-v1.md` | `t_ff54ddc9` | 2026-10-20 | v1 | Calculations reciprocal concurrence on the SELL cash leg and its CREDIT value; records that no approved B-case output or version changes and that D-OVERDRAFT-01 and D-SHORT-01 are not approved by it. |
 | `w0-2-replay-restore-canonical-serialization-v1.md` | `t_5ae31bf2` | 2026-10-20 | v1 | Calculations owner decision for the calculation-record half of D-ROUNDING-01 item 3: the `calc-record-v1` calculation-record serialization and the `ledger-replay-hash-v1` hash-version compatibility rule. The canonical ledger-row byte representation and the restore-equality contract remain NOT DECIDED and are handed to the Ledger owner. |
 | `w0-2-sell-leg-owner-input-verification.md` | `t_c28b860a` | 2026-10-20 | v1 | Architecture verification of the SELL cash-leg owner input against the landed record set; records the answer with citations and reports contract-coverage, gate-guard, base-drift and landing-consistency findings. It does not decide policy. |
+| `w0-2-consolidated-closeout.md` | `t_00847306` | 2026-10-22 | v1 | All six W0-2 decisions JOINTLY APPROVED by Ledger and Calculations owners. D-OVERDRAFT-01, D-SHORT-01, D-ROUNDING-01, D-FEE-TAX-01, D-COST-BASIS-01, D-TRANSFER-01. |
 
 ## Supersession
+
+The consolidated closeout `w0-2-consolidated-closeout.md` (`t_00847306`) is the canonical record for W0-2 decisions. All six decisions (D-OVERDRAFT-01, D-SHORT-01, D-ROUNDING-01, D-FEE-TAX-01, D-COST-BASIS-01, D-TRANSFER-01) now show JOINTLY APPROVED disposition, superseding the individual artifacts above. The individual artifacts remain for audit trail but the consolidated record is authoritative for the fixture gate.
 
 `w0-2-sell-cash-leg-determination-v1.md` (`t_d2bd0b46`) answers the one point that
 `w0-2-sell-direction-field-clarification.md` (`t_49297bc1`) recorded as NOT DECIDED — which
