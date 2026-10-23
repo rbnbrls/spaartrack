@@ -1508,6 +1508,7 @@ async function portfolioRoute(req: IncomingMessage, res: ServerResponse): Promis
          RETURNING id, owner_user_id, name, description, status, reporting_currency_code, privacy_scope, created_at, updated_at`,
         [name, portfolioMatch[1]]
       );
+      await auditEvent(req, res, userId, "UPDATE", "PORTFOLIO", String(updated.rows[0].id), { name: updated.rows[0].name, portfolio_id: String(updated.rows[0].id) });
       json(res, 200, { ...updated.rows[0], role: access.rows[0].role });
     } catch {
       json(res, 400, { error: "INVALID_PORTFOLIO_REQUEST" });
@@ -1607,6 +1608,7 @@ async function marketDataRoute(req: IncomingMessage, res: ServerResponse): Promi
         json(res, 409, { error: "FX_RATE_ALREADY_EXISTS" });
         return true;
       }
+      await auditEvent(req, res, userId, "CREATE", "FX_RATE", `${base}:${quote}:${rateAt}`, { base_currency_code: base, quote_currency_code: quote, rate_at: rateAt, source, source_version: sourceVersion });
       json(res, 201, result.rows[0]);
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {
@@ -1685,6 +1687,7 @@ async function marketDataRoute(req: IncomingMessage, res: ServerResponse): Promi
         json(res, 409, { error: "PRICE_ALREADY_EXISTS" });
         return true;
       }
+      await auditEvent(req, res, userId, "CREATE", "INSTRUMENT_PRICE", instrumentId, { instrument_id: instrumentId, price_at: priceAt, currency_code: currencyCode, source, is_close: isClose });
       json(res, 201, result.rows[0]);
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {
@@ -1753,6 +1756,7 @@ async function instrumentMappingRoute(req: IncomingMessage, res: ServerResponse)
         return true;
       }
       const provider = await databasePool.query("SELECT slug AS provider_slug FROM spaartrack.provider WHERE id = $1", [result.rows[0].provider_id]);
+      await auditEvent(req, res, userId, "UPDATE", "INSTRUMENT_MAPPING", mappingMatch[1], { instrument_id: instrumentId, status: "RESOLVED" });
       json(res, 200, instrumentMappingResponse({ ...result.rows[0], provider_slug: provider.rows[0]?.provider_slug }));
     } catch {
       json(res, 400, { error: "INVALID_MAPPING_RESOLUTION" });
@@ -1824,6 +1828,7 @@ async function instrumentMappingRoute(req: IncomingMessage, res: ServerResponse)
         json(res, 409, { error: "MAPPING_ALREADY_EXISTS" });
         return true;
       }
+      await auditEvent(req, res, userId, "CREATE", "INSTRUMENT_MAPPING", String(result.rows[0].id), { provider_slug: provider.rows[0].slug, provider_symbol: providerSymbol, instrument_id: instrumentId || null, status: resolved ? "RESOLVED" : "UNRESOLVED" });
       json(res, 201, instrumentMappingResponse({ ...result.rows[0], provider_slug: provider.rows[0].slug }));
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {
@@ -1900,6 +1905,7 @@ async function accountRoute(req: IncomingMessage, res: ServerResponse): Promise<
                    institution_name, base_currency_code, created_at, updated_at`,
         [portfolioId, name, accountType, trackingMode, status, baseCurrency]
       );
+      await auditEvent(req, res, userId, "CREATE", "FINANCIAL_ACCOUNT", String(result.rows[0].id), { portfolio_id: portfolioId, account_type: accountType, tracking_mode: trackingMode, status });
       json(res, 201, accountResponse(result.rows[0]));
     } catch (error) {
       if ((error as { code?: string }).code === "23505") {
@@ -2892,6 +2898,7 @@ async function instrumentRoute(req: IncomingMessage, res: ServerResponse): Promi
       await client.query("COMMIT");
       const response = result.rows[0] as Record<string, unknown>;
       response.exchange = exchange;
+      await auditEvent(req, res, userId, "CREATE", "INSTRUMENT", String(response.id), { name, instrument_type: instrumentType, asset_class: assetClass, currency_code: currencyCode, exchange_id: exchangeId });
       json(res, 201, instrumentResponse(response));
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
@@ -3577,6 +3584,7 @@ async function corporateActionRoute(req: IncomingMessage, res: ServerResponse): 
         json(res, 409, { error: "CORPORATE_ACTION_ALREADY_EXISTS" });
         return true;
       }
+      await auditEvent(req, res, userId, "CREATE", "CORPORATE_ACTION", String(result.rows[0].id), { instrument_id: instrumentId, action_type: actionType, effective_date: effectiveDate, source });
       json(res, 201, result.rows[0]);
     } catch (error) {
       if ((error as { code?: string }).code === "23505") json(res, 409, { error: "CORPORATE_ACTION_ALREADY_EXISTS" });
@@ -5947,6 +5955,7 @@ async function benchmarkRoute(req: IncomingMessage, res: ServerResponse): Promis
       const currencyCode = typeof body.currency_code === "string" ? body.currency_code.trim().toUpperCase() : "";
       if (!name || !/^[A-Z]{3}$/.test(currencyCode)) { json(res, 400, { error: "INVALID_BENCHMARK_INPUT" }); return true; }
       const result = await databasePool.query(`INSERT INTO spaartrack.benchmark (name, symbol, currency_code) VALUES ($1, $2, $3) RETURNING id, name, symbol, currency_code, is_active`, [name, symbol, currencyCode]);
+      await auditEvent(req, res, userId, "CREATE", "BENCHMARK", String(result.rows[0].id), { name, symbol, currency_code: currencyCode });
       json(res, 201, result.rows[0]);
       return true;
     }
@@ -5958,6 +5967,7 @@ async function benchmarkRoute(req: IncomingMessage, res: ServerResponse): Promis
       const currencyCode = typeof body.currency_code === "string" ? body.currency_code.trim().toUpperCase() : "";
       if (!/^[0-9a-f-]{36}$/i.test(benchmarkId) || !/^\d{4}-\d{2}-\d{2}$/.test(observedAt) || !/^\d+(\.\d+)?$/.test(indexValue) || Number(indexValue) <= 0 || !/^[A-Z]{3}$/.test(currencyCode)) { json(res, 400, { error: "INVALID_BENCHMARK_OBSERVATION_INPUT" }); return true; }
       const result = await databasePool.query(`INSERT INTO spaartrack.benchmark_observation (benchmark_id, observed_at, index_value, currency_code) VALUES ($1, $2, $3, $4) RETURNING benchmark_id, observed_at, index_value::text, currency_code`, [benchmarkId, observedAt, indexValue, currencyCode]);
+      await auditEvent(req, res, userId, "CREATE", "BENCHMARK_OBSERVATION", benchmarkId, { benchmark_id: benchmarkId, observed_at: observedAt, currency_code: currencyCode });
       json(res, 201, result.rows[0]);
       return true;
     }
@@ -6487,6 +6497,7 @@ async function connectionRoute(req: IncomingMessage, res: ServerResponse): Promi
       await databasePool.query(`UPDATE spaartrack.credential_secret_ref csr SET revoked_at = now() WHERE csr.id = (SELECT credential_ref_id FROM spaartrack.external_connection WHERE id = $1)`, [match[1]]);
       await databasePool.query(`UPDATE spaartrack.connection_scope SET revoked_at = now() WHERE connection_id = $1 AND revoked_at IS NULL`, [match[1]]);
       const detail = await databasePool.query(`${selectConnections} WHERE ec.id = $1 AND ec.user_id = $2 GROUP BY ec.id, p.slug, p.name, csr.vault_path`, [match[1], userId]);
+      await auditEvent(req, res, userId, "REVOKE", "EXTERNAL_CONNECTION", match[1], { status: "REVOKED", read_only: true });
       json(res, 200, { ...detail.rows[0], read_only: true, calculation_version: "connection-revoked-v1" });
       return true;
     }
@@ -6512,6 +6523,7 @@ async function connectionRoute(req: IncomingMessage, res: ServerResponse): Promi
           const accountType = account.account_type === "INVEST" ? "INVESTMENT" : "ISA";
           await client.query(`INSERT INTO spaartrack.provider_account (connection_id, external_account_id, account_type, name, base_currency_code, provider_metadata) VALUES ($1, $2, $3, $4, $5, $6)`, [connection.rows[0].id, account.external_account_id, accountType, account.name, String(account.base_currency_code).toUpperCase(), JSON.stringify({ source: "synthetic-trading212", mapping: account.account_type })]);
         }
+        await auditEvent(req, res, userId, "CREATE", "EXTERNAL_CONNECTION", String(connection.rows[0].id), { provider_slug: providerSlug, auth_mode: "API_KEY", status: "AUTHORIZED", read_only: true });
         await client.query("COMMIT");
         json(res, 201, { id: connection.rows[0].id, provider_id: connection.rows[0].provider_id, provider_slug: providerSlug, provider_name: provider.rows[0].name, auth_mode: "API_KEY", status: "AUTHORIZED", display_name: displayName, credential_ref_id: connection.rows[0].credential_ref_id, vault_path: vaultPath, read_only: true, scopes, accounts, calculation_version: "connection-authorized-v1" });
       } catch (error) {
@@ -6561,6 +6573,7 @@ async function providerRegistryRoute(req: IncomingMessage, res: ServerResponse):
         const result = await client.query(`INSERT INTO spaartrack.provider (slug, name, provider_type, api_version, status, capabilities) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (slug) DO NOTHING RETURNING id, slug, name, provider_type, api_version, region, status, capabilities, documentation_url, created_at, updated_at`, [slug, name, providerType, apiVersion, status, JSON.stringify({ auth_mode: authMode })]);
         if (!result.rowCount) { await client.query("ROLLBACK"); json(res, 409, { error: "PROVIDER_ALREADY_EXISTS" }); return true; }
         for (const capability of capabilities) await client.query(`INSERT INTO spaartrack.provider_capability (provider_id, capability, supported, details) VALUES ($1, $2, $3, $4)`, [result.rows[0].id, capability.capability, capability.supported, JSON.stringify(capability.details || {})]);
+        await auditEvent(req, res, userId, "CREATE", "PROVIDER", String(result.rows[0].id), { slug, provider_type: providerType, api_version: apiVersion, status, auth_mode: authMode, capability_count: capabilities.length });
         await client.query("COMMIT");
         json(res, 201, { ...result.rows[0], auth_mode: authMode, capabilities });
       } catch (error) {
@@ -6576,6 +6589,7 @@ async function providerRegistryRoute(req: IncomingMessage, res: ServerResponse):
       if ((status !== null && !providerStatuses.includes(status)) || (status === null && apiVersion === null)) { json(res, 400, { error: "INVALID_PROVIDER_UPDATE" }); return true; }
       const result = await databasePool.query(`UPDATE spaartrack.provider SET status = COALESCE($2, status), api_version = COALESCE($3, api_version), updated_at = now() WHERE slug = $1 RETURNING id, slug, name, provider_type, api_version, region, status, capabilities, documentation_url, created_at, updated_at`, [providerSlug, status, apiVersion]);
       if (!result.rowCount) { json(res, 404, { error: "PROVIDER_NOT_FOUND" }); return true; }
+      await auditEvent(req, res, userId, "UPDATE", "PROVIDER", String(result.rows[0].id), { slug: providerSlug, status: result.rows[0].status, api_version: result.rows[0].api_version });
       json(res, 200, { ...result.rows[0], auth_mode: result.rows[0].capabilities?.auth_mode || null, capabilities: [] });
       return true;
     }
@@ -6935,6 +6949,7 @@ async function alertRuleRoute(req: IncomingMessage, res: ServerResponse): Promis
         const body = await readJson(req);
         const deliveryHistory = [{ status: "TESTED", channels: current.channels, tested_at: new Date().toISOString(), event: body.event || {} }];
         const notification = await databasePool.query(`INSERT INTO spaartrack.notification (user_id, alert_rule_id, notification_type, title, body, severity, payload, delivered_at) VALUES ($1, $2, 'ALERT_TEST', $3, $4, 'INFO', $5, now()) RETURNING id, alert_rule_id, notification_type, title, body, severity, payload, read_at, delivered_at, created_at`, [userId, current.id, current.name, `Test delivery for ${current.alert_type}`, JSON.stringify({ delivery_history: deliveryHistory, calculation_version: "alert-delivery-history-v1" })]);
+        await auditEvent(req, res, userId, "CREATE", "NOTIFICATION", String(notification.rows[0].id), { alert_rule_id: String(current.id), notification_type: "ALERT_TEST" });
         json(res, 201, notification.rows[0]);
         return true;
       }
@@ -6942,6 +6957,7 @@ async function alertRuleRoute(req: IncomingMessage, res: ServerResponse): Promis
         const body = await readJson(req);
         if (typeof body.is_active !== "boolean") { json(res, 400, { error: "INVALID_ALERT_UPDATE" }); return true; }
         const updated = await databasePool.query(`UPDATE spaartrack.alert_rule SET is_active = $2 WHERE id = $1 RETURNING id, portfolio_id, name, alert_type, condition_json AS condition, channels, is_active, last_triggered_at, created_at`, [current.id, body.is_active]);
+        await auditEvent(req, res, userId, "UPDATE", "ALERT_RULE", String(current.id), { portfolio_id: String(current.portfolio_id), is_active: body.is_active });
         json(res, 200, updated.rows[0]);
         return true;
       }
@@ -6959,6 +6975,7 @@ async function alertRuleRoute(req: IncomingMessage, res: ServerResponse): Promis
       const access = await databasePool.query(`SELECT 1 FROM spaartrack.portfolio_member WHERE portfolio_id = $1 AND user_id = $2 AND revoked_at IS NULL AND role IN ('OWNER', 'EDITOR')`, [portfolioId, userId]);
       if (!access.rowCount) { json(res, 403, { error: "PORTFOLIO_ROLE_FORBIDDEN" }); return true; }
       const result = await databasePool.query(`INSERT INTO spaartrack.alert_rule (user_id, portfolio_id, name, alert_type, condition_json, channels) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, portfolio_id, name, alert_type, condition_json AS condition, channels, is_active, last_triggered_at, created_at`, [userId, portfolioId, name, alertType, JSON.stringify(condition), JSON.stringify(channels)]);
+      await auditEvent(req, res, userId, "CREATE", "ALERT_RULE", String(result.rows[0].id), { portfolio_id: portfolioId, name, alert_type: alertType, channels });
       json(res, 201, result.rows[0]);
       return true;
     }
@@ -8264,6 +8281,7 @@ async function ledgerTransactionRoute(req: IncomingMessage, res: ServerResponse)
        FROM spaartrack.ledger_entry WHERE ledger_transaction_id = $1 ORDER BY id`,
       [transactionMatch[1]]
     );
+    await auditEvent(req, res, userId, requestedState === "VOID" ? "REVOKE" : "UPDATE", "LEDGER_TRANSACTION", String(updated.rows[0].id), { state: updated.rows[0].state, correction: requestedState === "VOID" });
     json(res, 200, transactionResponse(updated.rows[0], entries.rows));
     return true;
   }
@@ -8503,10 +8521,12 @@ async function ledgerTransactionRoute(req: IncomingMessage, res: ServerResponse)
           [pairedResult.rows[0].id, destinationAccountId, cashAmount, currencyCode]
         );
         await client.query("COMMIT");
+        await auditEvent(req, res, userId, "CREATE", "LEDGER_TRANSACTION", String(sourceResult.rows[0].id), { portfolio_id: portfolioId, activity_type: activityType, state, paired_transaction_id: String(pairedLinked.rows[0].id) });
         json(res, 201, { ...transactionResponse(sourceResult.rows[0], entryResult.rows), paired_transaction: transactionResponse(pairedLinked.rows[0], destinationEntry.rows) });
         return true;
       }
       await client.query("COMMIT");
+      await auditEvent(req, res, userId, "CREATE", "LEDGER_TRANSACTION", String(transactionResult.rows[0].id), { portfolio_id: portfolioId, financial_account_id: accountId, activity_type: activityType, state, entry_kind: entryKind });
       json(res, 201, transactionResponse(transactionResult.rows[0], entryResult.rows));
     } catch {
       await client.query("ROLLBACK").catch(() => undefined);
