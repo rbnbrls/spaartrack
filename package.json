@@ -6,7 +6,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/unit/*.test.mjs tests/smoke/*.test.mjs",
+    "test": "TRACE_ID=${TRACE_ID:-local-test-run} CORRELATION_ID=${CORRELATION_ID:-local-test-run} node --experimental-strip-types --test tests/unit/*.test.mjs tests/smoke/*.test.mjs",
     "test:contract-freeze": "node --experimental-strip-types --test tests/contract-freeze/*.test.mjs",
     "db:validate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f database/schema.sql",
     "compose:up": "scripts/dev/compose.sh up -d --build",

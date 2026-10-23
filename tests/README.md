@@ -6,8 +6,7 @@ De testsuite draait met `node --experimental-strip-types --test tests/unit/*.tes
 
 De laag `tests/contract-freeze/` draait bewust **niet** mee in de standaard-suite: de
 contracten daar zijn RED by design tot de domeineigenaren hun openstaande
-financiële beslissingen hebben vastgelegd, of release-gate-contracten waarvan de
-implementatie nog niet op main staat. Die laag draait op een eigen commando
+financiële beslissingen hebben vastgelegd. Die laag draait op een eigen commando
 (`pnpm test:contract-freeze`), zodat de regressie-gate van de andere stories groen
 blijft.
 
@@ -20,12 +19,11 @@ staan achter `STACK_SMOKE=1` en worden zonder die variabele overgeslagen.
 - `tests/smoke/` — provider-, API-, addon- en golden-contracten plus de stack-tests;
 - `tests/runtime/` — executable runtime tests die een gebouwde image en Docker benodigen;
 - `tests/helpers/` — gedeelde testhelpers (bijvoorbeeld `tests/helpers/web-source.mjs`);
-- `tests/support/` — gedeelde suite-infrastructuur, waaronder de expliciete lokale endpoint-resolver;
+- `tests/support/` — gedeelde lokale-stack endpoint-resolutie en preflight helpers;
 - `tests/fixtures/` — synthetische hulpmiddelen voor de smoke-tests (bijvoorbeeld de
   Trading212 GUI-harness);
 - `tests/contract-freeze/` — de financiële invariantencontracten van Wave 0
-  (US-0002-A/B/C) en release-gatecontracten waarvan de implementatie nog niet
-  op main staat. Deze laag is RED by design en draait op `pnpm test:contract-freeze`,
+  (US-0002-A/B/C). Deze laag is RED by design en draait op `pnpm test:contract-freeze`,
   buiten de standaard-suite om.
 
 De versieerbare fixturepacks staan in de repo-rootmap `fixtures/` (bijvoorbeeld
