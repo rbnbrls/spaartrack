@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        VCS_REF: ${APP_COMMIT_SHA:-local}
+        APP_VERSION: ${APP_RELEASE:-local}
     ports:
     - ${WEB_PORT:-3000}:80
     depends_on:
@@ -22,12 +25,17 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      args:
+        VCS_REF: ${APP_COMMIT_SHA:-local}
+        APP_VERSION: ${APP_RELEASE:-local}
     environment:
       APP_ENV: ${APP_ENV:-${NODE_ENV:-local}}
       BROKER_MASTER_KEY: ${BROKER_MASTER_KEY:-}
       APP_AUTH_MODE: ${APP_AUTH_MODE:-synthetic}
       SYNTHETIC_FIXTURE_KEY: ${SYNTHETIC_FIXTURE_KEY:-}
       APP_RELEASE: ${APP_RELEASE:-local}
+      # Use scripts/dev/compose.sh for local runs: it binds APP_COMMIT_SHA to
+      # git HEAD and uses local only as the documented unbound digest marker.
       APP_COMMIT_SHA: ${APP_COMMIT_SHA:-local}
       APP_IMAGE_DIGEST: ${APP_IMAGE_DIGEST:-local}
       APP_MIGRATION_VERSION: ${APP_MIGRATION_VERSION:-schema.sql}
@@ -60,6 +68,9 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      args:
+        VCS_REF: ${APP_COMMIT_SHA:-local}
+        APP_VERSION: ${APP_RELEASE:-local}
     command:
     - node
     - dist/apps/api/src/trading212-worker.js
@@ -85,6 +96,9 @@ services:
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
+      args:
+        VCS_REF: ${APP_COMMIT_SHA:-local}
+        APP_VERSION: ${APP_RELEASE:-local}
     environment:
       APP_ENV: local
       APP_RELEASE: local
