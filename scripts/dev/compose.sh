@@ -26,7 +26,11 @@ elif [ "$(basename "$root_real")" = spaartrack ]; then
   primary=1
 fi
 
-digest=$(printf '%s' "$root_real" | shasum -a 256 | awk '{print $1}')
+if command -v shasum >/dev/null 2>&1; then
+  digest=$(printf '%s' "$root_real" | shasum -a 256 | awk '{print $1}')
+else
+  digest=$(printf '%s' "$root_real" | sha256sum | awk '{print $1}')
+fi
 short_digest=$(printf '%.12s' "$digest")
 if [ "$primary" -eq 1 ]; then
   derived_project=spaartrack
@@ -60,6 +64,17 @@ export OBJECT_STORAGE_CONSOLE_PORT=${OBJECT_STORAGE_CONSOLE_PORT:-$console}
 export OTEL_GRPC_PORT=${OTEL_GRPC_PORT:-$otel_grpc} OTEL_HTTP_PORT=${OTEL_HTTP_PORT:-$otel_http}
 export OTEL_METRICS_PORT=${OTEL_METRICS_PORT:-$otel_metrics} PROMETHEUS_PORT=${PROMETHEUS_PORT:-$prometheus}
 export GRAFANA_PORT=${GRAFANA_PORT:-$grafana}
+
+# The identity contract is the checkout's `git rev-parse --verify HEAD`.
+if [ -n "${APP_COMMIT_SHA:-}" ]; then
+  commit_sha="$APP_COMMIT_SHA"
+elif commit_sha=$(git -C "$root_real" rev-parse --verify HEAD 2>/dev/null); then
+  :
+else
+  commit_sha=local
+fi
+export APP_COMMIT_SHA="$commit_sha"
+export APP_IMAGE_DIGEST="${APP_IMAGE_DIGEST:-local}"
 
 if [ "${1:-}" = settings ]; then
   printf '%s\n' \
