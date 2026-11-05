@@ -1,7 +1,7 @@
 # B-004 — dependency-ordered contract/backlog refinement
 
 Status: refinement proposal, READY for orchestrator review; downstream implementation is not authorized merely by this inventory.
-Owner: architecture. Source of truth for scope/dependencies: `roadmap.md`; tests: `test-cases.md`; operations queue remains `backlog.md`.
+Owner: architecture. Source of truth for scope/dependencies: `roadmap.md`; tests: `test-cases.md`; operations queue is `PRODUCT_BACKLOG.md`.
 
 ## Scope and dispatch rules
 
@@ -160,4 +160,4 @@ Parent gates: US-1701 -> TC-US-1701; US-1702 -> TC-US-1702; US-1705 -> TC-US-170
 
 ## Gate / handoff
 
-B-004 can be marked complete only when the refinement contract and full local checks pass, the orchestrator accepts proposed owners/dependency ordering, and W0 contract/fixture gaps have named owners and gates. It does not close Poort B, approve downstream starts, or claim deployment evidence. B-005 (QA) next: independently run the refinement-contract test and documented local verification and preserve exact current output. B-001 (platform) next: answer the explicit shared architecture/release-contract questions and independently verify local-vs-external evidence boundaries. Orchestrator reviews evidence and updates `backlog.md`; this report alone does not change task status.
+B-004 can be marked complete only when the refinement contract and full local checks pass, the orchestrator accepts proposed owners/dependency ordering, and W0 contract/fixture gaps have named owners and gates. It does not close Poort B, approve downstream starts, or claim deployment evidence. B-005 (QA) next: independently run the refinement-contract test and documented local verification and preserve exact current output. B-001 (platform) next: answer the explicit shared architecture/release-contract questions and independently verify local-vs-external evidence boundaries. Orchestrator reviews evidence and updates `PRODUCT_BACKLOG.md`; this report alone does not change task status.
