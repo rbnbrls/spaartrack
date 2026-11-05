@@ -130,6 +130,61 @@ CREATE TABLE oidc_login_state (
 CREATE INDEX oidc_login_state_active_idx
   ON oidc_login_state (state_hash) WHERE consumed_at IS NULL;
 
+-- Refresh tokens for session authentication (US-0202).
+ALTER TABLE user_session
+  ADD COLUMN IF NOT EXISTS refresh_token_hash text UNIQUE,
+  ADD COLUMN IF NOT EXISTS refresh_expires_at timestamptz;
+
+CREATE INDEX IF NOT EXISTS user_session_refresh_idx
+  ON user_session (refresh_token_hash)
+  WHERE refresh_token_hash IS NOT NULL AND refresh_expires_at > now();
+
+-- Email verification tokens for user registration (US-0201).
+CREATE TABLE email_verification_token (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  token_hash text NOT NULL UNIQUE,
+  email text NOT NULL,
+  expires_at timestamptz NOT NULL,
+  consumed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX email_verification_token_active_idx
+  ON email_verification_token (token_hash)
+  WHERE consumed_at IS NULL AND expires_at > now();
+
+-- TOTP backup codes for account recovery (US-0203).
+CREATE TABLE user_backup_codes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  code_hash text NOT NULL,
+  used_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX user_backup_codes_user_idx
+  ON user_backup_codes (user_id)
+  WHERE used_at IS NULL;
+
+-- Generic OIDC provider configuration (US-0204).
+CREATE TABLE oidc_provider (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug text NOT NULL UNIQUE,
+  name text NOT NULL,
+  issuer_url text NOT NULL,
+  client_id text NOT NULL,
+  client_secret_ref text NOT NULL,
+  scopes text[] NOT NULL DEFAULT ARRAY['openid', 'email', 'profile'],
+  pkce_enabled boolean NOT NULL DEFAULT true,
+  status text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'DISABLED')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER oidc_provider_updated_at BEFORE UPDATE ON oidc_provider
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 -- Durable proof of a user deletion request (US-0206 / TC-US-0206-B).
 -- Deliberately not a foreign key to app_user: the tombstone must outlive any
 -- future physical purge of the identity row and must be replayable after a
